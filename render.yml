@@ -4,6 +4,3 @@ services:
     env: python
     buildCommand: bash backend/render-build.sh
     startCommand: uvicorn backend.backend_api:app --host 0.0.0.0 --port 10000
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9

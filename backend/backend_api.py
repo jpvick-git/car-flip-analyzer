@@ -109,7 +109,9 @@ def get_first_image(lot_id):
 
     return f"/downloads/{lot_id}/{first_image}"
 
-
+# Make sure pyodbc can find the driver inside Render
+os.environ["LD_LIBRARY_PATH"] = "/opt/render/project/src/backend/odbc/usr/lib/x86_64-linux-gnu"
+os.environ["ODBCINSTINI"] = "/opt/render/project/src/backend/odbc/usr/share/msodbcsql18/odbcinst.ini"
 
 # --------------------------------------------------
 # DATABASE CONNECTION

@@ -1,2 +1,0 @@
-9000.00
-Assuming repairs are completed, the vehicle would be valued based on its make and model, minus depreciation due to the accident. Resale value considers repaired condition, unknown mileage, and generic market factors for similar vehicles.

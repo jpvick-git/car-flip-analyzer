@@ -1,2 +1,0 @@
-10000.00
-Assuming all repairs are completed and the vehicle is made roadworthy, its value depends on the make, model, and year, which are unknown. The value range reflects a mid-sized sedan with improved condition after repair, considering typical market depreciation.

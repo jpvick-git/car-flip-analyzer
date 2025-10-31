@@ -8,6 +8,22 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from openai import OpenAI
 from sqlalchemy import create_engine, text
+from dotenv import load_dotenv
+
+# --------------------------------------------------
+# LOAD ENVIRONMENT VARIABLES
+# --------------------------------------------------
+load_dotenv()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_PROJECT_ID = os.getenv("OPENAI_PROJECT_ID")
+
+if not OPENAI_API_KEY:
+    raise EnvironmentError("❌ OPENAI_API_KEY not found. Make sure it’s in your environment or .env file.")
+
+print(f"🔑 Using OpenAI key prefix: {OPENAI_API_KEY[:12]}...")
+if OPENAI_PROJECT_ID:
+    print(f"📁 Project ID: {OPENAI_PROJECT_ID}")
 
 # --------------------------------------------------
 # CONFIGURATION
@@ -19,16 +35,15 @@ DB_NAME = "cars"
 SERVER = "localhost\\SQLEXPRESS"
 DRIVER = "ODBC Driver 18 for SQL Server"
 
-MAX_WORKERS = 1
-MAX_IMAGES = 1
+MAX_WORKERS = 2
+MAX_IMAGES = 5
 RETRY_LIMIT = 3
 SLEEP_BETWEEN_LOTS = 1.5
-MIN_INTERVAL = 20  # seconds between requests to stay under rate limit
+MIN_INTERVAL = 10  # seconds between requests
 
 client = OpenAI()
 rate_lock = threading.Semaphore(1)
 _last_request_time = 0
-
 
 # --------------------------------------------------
 # DATABASE
@@ -44,21 +59,11 @@ def get_engine():
     params = urllib.parse.quote_plus(connection_string)
     return create_engine(f"mssql+pyodbc:///?odbc_connect={params}", pool_pre_ping=True, pool_size=5)
 
-
 # --------------------------------------------------
-# IMAGE ENCODING
-# --------------------------------------------------
-def encode_image(image_path):
-    """Convert image to base64 for API upload."""
-    with open(image_path, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
-
-
-# --------------------------------------------------
-# JSON SANITIZER
+# JSON PARSER
 # --------------------------------------------------
 def safe_json_parse(raw):
-    """Safely extract JSON from model output even if wrapped in code fences."""
+    """Extract valid JSON even if wrapped in markdown or text."""
     raw = raw.strip()
     if raw.startswith("```"):
         raw = raw.strip("`").replace("json", "").strip()
@@ -74,12 +79,10 @@ def safe_json_parse(raw):
                 pass
     raise ValueError(f"Invalid JSON: {raw}")
 
-
 # --------------------------------------------------
-# AI ESTIMATION (Combined Vision + Resale)
+# AI ANALYSIS (REPAIR + EVALUATION)
 # --------------------------------------------------
 def analyze_vehicle(folder_path, year=None, make=None, model=None, mileage=None):
-    """Analyze a vehicle's photos to estimate repair and resale values."""
     global _last_request_time
 
     image_files = [
@@ -91,30 +94,44 @@ def analyze_vehicle(folder_path, year=None, make=None, model=None, mileage=None)
     if not image_files:
         raise ValueError("No images found for this lot.")
 
+    # Base64 encode and resize images for efficiency
+    def encode_image(image_path):
+        from PIL import Image
+        import io, base64
+        img = Image.open(image_path)
+        img.thumbnail((1024, 1024))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=80)
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+
     image_inputs = [
-        {"type": "image_url", "image_url": f"data:image/jpeg;base64,{encode_image(img)}"}
+        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encode_image(img)}"}}
         for img in image_files
     ]
 
-    vehicle_info = f"Year: {year or 'Unknown'}\nMake: {make or 'Unknown'}\nModel: {model or 'Unknown'}\nMileage: {mileage or 'Unknown'}"
+    vehicle_info = (
+        f"Year: {year or 'Unknown'}\n"
+        f"Make: {make or 'Unknown'}\n"
+        f"Model: {model or 'Unknown'}\n"
+        f"Mileage: {mileage or 'Unknown'}"
+    )
 
     prompt = (
-        "You are 'Auto Mate', a professional used-car appraiser and repair estimator. "
-        "Analyze the attached vehicle photos and estimate both:\n"
-        "1. The minimum reasonable repair cost to make it presentable and roadworthy for resale (not showroom perfect).\n"
-        "2. The current resale value range (low, high, average) assuming the repairs are completed, "
-        "based on current U.S. market trends.\n\n"
+        "You are 'Auto Mate', a professional used-car flipper and investment evaluator. "
+        "Analyze the attached vehicle photos and provide:\n"
+        "1. The *minimum reasonable repair cost* to make it presentable and roadworthy for resale (not showroom perfect).\n"
+        "2. A *brief evaluation summary* describing whether this car is a good purchase candidate for flipping, "
+        "considering visible condition, repair complexity, and resale potential.\n\n"
         f"Vehicle details:\n{vehicle_info}\n\n"
-        "Respond ONLY in JSON format exactly like this:\n"
+        "Respond ONLY in this JSON format:\n"
         "{\n"
-        "  'repair': { 'estimate': number, 'details': 'plain-English summary of visible damage and required repairs' },\n"
-        "  'resale': { 'low': number, 'high': number, 'average': number, 'details': 'summary of value factors and reasoning' }\n"
+        "  'repair': { 'estimate': number, 'details': 'summary of visible damage and required repairs' },\n"
+        "  'evaluation': { 'summary': 'short paragraph describing if it’s a good flip candidate and why' }\n"
         "}"
     )
 
     for attempt in range(1, RETRY_LIMIT + 1):
         try:
-            # --- Rate-limited access ---
             with rate_lock:
                 now = time.time()
                 wait = MIN_INTERVAL - (now - _last_request_time)
@@ -124,12 +141,10 @@ def analyze_vehicle(folder_path, year=None, make=None, model=None, mileage=None)
 
                 response = client.chat.completions.create(
                     model="gpt-4o",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [{"type": "text", "text": prompt}] + image_inputs
-                        }
-                    ],
+                    messages=[{
+                        "role": "user",
+                        "content": [{"type": "text", "text": prompt}] + image_inputs
+                    }],
                     max_tokens=800,
                 )
 
@@ -137,48 +152,30 @@ def analyze_vehicle(folder_path, year=None, make=None, model=None, mileage=None)
             parsed = safe_json_parse(raw)
 
             repair = parsed.get("repair", {})
-            resale = parsed.get("resale", {})
+            evaluation = parsed.get("evaluation", {})
 
             return (
                 float(repair.get("estimate", 0)),
                 repair.get("details", ""),
-                float(resale.get("average", 0)),
-                resale.get("details", ""),
+                evaluation.get("summary", ""),
             )
 
         except Exception as e:
-            err_msg = str(e)
-            lower = err_msg.lower()
-
-            # Identify specific rate limit type
-            if "requests per" in lower:
-                limit_type = "REQUESTS-PER-MINUTE"
-            elif "tokens per" in lower:
-                limit_type = "TOKENS-PER-MINUTE"
-            elif "images" in lower or "429" in lower or "rate limit" in lower:
-                limit_type = "VISION/IMAGE RATE LIMIT"
-            else:
-                limit_type = "UNKNOWN"
-
-            # Adaptive cooldown with exponential backoff
-            if "429" in lower or "rate limit" in lower:
+            err = str(e)
+            if "rate limit" in err.lower() or "429" in err:
                 cooldown = min(45, 5 * (2 ** attempt)) + random.uniform(0, 3)
-                print(f"⏳ Rate limit hit ({limit_type}) — waiting {cooldown:.1f}s before retry...")
+                print(f"⏳ Rate limit hit — waiting {cooldown:.1f}s before retry...")
                 time.sleep(cooldown)
                 continue
-
-            # Non–rate-limit error
-            print(f"⚠️ Attempt {attempt} failed: {err_msg.strip()}")
+            print(f"⚠️ Attempt {attempt} failed: {err}")
             time.sleep(3)
 
     raise RuntimeError("Max retries reached for this lot.")
-
 
 # --------------------------------------------------
 # LOT PROCESSING
 # --------------------------------------------------
 def process_lot(lot_id, engine):
-    """Process a single lot folder — analyze, save results, update DB."""
     folder_path = os.path.join(DOWNLOAD_DIR, lot_id)
     if not os.path.exists(folder_path):
         print(f"⚠️ Missing folder for {lot_id}, skipping.")
@@ -186,7 +183,7 @@ def process_lot(lot_id, engine):
 
     estimate_path = os.path.join(folder_path, "repair_estimate.txt")
     details_path = os.path.join(folder_path, "repair_details.txt")
-    resale_path = os.path.join(folder_path, "resale_estimate.txt")
+    evaluation_path = os.path.join(folder_path, "evaluation.txt")
 
     if os.path.exists(estimate_path):
         print(f"⏭️ Skipping {lot_id} — already analyzed.")
@@ -194,17 +191,17 @@ def process_lot(lot_id, engine):
 
     try:
         print(f"🧠 Analyzing vehicle for lot {lot_id} ...")
-        repair_est, repair_det, resale_avg, resale_det = analyze_vehicle(folder_path)
+        repair_est, repair_det, evaluation_text = analyze_vehicle(folder_path)
 
-        # --- Write local text results ---
+        # Save local text results
         with open(estimate_path, "w", encoding="utf-8") as f:
             f.write(f"{repair_est:.2f}")
         with open(details_path, "w", encoding="utf-8") as f:
             f.write(repair_det)
-        with open(resale_path, "w", encoding="utf-8") as f:
-            f.write(f"{resale_avg:.2f}\n{resale_det}")
+        with open(evaluation_path, "w", encoding="utf-8") as f:
+            f.write(evaluation_text)
 
-        # --- Update SQL Server table ---
+        # Update SQL Server table
         try:
             with engine.begin() as conn:
                 conn.execute(
@@ -212,17 +209,17 @@ def process_lot(lot_id, engine):
                         UPDATE cars
                         SET repair_estimate = :repair_estimate,
                             repair_details = :repair_details,
-                            resale_estimate = :resale_estimate
+                            resale_details = :resale_details
                         WHERE lot_url LIKE :pattern
                     """),
                     {
                         "repair_estimate": repair_est,
                         "repair_details": repair_det,
-                        "resale_estimate": resale_avg,
+                        "resale_details": evaluation_text,
                         "pattern": f"%{lot_id}%",
                     },
                 )
-            print(f"✅ {lot_id} updated: Repair ${repair_est:.0f} | Resale ${resale_avg:.0f}")
+            print(f"✅ {lot_id} updated: Repair ${repair_est:.0f}")
         except Exception as db_err:
             print(f"⚠️ DB update failed for {lot_id}: {db_err}")
 
@@ -232,7 +229,6 @@ def process_lot(lot_id, engine):
         print(f"❌ Error processing {lot_id}: {e}")
         return False
 
-
 # --------------------------------------------------
 # MAIN
 # --------------------------------------------------
@@ -241,10 +237,7 @@ def main():
         print("❌ No downloads folder found.")
         return
 
-    all_folders = [
-        f for f in os.listdir(DOWNLOAD_DIR)
-        if os.path.isdir(os.path.join(DOWNLOAD_DIR, f))
-    ]
+    all_folders = [f for f in os.listdir(DOWNLOAD_DIR) if os.path.isdir(os.path.join(DOWNLOAD_DIR, f))]
     total = len(all_folders)
     if total == 0:
         print("No lot folders found.")
@@ -275,6 +268,8 @@ def main():
     elapsed = time.time() - start_time
     print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
 
-
+# --------------------------------------------------
+# ENTRY POINT
+# --------------------------------------------------
 if __name__ == "__main__":
     main()

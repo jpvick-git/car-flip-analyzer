@@ -1,13 +1,17 @@
-import React, { useState, useEffect, useMemo } from "react";
-import Papa from "papaparse";
+import React, { useState, useEffect } from "react";
 
 export default function CarFlipAnalyzer() {
   const [cars, setCars] = useState([]);
   const [filtered, setFiltered] = useState([]);
-  const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [targetMargin, setTargetMargin] = useState(30);
-  const [selectedCar, setSelectedCar] = useState(null); // for popup modal
+  const [selectedCar, setSelectedCar] = useState(null);
+  const [options, setOptions] = useState({
+    years: [],
+    makes: [],
+    models: [],
+    damages: [],
+  });
 
   const [filters, setFilters] = useState({
     year: "",
@@ -18,10 +22,8 @@ export default function CarFlipAnalyzer() {
     maxMiles: "",
   });
 
-  const handleFileSelect = (e) => setFile(e.target.files[0] || null);
-
   // --------------------------------------------------
-  // LOAD EXISTING CARS FROM BACKEND
+  // LOAD CARS FROM BACKEND
   // --------------------------------------------------
   useEffect(() => {
     const fetchCarsFromDB = async () => {
@@ -29,12 +31,20 @@ export default function CarFlipAnalyzer() {
       try {
         const res = await fetch("http://localhost:8000/cars/with_estimates");
         const data = await res.json();
-
         if (data && data.cars) {
-          setCars(data.cars);
-          setFiltered(data.cars);
+          const cars = data.cars;
+          setCars(cars);
+          setFiltered(cars);
+
+          // Extract unique dropdown options
+          const years = [...new Set(cars.map((c) => c.year))].sort((a, b) => b - a);
+          const makes = [...new Set(cars.map((c) => c.make))].sort();
+          const models = [...new Set(cars.map((c) => c.model))].sort();
+          const damages = [...new Set(cars.map((c) => c.damage))].sort();
+
+          setOptions({ years, makes, models, damages });
         } else {
-          console.warn("No cars returned from backend");
+          console.warn("⚠️ No cars returned from backend");
         }
       } catch (err) {
         console.error("❌ Error fetching cars:", err);
@@ -47,140 +57,22 @@ export default function CarFlipAnalyzer() {
   }, []);
 
   // --------------------------------------------------
-  // CSV FALLBACK
-  // --------------------------------------------------
-  const estimateResaleAI = (year, make, model, mileage, damage) => {
-    const base = 28000 - (new Date().getFullYear() - parseInt(year || 2020)) * 1500;
-    const mileageAdj = mileage > 150000 ? 0.6 : mileage > 100000 ? 0.75 : 0.9;
-    const damageAdj = /front|rear|side|major/i.test(damage)
-      ? 0.7
-      : /minor|wear/i.test(damage)
-      ? 0.85
-      : 1.0;
-    return Math.max(3000, Math.round(base * mileageAdj * damageAdj));
-  };
-
-  const calculateValues = (resale, repairs, bid) => {
-    const safeResale = Number(resale) || 0;
-    const safeRepairs = Number(repairs) || 0;
-    const safeBid = Number(bid) || 0;
-    const fees = safeResale * 0.0725;
-    const totalCost = safeRepairs + fees + safeBid;
-    const profit = safeResale - totalCost;
-    const margin =
-      safeResale > 0 && isFinite(profit)
-        ? ((profit / safeResale) * 100).toFixed(1)
-        : "0.0";
-    return { fees, profit: Math.round(profit), margin };
-  };
-
-  const handleRunAnalysis = () => {
-    if (!file) {
-      alert("Please select a CSV file first.");
-      return;
-    }
-
-    setLoading(true);
-
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (h) => h.trim().toLowerCase(),
-      complete: ({ data }) => {
-        const result = data.map((row) => {
-          const year = row["year"] || "";
-          const make = row["make"] || "";
-          const model = row["model"] || "";
-          const damage =
-            row["damage_description"] ||
-            row["damage description"] ||
-            row["primary damage"] ||
-            row["damage"] ||
-            "N/A";
-          const odometer =
-            parseFloat((row["odometer"] || "").replace(/[^0-9.]/g, "")) || 0;
-
-          const lotUrlKey = Object.keys(row).find(
-            (key) => key.toLowerCase().replace(/\s+/g, "") === "loturl"
-          );
-          const rawUrl = lotUrlKey ? row[lotUrlKey]?.trim() : "";
-          const url = rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`;
-
-          const resale = estimateResaleAI(year, make, model, odometer, damage);
-          const defaultRepair = (() => {
-            const d = (damage || "").toLowerCase();
-            if (d.includes("front")) return 3200;
-            if (d.includes("rear")) return 2800;
-            if (d.includes("side")) return 2200;
-            if (d.includes("minor")) return 900;
-            if (d.includes("wear")) return 1200;
-            return 1500;
-          })();
-
-          const fees = resale * 0.0725;
-          const targetMarginVal = resale * (targetMargin / 100);
-          const maxBid = resale - (defaultRepair + fees + targetMarginVal);
-          const bid = Math.max(0, Math.round(maxBid));
-          const { profit, margin } = calculateValues(resale, defaultRepair, bid);
-
-          return {
-            id: `${year}-${make}-${model}-${Math.random()}`,
-            year,
-            make,
-            model,
-            damage,
-            odometer,
-            resale,
-            repairs: defaultRepair,
-            fees,
-            maxBid: bid,
-            profit,
-            margin,
-            url,
-            repair_details: row["repair_details"] || "No details available.",
-          };
-        });
-
-        setCars(result);
-        setFiltered(result);
-        setLoading(false);
-      },
-    });
-  };
-
-  // --------------------------------------------------
-  // REPAIR EDIT
-  // --------------------------------------------------
-  const handleRepairChange = (id, newRepair) => {
-    const repairVal = parseFloat(newRepair) || 0;
-
-    const updatedCars = cars.map((car) => {
-      if (car.id === id) {
-        const { resale } = car;
-        const fees = resale * 0.0725;
-        const targetMarginVal = resale * (targetMargin / 100);
-        const maxBid = Math.max(0, Math.round(resale - (repairVal + fees + targetMarginVal)));
-        const { profit, margin } = calculateValues(resale, repairVal, maxBid);
-        return { ...car, repairs: repairVal, fees, maxBid, profit, margin };
-      }
-      return car;
-    });
-
-    setCars(updatedCars);
-    applyFilters(updatedCars, filters);
-  };
-
-  // --------------------------------------------------
-  // FILTERS
+  // FILTER LOGIC
   // --------------------------------------------------
   const applyFilters = (source, filterSet) => {
     let result = [...source];
-    if (filterSet.year) result = result.filter((c) => String(c.year) === String(filterSet.year));
-    if (filterSet.make) result = result.filter((c) => c.make === filterSet.make);
-    if (filterSet.model) result = result.filter((c) => c.model === filterSet.model);
-    if (filterSet.damage) result = result.filter((c) => c.damage === filterSet.damage);
-    if (filterSet.minMiles) result = result.filter((c) => c.odometer >= +filterSet.minMiles);
-    if (filterSet.maxMiles) result = result.filter((c) => c.odometer <= +filterSet.maxMiles);
+    if (filterSet.year)
+      result = result.filter((c) => String(c.year) === String(filterSet.year));
+    if (filterSet.make)
+      result = result.filter((c) => c.make === filterSet.make);
+    if (filterSet.model)
+      result = result.filter((c) => c.model === filterSet.model);
+    if (filterSet.damage)
+      result = result.filter((c) => c.damage === filterSet.damage);
+    if (filterSet.minMiles)
+      result = result.filter((c) => c.odometer >= +filterSet.minMiles);
+    if (filterSet.maxMiles)
+      result = result.filter((c) => c.odometer <= +filterSet.maxMiles);
     setFiltered(result);
   };
 
@@ -193,24 +85,105 @@ export default function CarFlipAnalyzer() {
   // --------------------------------------------------
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col relative">
-      <header className="flex flex-col md:flex-row md:items-center md:justify-between p-6 border-b border-neutral-800 bg-neutral-950/70">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
-          🚗 Car Flip Analyzer (AI)
-        </h1>
-        <div className="flex items-center gap-4 mt-4 md:mt-0">
-          <input type="file" accept=".csv" onChange={handleFileSelect} className="text-sm text-gray-300" />
-          <button
-            onClick={handleRunAnalysis}
-            disabled={loading}
-            className="bg-gradient-to-r from-blue-500 to-blue-700 text-white px-6 py-2 rounded-full shadow-md hover:opacity-90"
-          >
-            {loading ? "Loading…" : "Run Analysis"}
-          </button>
-        </div>
-      </header>
+		<header className="flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950/90">
+		  <div className="flex items-center gap-2">
+			
+			<h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
+			  Car Flip Analyzer (AI)
+			</h1>
+		  </div>
 
+		  <img
+			src="/logo.png"
+			alt="Automotive Analyst Logo"
+			className="h-16 md:h-20 lg:h-24 object-contain opacity-90 hover:opacity-100 transition-opacity duration-200"
+		  />
+		</header>
+
+
+
+      {/* FILTER BAR */}
+      <div className="p-4 border-b border-neutral-800 bg-neutral-900/60 flex flex-wrap gap-3 justify-center">
+        {/* Year */}
+        <select
+          value={filters.year}
+          onChange={(e) => setFilters({ ...filters, year: e.target.value })}
+          className="bg-neutral-800 text-white px-3 py-2 rounded-md w-32 text-sm"
+        >
+          <option value="">All Years</option>
+          {options.years.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+
+        {/* Make */}
+        <select
+          value={filters.make}
+          onChange={(e) => setFilters({ ...filters, make: e.target.value })}
+          className="bg-neutral-800 text-white px-3 py-2 rounded-md w-40 text-sm"
+        >
+          <option value="">All Makes</option>
+          {options.makes.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+
+        {/* Model */}
+        <select
+          value={filters.model}
+          onChange={(e) => setFilters({ ...filters, model: e.target.value })}
+          className="bg-neutral-800 text-white px-3 py-2 rounded-md w-44 text-sm"
+        >
+          <option value="">All Models</option>
+          {options.models.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+
+        {/* Damage */}
+        <select
+          value={filters.damage}
+          onChange={(e) => setFilters({ ...filters, damage: e.target.value })}
+          className="bg-neutral-800 text-white px-3 py-2 rounded-md w-48 text-sm"
+        >
+          <option value="">All Damages</option>
+          {options.damages.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+
+        {/* Mileage Range */}
+        <input
+          placeholder="Min Miles"
+          type="number"
+          value={filters.minMiles}
+          onChange={(e) => setFilters({ ...filters, minMiles: e.target.value })}
+          className="bg-neutral-800 text-white px-3 py-2 rounded-md w-28 text-sm"
+        />
+        <input
+          placeholder="Max Miles"
+          type="number"
+          value={filters.maxMiles}
+          onChange={(e) => setFilters({ ...filters, maxMiles: e.target.value })}
+          className="bg-neutral-800 text-white px-3 py-2 rounded-md w-28 text-sm"
+        />
+      </div>
+
+      {/* MAIN CONTENT */}
       <main className="flex-1 overflow-y-auto p-6">
-        {loading && <p className="text-center text-gray-400 mt-10">⏳ Loading vehicle data...</p>}
+        {loading && (
+          <p className="text-center text-gray-400 mt-10">
+            ⏳ Loading vehicle data...
+          </p>
+        )}
 
         {!loading && filtered.length > 0 ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -225,46 +198,66 @@ export default function CarFlipAnalyzer() {
                 }}
                 className="bg-neutral-800/80 border border-neutral-700 rounded-2xl p-5 shadow-md hover:bg-neutral-700/70 hover:ring-2 hover:ring-blue-500 cursor-pointer transition-all"
               >
+                {/* IMAGE */}
+                {car.image_url && (
+                  <img
+                    src={`http://localhost:8000${car.image_url}`}
+                    alt={`${car.make} ${car.model}`}
+                    className="w-full h-48 object-cover rounded-lg mb-3"
+                  />
+                )}
+
+                {/* TITLE */}
                 <div className="pb-3 border-b border-neutral-700 mb-3">
                   <h2 className="text-xl font-semibold mb-1 text-white">
                     {car.year} {car.make} {car.model}
                   </h2>
-                  <p className="text-sm text-gray-400 mb-1">Odometer: {car.odometer?.toLocaleString?.()} mi</p>
+                  <p className="text-sm text-gray-400 mb-1">
+                    Odometer: {car.odometer?.toLocaleString?.()} mi
+                  </p>
                   <p className="text-sm text-gray-400">Damage: {car.damage}</p>
                 </div>
 
-				<div className="space-y-1 text-sm">
-				  {/* 🖼️ Vehicle Image */}
-				  {car.image_url && (
-					<img
-					  src={`http://localhost:8000${car.image_url}`}
-					  alt={`${car.make} ${car.model}`}
-					  className="card-image"
-					  loading="lazy"
-					/>
-				  )}
-
-				  <p>
-					AI Resale Value:{" "}
-					<span className="text-gray-300">
-					  ${car.resale?.toLocaleString?.()}
-					</span>
-				  </p>
-				  <p>
-					Repairs:{" "}
-					<input
-					  type="number"
-					  value={car.repairs}
-					  onClick={(e) => e.stopPropagation()}
-					  onChange={(e) => handleRepairChange(car.id, e.target.value)}
-					  onKeyDown={(e) => e.stopPropagation()}
-					  className="bg-neutral-700 text-white px-2 py-1 w-24 rounded-md ml-2"
-					/>
-				  </p>
-
-                  <p>Max Bid ({targetMargin}% Margin): <span className="font-semibold text-yellow-400">${car.maxBid?.toLocaleString?.()}</span></p>
-                  <p>Profit: <span className={`font-semibold ${car.profit >= 0 ? "text-green-400" : "text-red-400"}`}>${car.profit?.toLocaleString?.()}</span></p>
-                  <p>Margin: <span className={`font-semibold ${car.margin >= 30 ? "text-green-400" : "text-blue-400"}`}>{car.margin}%</span></p>
+                {/* STATS */}
+                <div className="space-y-1 text-sm">
+                  <p>
+                    AI Resale Value:{" "}
+                    <span className="text-gray-300">
+                      ${car.resale?.toLocaleString?.()}
+                    </span>
+                  </p>
+                  <p>
+                    Repairs:{" "}
+                    <span className="text-gray-300">
+                      ${car.repairs?.toLocaleString?.()}
+                    </span>
+                  </p>
+                  <p>
+                    Max Bid ({targetMargin}% Margin):{" "}
+                    <span className="font-semibold text-yellow-400">
+                      ${car.maxBid?.toLocaleString?.()}
+                    </span>
+                  </p>
+                  <p>
+                    Profit:{" "}
+                    <span
+                      className={`font-semibold ${
+                        car.profit >= 0 ? "text-green-400" : "text-red-400"
+                      }`}
+                    >
+                      ${car.profit?.toLocaleString?.()}
+                    </span>
+                  </p>
+                  <p>
+                    Margin:{" "}
+                    <span
+                      className={`font-semibold ${
+                        car.margin >= 30 ? "text-green-400" : "text-blue-400"
+                      }`}
+                    >
+                      {car.margin}%
+                    </span>
+                  </p>
                 </div>
 
                 <div className="mt-4">
@@ -283,12 +276,9 @@ export default function CarFlipAnalyzer() {
           </div>
         ) : (
           !loading && (
-            <div className="flex flex-col items-center justify-center mt-16 text-center">
-              <img src="/logo.png" alt="Automotive Analyst Logo" className="w-64 md:w-80 lg:w-96 mb-6" />
-              <p className="text-gray-500">
-                Upload a CSV or wait for backend data from <b>/cars/with_estimates</b>.
-              </p>
-            </div>
+            <p className="text-center text-gray-500 mt-10">
+              No cars found. Try adjusting your filters.
+            </p>
           )
         )}
       </main>
@@ -306,8 +296,13 @@ export default function CarFlipAnalyzer() {
             <h3 className="text-xl font-semibold mb-2">
               {selectedCar.year} {selectedCar.make} {selectedCar.model}
             </h3>
+            <p className="text-sm text-gray-300 whitespace-pre-wrap mb-3">
+              <strong>Repair Details:</strong>{" "}
+              {selectedCar.repair_details || "No details available."}
+            </p>
             <p className="text-sm text-gray-300 whitespace-pre-wrap">
-              {selectedCar.repair_details || "No repair details available."}
+              <strong>Resale Details:</strong>{" "}
+              {selectedCar.resale_details || "No resale details available."}
             </p>
             <button
               onClick={() => setSelectedCar(null)}

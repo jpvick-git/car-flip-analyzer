@@ -3,25 +3,25 @@ set -e
 
 echo "🚀 Starting Render build setup..."
 
-# Work inside the app folder (writeable)
+# Create a local ODBC install folder
 ODBC_DIR="/opt/render/project/src/backend/odbc"
 mkdir -p "$ODBC_DIR"
 cd "$ODBC_DIR"
 
-echo "📦 Downloading Microsoft ODBC Driver 18 for SQL Server (Ubuntu 22.04)..."
-curl -L -o msodbcsql18.tar.gz https://aka.ms/msodbcsql18/linux/ubuntu/22.04/x64/msodbcsql18.tar.gz
+echo "📦 Downloading Microsoft ODBC Driver 18 for SQL Server (Debian package)..."
+curl -L -o msodbcsql18.deb https://packages.microsoft.com/ubuntu/22.04/prod/pool/main/m/msodbcsql18/msodbcsql18_18.3.3.1-1_amd64.deb
 
-echo "📂 Extracting driver..."
-tar -xzf msodbcsql18.tar.gz
-rm msodbcsql18.tar.gz
+echo "📂 Extracting files from the .deb package..."
+dpkg-deb -x msodbcsql18.deb "$ODBC_DIR"
+rm msodbcsql18.deb
 
-echo "✅ Driver extracted to $ODBC_DIR"
+echo "✅ Driver extracted locally to $ODBC_DIR"
 
-# Make sure Python and pyodbc can find the driver at runtime
-export LD_LIBRARY_PATH="$ODBC_DIR:$LD_LIBRARY_PATH"
-export ODBCINSTINI="$ODBC_DIR/odbcinst.ini"
+# Export local path so pyodbc can find it
+export LD_LIBRARY_PATH="$ODBC_DIR/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
+export ODBCINSTINI="$ODBC_DIR/usr/share/msodbcsql18/odbcinst.ini"
 
-# Return to backend root for dependency install
+# Move back to backend root
 cd /opt/render/project/src/backend
 
 echo "🐍 Installing Python dependencies..."

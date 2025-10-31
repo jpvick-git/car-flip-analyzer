@@ -5,36 +5,17 @@ import urllib
 import threading
 import os
 from fastapi.staticfiles import StaticFiles
-import os
 import subprocess
 
-def ensure_odbc_driver():
-    """Ensure ODBC Driver 18 is installed at runtime (non-root safe)."""
-    try:
-        # Check if driver is already there
-        if os.path.exists("/opt/microsoft/msodbcsql18/lib64/libmsodbcsql-18.so"):
-            print("✅ ODBC Driver 18 already installed.")
-            return
-
-        print("📦 Downloading Microsoft ODBC Driver 18 for SQL Server...")
-        subprocess.run([
-            "curl", "-fsSL",
-            "https://packages.microsoft.com/ubuntu/22.04/prod/pool/main/m/msodbcsql18/msodbcsql18_18.3.2.1-1_amd64.deb",
-            "-o", "/tmp/msodbcsql18.deb"
-        ], check=True)
-
-        subprocess.run(["dpkg", "-x", "/tmp/msodbcsql18.deb", "/opt/microsoft/msodbcsql18"], check=True)
-        os.environ["ODBCSYSINI"] = "/opt/microsoft/msodbcsql18/etc"
-        os.environ["LD_LIBRARY_PATH"] = "/opt/microsoft/msodbcsql18/lib64"
-        print("✅ ODBC Driver 18 installed successfully (user mode).")
-
-    except Exception as e:
-        print(f"⚠️ Skipped ODBC install (no permission or already installed): {e}")
-
-
+# --------------------------------------------------
+# ODBC DRIVER PATH FIX (Render compatible)
+# --------------------------------------------------
+os.environ["ODBCSYSINI"] = "/opt/render/project/src/backend/odbc/etc"
+os.environ["ODBCINSTINI"] = "/opt/render/project/src/backend/odbc/usr/share/msodbcsql18/odbcinst.ini"
+os.environ["LD_LIBRARY_PATH"] = "/opt/render/project/src/backend/odbc/usr/lib/x86_64-linux-gnu"
 
 # --------------------------------------------------
-# CONFIGURATION
+# FASTAPI SETUP
 # --------------------------------------------------
 app = FastAPI()
 
@@ -46,76 +27,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
+# --------------------------------------------------
+# DATABASE CONFIGURATION
+# --------------------------------------------------
 DRIVER = "ODBC Driver 18 for SQL Server"
 SERVER = "carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com"
 DATABASE = "cars"
 USERNAME = "admin"
-PASSWORD = "1K0xi*rfMR!r4VN7"  # <- use your actual RDS password
+PASSWORD = "1K0xi*rfMR!r4VN7"  # replace if needed
 
-connection_string = (
-    f"Driver={{{DRIVER}}};"
-    f"Server={SERVER},1433;"
-    f"Database={DATABASE};"
-    f"Uid={USERNAME};"
-    f"Pwd={PASSWORD};"
-    "Encrypt=yes;"
-    "TrustServerCertificate=yes;"
-)
-
-params = urllib.parse.quote_plus(connection_string)
-engine = create_engine(f"mssql+pyodbc:///?odbc_connect={params}", pool_pre_ping=True)
-
-MAX_WORKERS = 2
-MAX_IMAGES = 5
-RETRY_LIMIT = 3
-SLEEP_BETWEEN_LOTS = 1.5
-MIN_INTERVAL = 10  # seconds between requests to stay under rate limit
-
-# --- optional global rate limiting for OpenAI or external APIs ---
-client = None  # placeholder for your OpenAI client
-rate_lock = threading.Semaphore(1)
-_last_request_time = 0
-
-
-# --------------------------------------------------
-# IMAGE CONFIGURATION
-# --------------------------------------------------
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
-
-# Serve local images from /downloads
-app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
-
-def get_first_image(lot_id):
-    """Return the first image path for a given lot ID like 69251935_image_1.jpg."""
-    lot_folder = os.path.join(DOWNLOAD_DIR, str(lot_id))
-    if not os.path.exists(lot_folder):
-        return None
-
-    # Look for filenames that start with the lot_id and end with .jpg/.jpeg/.png
-    images = [
-        f for f in os.listdir(lot_folder)
-        if f.lower().startswith(str(lot_id).lower()) and f.lower().endswith((".jpg", ".jpeg", ".png"))
-    ]
-
-    if not images:
-        return None
-
-    # Sort so _image_1.jpg comes first
-    images.sort()
-    first_image = images[0]
-
-    return f"/downloads/{lot_id}/{first_image}"
-
-# Make sure pyodbc can find the driver inside Render
-os.environ["LD_LIBRARY_PATH"] = "/opt/render/project/src/backend/odbc/usr/lib/x86_64-linux-gnu"
-os.environ["ODBCINSTINI"] = "/opt/render/project/src/backend/odbc/usr/share/msodbcsql18/odbcinst.ini"
-
-# --------------------------------------------------
-# DATABASE CONNECTION
-# --------------------------------------------------
 def get_engine():
     """Create a SQLAlchemy engine for AWS RDS SQL Server."""
     connection_string = (
@@ -130,6 +50,29 @@ def get_engine():
     params = urllib.parse.quote_plus(connection_string)
     return create_engine(f"mssql+pyodbc:///?odbc_connect={params}", pool_pre_ping=True)
 
+# --------------------------------------------------
+# IMAGE CONFIGURATION
+# --------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
+
+# Serve static car images
+app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
+
+def get_first_image(lot_id):
+    """Return the first matching image for a given lot."""
+    lot_folder = os.path.join(DOWNLOAD_DIR, str(lot_id))
+    if not os.path.exists(lot_folder):
+        return None
+    images = [
+        f for f in os.listdir(lot_folder)
+        if f.lower().startswith(str(lot_id).lower()) and f.lower().endswith((".jpg", ".jpeg", ".png"))
+    ]
+    if not images:
+        return None
+    images.sort()
+    first_image = images[0]
+    return f"/downloads/{lot_id}/{first_image}"
 
 # --------------------------------------------------
 # ROUTES
@@ -137,7 +80,6 @@ def get_engine():
 @app.get("/")
 def root():
     return {"status": "Backend is running"}
-
 
 @app.get("/test_db")
 def test_db():
@@ -149,7 +91,6 @@ def test_db():
             return {"database": row[0], "user": row[1]}
     except Exception as e:
         return {"error": str(e)}
-
 
 @app.get("/cars/with_estimates")
 def get_cars_with_estimates():
@@ -170,7 +111,7 @@ def get_cars_with_estimates():
                         repair_estimate,
                         lot_url,
                         repair_details,
-                        resale_details       
+                        resale_details
                     FROM cars
                     WHERE repair_estimate IS NOT NULL
                 """)
@@ -194,8 +135,6 @@ def get_cars_with_estimates():
             max_bid = max(0, round(resale - (repair + fees + resale * target_margin)))
             profit = resale - (repair + fees + max_bid)
             margin = round((profit / resale * 100), 1) if resale else 0.0
-
-            # ✅ Generate image URL for this lot
             image_url = get_first_image(r.lot_number)
 
             cars.append({
@@ -212,18 +151,15 @@ def get_cars_with_estimates():
                 "profit": round(profit, 2),
                 "margin": margin,
                 "url": r.lot_url,
-                "repair_details": r.repair_details if getattr(r, "repair_details", None) else "",
+                "repair_details": r.repair_details or "",
                 "resale_details": r.resale_details or "",
-                "image_url": image_url or "",  # ✅ include image path
+                "image_url": image_url or "",
             })
 
         return {"cars": cars}
 
     except Exception as e:
         return {"error": str(e)}
-
-
-
 
 # --------------------------------------------------
 # MAIN ENTRYPOINT

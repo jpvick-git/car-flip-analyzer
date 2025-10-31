@@ -1,0 +1,1 @@
+This vehicle is not a good candidate for flipping. The cost and complexity of repairs to restore it to a roadworthy state far exceed typical resale value. The fire damage is extensive, affecting almost all major components.

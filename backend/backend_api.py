@@ -19,9 +19,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DB_NAME = "cars"  # name of your database
-SERVER = "localhost\\SQLEXPRESS"
+
 DRIVER = "ODBC Driver 18 for SQL Server"
+SERVER = "carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com"
+DATABASE = "cars"
+USERNAME = "admin"
+PASSWORD = "1K0xi*rfMR!r4VN7"  # <- use your actual RDS password
+
+connection_string = (
+    f"Driver={{{DRIVER}}};"
+    f"Server={SERVER},1433;"
+    f"Database={DATABASE};"
+    f"Uid={USERNAME};"
+    f"Pwd={PASSWORD};"
+    "Encrypt=yes;"
+    "TrustServerCertificate=yes;"
+)
+
+params = urllib.parse.quote_plus(connection_string)
+engine = create_engine(f"mssql+pyodbc:///?odbc_connect={params}", pool_pre_ping=True)
 
 MAX_WORKERS = 2
 MAX_IMAGES = 5
@@ -72,16 +88,18 @@ def get_first_image(lot_id):
 # DATABASE CONNECTION
 # --------------------------------------------------
 def get_engine():
+    """Create a SQLAlchemy engine for AWS RDS SQL Server."""
     connection_string = (
         f"Driver={{{DRIVER}}};"
-        f"Server={SERVER};"
-        f"Database={DB_NAME};"
-        "Trusted_Connection=yes;"
-        "Encrypt=no;"
+        f"Server={SERVER},1433;"
+        f"Database={DATABASE};"
+        f"Uid={USERNAME};"
+        f"Pwd={PASSWORD};"
+        "Encrypt=yes;"
         "TrustServerCertificate=yes;"
     )
     params = urllib.parse.quote_plus(connection_string)
-    return create_engine(f"mssql+pyodbc:///?odbc_connect={params}", pool_pre_ping=True, pool_size=5)
+    return create_engine(f"mssql+pyodbc:///?odbc_connect={params}", pool_pre_ping=True)
 
 
 # --------------------------------------------------

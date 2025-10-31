@@ -29,7 +29,7 @@ export default function CarFlipAnalyzer() {
     const fetchCarsFromDB = async () => {
       setLoading(true);
       try {
-        const res = await fetch("http://localhost:8000/cars/with_estimates");
+        const res = await fetch("https://car-flip-analyzer.onrender.com/cars/with_estimates");
         const data = await res.json();
         if (data && data.cars) {
           const cars = data.cars;

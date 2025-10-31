@@ -1,0 +1,6 @@
+2025/10/17-18:17:35.391 8da4 Reusing MANIFEST C:\car-flip-analyzer\backend\edge_profile\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2025/10/17-18:17:35.392 8da4 Recovering log #36
+2025/10/17-18:17:35.393 8da4 Reusing old log C:\car-flip-analyzer\backend\edge_profile\Default\EdgeCoupons/coupons_data.db/000036.log 
+2025/10/17-18:17:35.494 8ac4 Level-0 table #40: started
+2025/10/17-18:17:35.499 8ac4 Level-0 table #40: 672340 bytes OK
+2025/10/17-18:17:35.501 8ac4 Delete type=0 #36

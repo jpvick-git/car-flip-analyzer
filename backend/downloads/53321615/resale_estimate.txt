@@ -1,0 +1,2 @@
+13500.00
+Assuming repairs are completed, the vehicle should have average resale value based on the current market for this make and model. Condition post-repair, mileage, and potential warranty impact the resale price range.

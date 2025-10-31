@@ -1,0 +1,29 @@
+>>> copart_download.py started <<<
+=== Running copart_download.py (Final v5) ===
+➡️  URL provided: https://www.copart.com/lot/87859185/salvage-2017-infiniti-qx30-base-il-chicago-north
+🔗 Using Copart URL: https://www.copart.com/lot/87859185/salvage-2017-infiniti-qx30-base-il-chicago-north
+🟢 Attaching to Edge session for lot 87859185...
+🚀 Launching Edge (normal mode)...
+🟢 Edge debugger is ready.
+🔗 Connecting to Edge via CDP...
+🌐 Navigating to https://www.copart.com/lot/87859185/salvage-2017-infiniti-qx30-base-il-chicago-north ...
+✅ Page loaded: 2017 INFINITI QX30 BASE | Run and Drive | Tue. Oct 28, 2025 | IL - CHICAGO NORTH | Copart
+📸 Clicked photo icon — gallery opened.
+🔽 Looking for download arrow (button#downloadImageBtn)...
+⚠️ Normal click failed, retrying with JS...
+✅ Clicked download icon via JS.
+📦 Waiting for 'Download all' overlay to appear...
+🔍 Attempt 1: Visible buttons → Search inventory, USA | English, Yes, USA, Sign in, Yes, USA, ×, Cancel, Go now, Close, Run and Drive, IL - CHICAGO NORTH, IL - CHICAGO NORTH, 1/13, Watchlist, HD, Download all
+Download this image, Download all, Download this image, Order condition report, Listen to engine, View front right
+No highlight(s), View front left
+No highlight(s), View rear left
+No highlight(s), View rear right
+2 highlight(s), Seller reserve not yet met, (What is this?), (What is this?), bid increment, Bid now, Buy it now ($5,700), Make an offer, Shipping estimate, Check estimate, Starting bid, Check now, Learn more, Check now, English, USA, English, USA, ×, Submit, ×, OK, ×
+                        Close, Sign into your account, ×, ×, ×, ×, ×, OK, ×, Allow All, Back Button, Filter Icon, Clear, Apply, Cancel, Reject All, Confirm My Choices, All images (13), Engine
+(2), HD
+✅ Found 'Download all' button using: button.btn-reset.p-pb-5.text-dark-gray-3.p-decor-none
+✅ Downloaded ZIP: C:\car-flip-analyzer\backend\downloads\87859185.zip
+📦 Extracting ZIP → C:\car-flip-analyzer\backend\downloads\87859185
+📂 Extracted 12 files to: C:\car-flip-analyzer\backend\downloads\87859185
+🧹 Closing browser window...
+💨 Edge closed successfully.

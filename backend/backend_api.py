@@ -106,7 +106,7 @@ def test_db():
 
 @app.get("/cars/with_estimates")
 def get_cars_with_estimates():
-    """Return cars where repair_estimate is not null, with calculated values."""
+    """Return cars where repair_estimate is not null, with calculated values and image URLs."""
     try:
         engine = get_engine()
         with engine.connect() as conn:
@@ -148,6 +148,9 @@ def get_cars_with_estimates():
             profit = resale - (repair + fees + max_bid)
             margin = round((profit / resale * 100), 1) if resale else 0.0
 
+            # ✅ Generate image URL for this lot
+            image_url = get_first_image(r.lot_number)
+
             cars.append({
                 "id": r.lot_number,
                 "year": r.year,
@@ -164,12 +167,15 @@ def get_cars_with_estimates():
                 "url": r.lot_url,
                 "repair_details": r.repair_details if getattr(r, "repair_details", None) else "",
                 "resale_details": r.resale_details or "",
+                "image_url": image_url or "",  # ✅ include image path
             })
 
         return {"cars": cars}
 
     except Exception as e:
         return {"error": str(e)}
+
+
 
 
 # --------------------------------------------------

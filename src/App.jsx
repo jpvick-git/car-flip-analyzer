@@ -233,19 +233,35 @@ export default function CarFlipAnalyzer() {
                   <p className="text-sm text-gray-400">Damage: {car.damage}</p>
                 </div>
 
-                <div className="space-y-1 text-sm">
-                  <p>AI Resale Value: <span className="text-gray-300">${car.resale?.toLocaleString?.()}</span></p>
-                  <p>
-                    Repairs:{" "}
-                    <input
-                      type="number"
-                      value={car.repairs}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => handleRepairChange(car.id, e.target.value)}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      className="bg-neutral-700 text-white px-2 py-1 w-24 rounded-md ml-2"
-                    />
-                  </p>
+				<div className="space-y-1 text-sm">
+				  {/* 🖼️ Vehicle Image */}
+				  {car.image_url && (
+					<img
+					  src={`http://localhost:8000${car.image_url}`}
+					  alt={`${car.make} ${car.model}`}
+					  className="card-image"
+					  loading="lazy"
+					/>
+				  )}
+
+				  <p>
+					AI Resale Value:{" "}
+					<span className="text-gray-300">
+					  ${car.resale?.toLocaleString?.()}
+					</span>
+				  </p>
+				  <p>
+					Repairs:{" "}
+					<input
+					  type="number"
+					  value={car.repairs}
+					  onClick={(e) => e.stopPropagation()}
+					  onChange={(e) => handleRepairChange(car.id, e.target.value)}
+					  onKeyDown={(e) => e.stopPropagation()}
+					  className="bg-neutral-700 text-white px-2 py-1 w-24 rounded-md ml-2"
+					/>
+				  </p>
+
                   <p>Max Bid ({targetMargin}% Margin): <span className="font-semibold text-yellow-400">${car.maxBid?.toLocaleString?.()}</span></p>
                   <p>Profit: <span className={`font-semibold ${car.profit >= 0 ? "text-green-400" : "text-red-400"}`}>${car.profit?.toLocaleString?.()}</span></p>
                   <p>Margin: <span className={`font-semibold ${car.margin >= 30 ? "text-green-400" : "text-blue-400"}`}>{car.margin}%</span></p>

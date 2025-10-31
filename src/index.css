@@ -5,3 +5,20 @@
 body {
   @apply bg-gradient-to-b from-neutral-950 to-black text-white min-h-screen font-sans;
 }
+
+/* -------------------------------------------------- */
+/* Custom image + card styling for Car Flip Analyzer  */
+/* -------------------------------------------------- */
+
+img {
+  @apply select-none rounded-lg shadow-md transition-transform duration-200;
+}
+
+img:hover {
+  @apply scale-[1.02];
+}
+
+/* Limit card image height for consistency */
+.card-image {
+  @apply object-cover w-full max-h-48 rounded-lg mb-3 shadow-lg;
+}

@@ -1,19 +1,27 @@
-aiohappyeyeballs==2.6.1
-aiohttp==3.13.1
-aiosignal==1.4.0
-attrs==25.4.0
-certifi==2025.10.5
-charset-normalizer==3.4.4
-frozenlist==1.8.0
-greenlet==3.2.4
-idna==3.11
-multidict==6.7.0
-playwright==1.55.0
-propcache==0.4.1
-pyee==13.0.0
-python-dotenv==1.1.1
-requests==2.32.5
+# --- Core FastAPI stack ---
+fastapi==0.115.2
+uvicorn[standard]==0.32.0
+sqlalchemy==2.0.36
+pydantic==2.9.2
+
+# --- SQL Server + DB driver ---
+pyodbc==5.2.0
+
+# --- Task scheduling / utilities ---
 schedule==1.2.2
-typing_extensions==4.15.0
-urllib3==2.5.0
+python-dotenv==1.1.1
+requests==2.32.3
+
+# --- Async / networking ---
+aiohttp==3.13.1
+aiohappyeyeballs==2.6.1
+aiosignal==1.4.0
+multidict==6.7.0
+attrs==25.1.0
+frozenlist==1.4.1
 yarl==1.22.0
+
+# --- Optional: only if you run Playwright locally ---
+# playwright==1.55.0
+# pyee==13.0.0
+# propcache==0.4.1

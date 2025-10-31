@@ -200,13 +200,22 @@ export default function CarFlipAnalyzer() {
               >
                 {/* IMAGE */}
                 {car.image_url && (
-                  <img
-                    src={`http://localhost:8000${car.image_url}`}
-                    alt={`${car.make} ${car.model}`}
-                    className="w-full h-48 object-cover rounded-lg mb-3"
-                  />
-                )}
-
+				  <img
+					src={
+					  car.image_url.startsWith("http")
+						? car.image_url
+						: `${import.meta.env.MODE === "development"
+							? "http://localhost:8000"
+							: "https://car-flip-analyzer.onrender.com"
+						  }${car.image_url}`
+					}
+					alt={`${car.make} ${car.model}`}
+					className="w-full h-48 object-cover rounded-lg mb-3"
+					onError={(e) => {
+					  e.target.src = "https://placehold.co/600x400?text=No+Image";
+					}}
+				  />
+				)}
                 {/* TITLE */}
                 <div className="pb-3 border-b border-neutral-700 mb-3">
                   <h2 className="text-xl font-semibold mb-1 text-white">

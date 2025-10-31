@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, text
 import urllib
 import threading
+import os
+from fastapi.staticfiles import StaticFiles
 
 # --------------------------------------------------
 # CONFIGURATION
@@ -31,6 +33,39 @@ MIN_INTERVAL = 10  # seconds between requests to stay under rate limit
 client = None  # placeholder for your OpenAI client
 rate_lock = threading.Semaphore(1)
 _last_request_time = 0
+
+
+# --------------------------------------------------
+# IMAGE CONFIGURATION
+# --------------------------------------------------
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
+
+# Serve local images from /downloads
+app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
+
+def get_first_image(lot_id):
+    """Return the first image path for a given lot ID like 69251935_image_1.jpg."""
+    lot_folder = os.path.join(DOWNLOAD_DIR, str(lot_id))
+    if not os.path.exists(lot_folder):
+        return None
+
+    # Look for filenames that start with the lot_id and end with .jpg/.jpeg/.png
+    images = [
+        f for f in os.listdir(lot_folder)
+        if f.lower().startswith(str(lot_id).lower()) and f.lower().endswith((".jpg", ".jpeg", ".png"))
+    ]
+
+    if not images:
+        return None
+
+    # Sort so _image_1.jpg comes first
+    images.sort()
+    first_image = images[0]
+
+    return f"/downloads/{lot_id}/{first_image}"
+
 
 
 # --------------------------------------------------
@@ -87,7 +122,8 @@ def get_cars_with_estimates():
                         est_retail_value AS resale_value,
                         repair_estimate,
                         lot_url,
-                        repair_details
+                        repair_details,
+                        resale_details       
                     FROM cars
                     WHERE repair_estimate IS NOT NULL
                 """)
@@ -126,7 +162,8 @@ def get_cars_with_estimates():
                 "profit": round(profit, 2),
                 "margin": margin,
                 "url": r.lot_url,
-                "repair_details": r.repair_details if getattr(r, "repair_details", None) else "",  # ✅ add this
+                "repair_details": r.repair_details if getattr(r, "repair_details", None) else "",
+                "resale_details": r.resale_details or "",
             })
 
         return {"cars": cars}

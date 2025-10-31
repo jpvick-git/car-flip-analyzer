@@ -85,19 +85,22 @@ export default function CarFlipAnalyzer() {
   // --------------------------------------------------
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col relative">
-      <header className="flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950/90">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
-            Car Flip Analyzer (AI)
-          </h1>
-        </div>
+		<header className="flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950/90">
+		  <div className="flex items-center gap-2">
+			
+			<h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
+			  Car Flip Analyzer (AI)
+			</h1>
+		  </div>
 
-        <img
-          src="/logo.png"
-          alt="Automotive Analyst Logo"
-          className="h-16 md:h-20 lg:h-24 object-contain opacity-90 hover:opacity-100 transition-opacity duration-200"
-        />
-      </header>
+		  <img
+			src="/logo.png"
+			alt="Automotive Analyst Logo"
+			className="h-16 md:h-20 lg:h-24 object-contain opacity-90 hover:opacity-100 transition-opacity duration-200"
+		  />
+		</header>
+
+
 
       {/* FILTER BAR */}
       <div className="p-4 border-b border-neutral-800 bg-neutral-900/60 flex flex-wrap gap-3 justify-center">
@@ -197,22 +200,23 @@ export default function CarFlipAnalyzer() {
               >
                 {/* IMAGE */}
                 {car.image_url && (
-                  <img
-                    src={
-                      car.image_url.startsWith("http")
-                        ? car.image_url
-                        : `${import.meta.env.MODE === "development"
-                            ? "http://localhost:8000"
-                            : "https://car-flip-analyzer.onrender.com"
-                          }${car.image_url}`
-                    }
-                    alt={`${car.make} ${car.model}`}
-                    className="w-full h-48 object-cover rounded-lg mb-3"
-                    onError={(e) => {
-                      e.target.src = "https://placehold.co/600x400?text=No+Image";
-                    }}
-                  />
-                )}
+				  <img
+					src={
+					  car.image_url.startsWith("http")
+						? car.image_url
+						: `${import.meta.env.MODE === "development"
+							? "http://localhost:8000"
+							: "https://car-flip-analyzer.onrender.com"
+						  }${car.image_url}`
+					}
+					alt={`${car.make} ${car.model}`}
+					className="w-full h-48 object-cover rounded-lg mb-3"
+					onError={(e) => {
+					  e.target.src = "https://placehold.co/600x400?text=No+Image";
+					}}
+				  />
+				)}
+
 
                 {/* TITLE */}
                 <div className="pb-3 border-b border-neutral-700 mb-3">

@@ -5,6 +5,33 @@ import urllib
 import threading
 import os
 from fastapi.staticfiles import StaticFiles
+import os
+import subprocess
+
+def ensure_odbc_driver():
+    """Ensure ODBC Driver 18 is installed at runtime (non-root safe)."""
+    try:
+        # Check if driver is already there
+        if os.path.exists("/opt/microsoft/msodbcsql18/lib64/libmsodbcsql-18.so"):
+            print("✅ ODBC Driver 18 already installed.")
+            return
+
+        print("📦 Downloading Microsoft ODBC Driver 18 for SQL Server...")
+        subprocess.run([
+            "curl", "-fsSL",
+            "https://packages.microsoft.com/ubuntu/22.04/prod/pool/main/m/msodbcsql18/msodbcsql18_18.3.2.1-1_amd64.deb",
+            "-o", "/tmp/msodbcsql18.deb"
+        ], check=True)
+
+        subprocess.run(["dpkg", "-x", "/tmp/msodbcsql18.deb", "/opt/microsoft/msodbcsql18"], check=True)
+        os.environ["ODBCSYSINI"] = "/opt/microsoft/msodbcsql18/etc"
+        os.environ["LD_LIBRARY_PATH"] = "/opt/microsoft/msodbcsql18/lib64"
+        print("✅ ODBC Driver 18 installed successfully (user mode).")
+
+    except Exception as e:
+        print(f"⚠️ Skipped ODBC install (no permission or already installed): {e}")
+
+
 
 # --------------------------------------------------
 # CONFIGURATION

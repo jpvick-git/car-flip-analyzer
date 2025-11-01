@@ -203,9 +203,11 @@ console.log("🚀 Fresh Vercel build deployed!");
                 {car.image_url && (
 					<img
 					  src={
-						car.image_url?.startsWith("http")
-						  ? car.image_url.replace("http://45.55.43.140", "")
-						  : car.image_url
+						car.image_url
+						  ? car.image_url.startsWith("http")
+							? car.image_url.replace("http://", "https://") // enforce HTTPS
+							: `https://45.55.43.140${car.image_url}`       // relative → absolute path
+						  : "https://placehold.co/600x400?text=No+Image"
 					  }
 					  alt={`${car.make} ${car.model}`}
 					  className="w-full h-48 object-cover rounded-lg mb-3"
@@ -213,6 +215,7 @@ console.log("🚀 Fresh Vercel build deployed!");
 						e.target.src = "https://placehold.co/600x400?text=No+Image";
 					  }}
 					/>
+
 				)}
 
 

@@ -13,6 +13,7 @@ import subprocess
 os.environ["LD_LIBRARY_PATH"] = "/opt/render/project/src/backend/odbc/usr/lib/x86_64-linux-gnu"
 os.environ["ODBCINSTINI"] = "/opt/render/project/src/backend/odbc/etc/odbcinst.ini"
 os.environ["ODBCSYSINI"] = "/opt/render/project/src/backend/odbc/etc"
+os.environ["PATH"] = os.environ["LD_LIBRARY_PATH"] + ":" + os.environ.get("PATH", "")
 
 # --------------------------------------------------
 # FASTAPI SETUP

@@ -20,6 +20,14 @@ echo "📂 Extracting files from the .deb package..."
 dpkg -x msodbcsql18.deb .
 
 # -----------------------------------------------------------
+# EXPORT DRIVER PATH SO PYODBC CAN FIND IT
+# -----------------------------------------------------------
+echo "📦 Setting ODBC environment paths..."
+echo "export LD_LIBRARY_PATH=/opt/render/project/src/backend/odbc/usr/lib/x86_64-linux-gnu:\$LD_LIBRARY_PATH" >> $RENDER_OUTPUT_FILE
+echo "export ODBCINSTINI=/opt/render/project/src/backend/odbc/etc/odbcinst.ini" >> $RENDER_OUTPUT_FILE
+echo "export ODBCSYSINI=/opt/render/project/src/backend/odbc/etc" >> $RENDER_OUTPUT_FILE
+
+# -----------------------------------------------------------
 # VERIFY LIBRARY FILES
 # -----------------------------------------------------------
 echo "✅ Driver extracted locally to $(pwd)"

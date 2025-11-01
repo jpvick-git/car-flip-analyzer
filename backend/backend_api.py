@@ -19,25 +19,20 @@ app.add_middleware(
 )
 
 # --------------------------------------------------
-# DATABASE CONFIGURATION (PostgreSQL)
-# --------------------------------------------------
-# --------------------------------------------------
 # DATABASE CONFIGURATION (PostgreSQL with SSL for Render)
 # --------------------------------------------------
-
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
     raise RuntimeError("❌ DATABASE_URL not set. Make sure it's defined in Render environment variables.")
 
-# Ensure sslmode=require is present
-if "sslmode" not in DATABASE_URL:
-    DATABASE_URL += "?sslmode=require"
+# Make sure the dialect is correct for psycopg3
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://")
 
-# ✅ Force SSL handshake explicitly
-# psycopg3 works with the 'postgresql+psycopg' dialect
+# Create engine with explicit SSL
 engine = create_engine(
-    DATABASE_URL.replace("postgresql://", "postgresql+psycopg://"),
+    DATABASE_URL,
     connect_args={"sslmode": "require"},
     pool_pre_ping=True
 )
@@ -53,7 +48,6 @@ def get_engine():
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 
-# Serve static car images
 if not os.path.exists(DOWNLOAD_DIR):
     os.makedirs(DOWNLOAD_DIR)
 
@@ -73,12 +67,14 @@ def get_first_image(lot_id: str):
     images.sort()
     return f"/downloads/{lot_id}/{images[0]}"
 
+
 # --------------------------------------------------
 # ROUTES
 # --------------------------------------------------
 @app.get("/")
 def root():
     return {"status": "✅ Backend is running with PostgreSQL!"}
+
 
 @app.get("/test_db")
 def test_db():
@@ -89,6 +85,7 @@ def test_db():
             return {"database": row[0], "user": row[1]}
     except Exception as e:
         return {"error": str(e)}
+
 
 @app.get("/cars/with_estimates")
 def get_cars_with_estimates():
@@ -157,28 +154,33 @@ def get_cars_with_estimates():
     except Exception as e:
         return {"error": str(e)}
 
+
 # --------------------------------------------------
-# AUTO TABLE CREATION (Render-friendly)
+# AUTO TABLE CREATION
 # --------------------------------------------------
 @app.on_event("startup")
 def create_tables_if_needed():
-    with engine.connect() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS cars (
-                lot_inv_num VARCHAR(50) PRIMARY KEY,
-                year INTEGER,
-                make VARCHAR(100),
-                model VARCHAR(100),
-                odometer INTEGER,
-                damage_description VARCHAR(255),
-                est_retail_value NUMERIC(12,2),
-                repair_estimate NUMERIC(12,2),
-                lot_url TEXT,
-                repair_details TEXT,
-                resale_details TEXT
-            );
-        """))
-        conn.commit()
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS cars (
+                    lot_inv_num VARCHAR(50) PRIMARY KEY,
+                    year INTEGER,
+                    make VARCHAR(100),
+                    model VARCHAR(100),
+                    odometer INTEGER,
+                    damage_description VARCHAR(255),
+                    est_retail_value NUMERIC(12,2),
+                    repair_estimate NUMERIC(12,2),
+                    lot_url TEXT,
+                    repair_details TEXT,
+                    resale_details TEXT
+                );
+            """))
+            conn.commit()
+    except Exception as e:
+        print(f"❌ Table creation failed: {e}")
+
 
 # --------------------------------------------------
 # MAIN ENTRYPOINT

@@ -154,6 +154,21 @@ def get_cars_with_estimates():
     except Exception as e:
         return {"error": str(e)}
 
+import time
+
+def wait_for_db(max_retries=5, delay=3):
+    """Wait for the database to be ready before continuing startup."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            print(f"✅ Database connected on attempt {attempt}")
+            return True
+        except Exception as e:
+            print(f"⏳ DB not ready (attempt {attempt}/{max_retries}): {e}")
+            time.sleep(delay)
+    raise RuntimeError("❌ Could not connect to the database after several attempts.")
+
 
 # --------------------------------------------------
 # AUTO TABLE CREATION

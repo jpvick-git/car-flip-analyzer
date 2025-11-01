@@ -10,9 +10,9 @@ import subprocess
 # --------------------------------------------------
 # ODBC DRIVER PATH FIX (Render compatible)
 # --------------------------------------------------
-os.environ["ODBCSYSINI"] = "/opt/render/project/src/backend/odbc/etc"
-os.environ["ODBCINSTINI"] = "/opt/render/project/src/backend/odbc/usr/share/msodbcsql18/odbcinst.ini"
 os.environ["LD_LIBRARY_PATH"] = "/opt/render/project/src/backend/odbc/usr/lib/x86_64-linux-gnu"
+os.environ["ODBCINSTINI"] = "/opt/render/project/src/backend/odbc/etc/odbcinst.ini"
+os.environ["ODBCSYSINI"] = "/opt/render/project/src/backend/odbc/etc"
 
 # --------------------------------------------------
 # FASTAPI SETUP
@@ -31,10 +31,10 @@ app.add_middleware(
 # DATABASE CONFIGURATION
 # --------------------------------------------------
 DRIVER = "ODBC Driver 18 for SQL Server"
-SERVER = "carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com"
-DATABASE = "cars"
-USERNAME = "admin"
-PASSWORD = "1K0xi*rfMR!r4VN7"  # replace if needed
+SERVER = os.getenv("SERVER")
+DATABASE = os.getenv("DATABASE")
+USERNAME = os.getenv("USERNAME")
+PASSWORD = os.getenv("PASSWORD")
 
 def get_engine():
     """Create a SQLAlchemy engine for AWS RDS SQL Server."""

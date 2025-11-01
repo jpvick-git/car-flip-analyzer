@@ -1,33 +1,39 @@
-FROM python:3.12-slim
+# --------------------------------------------------
+# Base image
+# --------------------------------------------------
+FROM python:3.12-bullseye
 
+# Prevents tzdata from prompting
 ENV DEBIAN_FRONTEND=noninteractive
 
 # --------------------------------------------------
-# Install Microsoft ODBC Driver 18 for SQL Server (Debian 13+)
+# Install dependencies for ODBC + pyodbc + MS SQL
 # --------------------------------------------------
 RUN apt-get update && \
-    apt-get install -y curl gnupg2 ca-certificates apt-transport-https && \
-    curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft.gpg && \
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/debian/12/prod bookworm main" \
-      > /etc/apt/sources.list.d/mssql-release.list && \
+    apt-get install -y curl gnupg2 apt-transport-https ca-certificates && \
+    curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /etc/apt/trusted.gpg.d/microsoft.gpg && \
+    curl https://packages.microsoft.com/config/debian/11/prod.list -o /etc/apt/sources.list.d/mssql-release.list && \
     apt-get update && ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------
-# Python dependencies
+# Create app directory
 # --------------------------------------------------
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
-
-# --------------------------------------------------
-# Copy app
-# --------------------------------------------------
-COPY . /app
 WORKDIR /app
+COPY . /app
+
+# --------------------------------------------------
+# Install Python requirements
+# --------------------------------------------------
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# --------------------------------------------------
+# Expose port
+# --------------------------------------------------
+EXPOSE 10000
 
 # --------------------------------------------------
 # Start app
 # --------------------------------------------------
-ENV PORT=10000
-EXPOSE 10000
-CMD ["uvicorn", "backend.backend_api:app", "--host", "0.0.0.0", "--port", "10000"]
+CMD ["uvicorn", "backend_api:app", "--host", "0.0.0.0", "--port", "10000"]

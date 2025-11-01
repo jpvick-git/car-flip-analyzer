@@ -3,7 +3,7 @@ services:
     name: car-flip-analyzer
     env: python
     buildCommand: bash render-build.sh
-    startCommand: uvicorn backend_api:app --host 0.0.0.0 --port 10000
+    startCommand: uvicorn backend.backend_api:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: SERVER
         value: carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com
@@ -12,4 +12,4 @@ services:
       - key: USERNAME
         value: admin
       - key: PASSWORD
-        value: your_actual_password
+        value: 1K0xi*rfMR!r4VN7

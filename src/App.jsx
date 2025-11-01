@@ -29,7 +29,7 @@ export default function CarFlipAnalyzer() {
     const fetchCarsFromDB = async () => {
       setLoading(true);
       try {
-        const res = await fetch("https://car-flip-analyzer.onrender.com/cars/with_estimates");
+        const res = await fetch("http://45.55.43.140/cars/with_estimates");
         const data = await res.json();
         if (data && data.cars) {
           const cars = data.cars;
@@ -206,7 +206,8 @@ export default function CarFlipAnalyzer() {
 						? car.image_url
 						: `${import.meta.env.MODE === "development"
 							? "http://localhost:8000"
-							: "https://car-flip-analyzer.onrender.com"
+							: "http://45.55.43.140"
+
 						  }${car.image_url}`
 					}
 					alt={`${car.make} ${car.model}`}

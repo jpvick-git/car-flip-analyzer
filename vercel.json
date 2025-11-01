@@ -1,12 +1,15 @@
 {
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "cache": false,
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "http://45.55.43.140/$1"
+      "destination": "https://45.55.43.140/$1"
     },
     {
       "source": "/downloads/(.*)",
-      "destination": "http://45.55.43.140/downloads/$1"
+      "destination": "https://45.55.43.140/downloads/$1"
     }
   ]
 }

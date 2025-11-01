@@ -29,7 +29,7 @@ export default function CarFlipAnalyzer() {
     const fetchCarsFromDB = async () => {
       setLoading(true);
       try {
-        const res = await fetch("http://45.55.43.140/cars/with_estimates");
+        const res = await fetch("/api/cars/with_estimates");
         const data = await res.json();
         if (data && data.cars) {
           const cars = data.cars;

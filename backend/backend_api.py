@@ -35,8 +35,9 @@ if "sslmode" not in DATABASE_URL:
     DATABASE_URL += "?sslmode=require"
 
 # ✅ Force SSL handshake explicitly
+# psycopg3 works with the 'postgresql+psycopg' dialect
 engine = create_engine(
-    DATABASE_URL,
+    DATABASE_URL.replace("postgresql://", "postgresql+psycopg://"),
     connect_args={"sslmode": "require"},
     pool_pre_ping=True
 )

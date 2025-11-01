@@ -175,26 +175,26 @@ def wait_for_db(max_retries=5, delay=3):
 # --------------------------------------------------
 @app.on_event("startup")
 def create_tables_if_needed():
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS cars (
-                    lot_inv_num VARCHAR(50) PRIMARY KEY,
-                    year INTEGER,
-                    make VARCHAR(100),
-                    model VARCHAR(100),
-                    odometer INTEGER,
-                    damage_description VARCHAR(255),
-                    est_retail_value NUMERIC(12,2),
-                    repair_estimate NUMERIC(12,2),
-                    lot_url TEXT,
-                    repair_details TEXT,
-                    resale_details TEXT
-                );
-            """))
-            conn.commit()
-    except Exception as e:
-        print(f"❌ Table creation failed: {e}")
+    wait_for_db()  # 👈 ensures connection before running CREATE TABLE
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS cars (
+                lot_inv_num VARCHAR(50) PRIMARY KEY,
+                year INTEGER,
+                make VARCHAR(100),
+                model VARCHAR(100),
+                odometer INTEGER,
+                damage_description VARCHAR(255),
+                est_retail_value NUMERIC(12,2),
+                repair_estimate NUMERIC(12,2),
+                lot_url TEXT,
+                repair_details TEXT,
+                resale_details TEXT
+            );
+        """))
+        conn.commit()
+    print("✅ Cars table ready!")
+
 
 
 # --------------------------------------------------

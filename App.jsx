@@ -21,6 +21,7 @@ export default function CarFlipAnalyzer() {
     minMiles: "",
     maxMiles: "",
   });
+console.log("🚀 Fresh Vercel build deployed!");
 
   // --------------------------------------------------
   // LOAD CARS FROM BACKEND

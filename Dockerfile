@@ -1,34 +1,32 @@
-# Use a small base image that supports Microsoft ODBC
 FROM python:3.12-slim
 
-# Prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 
 # --------------------------------------------------
-# Install dependencies and the Microsoft ODBC driver
+# Install Microsoft ODBC Driver 18 for SQL Server
 # --------------------------------------------------
 RUN apt-get update && \
-    apt-get install -y curl gnupg2 apt-transport-https && \
-    curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
-    curl https://packages.microsoft.com/config/debian/12/prod.list \
-        -o /etc/apt/sources.list.d/mssql-release.list && \
+    apt-get install -y curl gnupg2 ca-certificates apt-transport-https software-properties-common && \
+    curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft.gpg && \
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/debian/12/prod bookworm main" \
+      > /etc/apt/sources.list.d/mssql-release.list && \
     apt-get update && ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------
-# Install Python packages
+# Python dependencies
 # --------------------------------------------------
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 # --------------------------------------------------
-# Copy the backend code into the container
+# Copy app
 # --------------------------------------------------
 COPY . /app
 WORKDIR /app
 
 # --------------------------------------------------
-# Expose port and start FastAPI
+# Start app
 # --------------------------------------------------
 ENV PORT=10000
 EXPOSE 10000

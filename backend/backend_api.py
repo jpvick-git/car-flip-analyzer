@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, text
 from fastapi.staticfiles import StaticFiles
 import os
+import re
 
 # --------------------------------------------------
 # FASTAPI SETUP
@@ -27,6 +28,10 @@ if not DATABASE_URL:
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
+def get_engine():
+    """Return the global database engine."""
+    return engine
+
 # --------------------------------------------------
 # IMAGE CONFIGURATION
 # --------------------------------------------------
@@ -36,8 +41,8 @@ DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 # Serve static car images
 if not os.path.exists(DOWNLOAD_DIR):
     os.makedirs(DOWNLOAD_DIR)
-app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
+app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
 def get_first_image(lot_id: str):
     """Return the first matching image for a given lot."""
@@ -56,11 +61,9 @@ def get_first_image(lot_id: str):
 # --------------------------------------------------
 # ROUTES
 # --------------------------------------------------
-
 @app.get("/")
 def root():
     return {"status": "✅ Backend is running with PostgreSQL!"}
-
 
 @app.get("/test_db")
 def test_db():
@@ -71,7 +74,6 @@ def test_db():
             return {"database": row[0], "user": row[1]}
     except Exception as e:
         return {"error": str(e)}
-
 
 @app.get("/cars/with_estimates")
 def get_cars_with_estimates():
@@ -104,7 +106,6 @@ def get_cars_with_estimates():
                     return 0.0
                 if isinstance(v, (int, float)):
                     return float(v)
-                import re
                 num = re.sub(r"[^0-9.]", "", str(v))
                 return float(num) if num else 0.0
 
@@ -140,11 +141,12 @@ def get_cars_with_estimates():
 
     except Exception as e:
         return {"error": str(e)}
-        
+
+# --------------------------------------------------
+# AUTO TABLE CREATION (Render-friendly)
+# --------------------------------------------------
 @app.on_event("startup")
 def create_tables_if_needed():
-    from sqlalchemy import text
-    engine = get_engine()
     with engine.connect() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS cars (

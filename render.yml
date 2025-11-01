@@ -1,15 +1,17 @@
 services:
   - type: web
     name: car-flip-analyzer
-    env: docker
+    env: python
     plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend_api:app --host 0.0.0.0 --port 10000
     healthCheckPath: /test_db
     envVars:
-      - key: SERVER
-        value: carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com
-      - key: DATABASE
-        value: cars
-      - key: USERNAME
-        value: admin
-      - key: PASSWORD
-        value: 1K0xi*rfMR!r4VN7
+      - key: DATABASE_URL
+        fromDatabase:
+          name: car-flip-db
+          property: connectionString
+
+databases:
+  - name: car-flip-db
+    plan: free

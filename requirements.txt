@@ -3,7 +3,7 @@ fastapi==0.115.2
 uvicorn[standard]==0.32.0
 sqlalchemy==2.0.36
 pydantic==2.9.2
-psycopg2-binary==2.9.10
+psycopg[binary]
 python-multipart==0.0.9
 
 # --- SQL Server (for local dev only) ---

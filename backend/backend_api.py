@@ -24,19 +24,15 @@ app.add_middleware(
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
-    raise RuntimeError("❌ DATABASE_URL not set. Make sure it's defined in Render environment variables.")
+    raise RuntimeError("❌ DATABASE_URL not set")
 
-# Make sure the dialect is correct for psycopg3
-if DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://")
+print(f"🌐 Connecting to {DATABASE_URL}")
 
-# Create engine with explicit SSL
 engine = create_engine(
-    DATABASE_URL,
+    DATABASE_URL + "?sslmode=require" if "sslmode" not in DATABASE_URL else DATABASE_URL,
+    pool_pre_ping=True,
     connect_args={"sslmode": "require"},
-    pool_pre_ping=True
 )
-
 def get_engine():
     """Return the global database engine."""
     return engine

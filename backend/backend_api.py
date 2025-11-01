@@ -2,9 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, text
 from fastapi.staticfiles import StaticFiles
+from dotenv import load_dotenv
 import os
 import re
 import time
+
+load_dotenv()  # 👈 this must come BEFORE DATABASE_URL = os.getenv(...)
 
 # --------------------------------------------------
 # FASTAPI SETUP

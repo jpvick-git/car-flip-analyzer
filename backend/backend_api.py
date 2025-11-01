@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, text
 from fastapi.staticfiles import StaticFiles
 import os
 import re
+import time
 
 # --------------------------------------------------
 # FASTAPI SETUP
@@ -12,14 +13,14 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # You can restrict this to your React domain later
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # --------------------------------------------------
-# DATABASE CONFIGURATION (PostgreSQL with SSL for Render)
+# DATABASE CONFIGURATION (SQL Server on AWS RDS)
 # --------------------------------------------------
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -28,11 +29,13 @@ if not DATABASE_URL:
 
 print(f"🌐 Connecting to {DATABASE_URL}")
 
+# ✅ SQL Server requires ODBC Driver 18 and uses TrustServerCertificate for SSL
 engine = create_engine(
-    DATABASE_URL + "?sslmode=require" if "sslmode" not in DATABASE_URL else DATABASE_URL,
+    DATABASE_URL,
     pool_pre_ping=True,
-    connect_args={"sslmode": "require"},
+    connect_args={"TrustServerCertificate": "yes"},
 )
+
 def get_engine():
     """Return the global database engine."""
     return engine
@@ -69,15 +72,15 @@ def get_first_image(lot_id: str):
 # --------------------------------------------------
 @app.get("/")
 def root():
-    return {"status": "✅ Backend is running with PostgreSQL!"}
+    return {"status": "✅ Backend is running with SQL Server!"}
 
 
 @app.get("/test_db")
 def test_db():
-    """Test connection to PostgreSQL database."""
+    """Test connection to SQL Server database."""
     try:
         with engine.connect() as conn:
-            row = conn.execute(text("SELECT current_database(), current_user;")).fetchone()
+            row = conn.execute(text("SELECT DB_NAME(), SUSER_NAME();")).fetchone()
             return {"database": row[0], "user": row[1]}
     except Exception as e:
         return {"error": str(e)}
@@ -150,8 +153,10 @@ def get_cars_with_estimates():
     except Exception as e:
         return {"error": str(e)}
 
-import time
 
+# --------------------------------------------------
+# DB CONNECTION WAIT
+# --------------------------------------------------
 def wait_for_db(max_retries=5, delay=3):
     """Wait for the database to be ready before continuing startup."""
     for attempt in range(1, max_retries + 1):
@@ -171,26 +176,26 @@ def wait_for_db(max_retries=5, delay=3):
 # --------------------------------------------------
 @app.on_event("startup")
 def create_tables_if_needed():
-    wait_for_db()  # 👈 ensures connection before running CREATE TABLE
+    wait_for_db()
     with engine.connect() as conn:
         conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS cars (
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='cars' AND xtype='U')
+            CREATE TABLE cars (
                 lot_inv_num VARCHAR(50) PRIMARY KEY,
-                year INTEGER,
+                year INT,
                 make VARCHAR(100),
                 model VARCHAR(100),
-                odometer INTEGER,
+                odometer INT,
                 damage_description VARCHAR(255),
-                est_retail_value NUMERIC(12,2),
-                repair_estimate NUMERIC(12,2),
-                lot_url TEXT,
-                repair_details TEXT,
-                resale_details TEXT
+                est_retail_value DECIMAL(12,2),
+                repair_estimate DECIMAL(12,2),
+                lot_url NVARCHAR(MAX),
+                repair_details NVARCHAR(MAX),
+                resale_details NVARCHAR(MAX)
             );
         """))
         conn.commit()
     print("✅ Cars table ready!")
-
 
 
 # --------------------------------------------------

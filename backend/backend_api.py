@@ -21,16 +21,30 @@ app.add_middleware(
 # --------------------------------------------------
 # DATABASE CONFIGURATION (PostgreSQL)
 # --------------------------------------------------
+# --------------------------------------------------
+# DATABASE CONFIGURATION (PostgreSQL with SSL for Render)
+# --------------------------------------------------
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
     raise RuntimeError("❌ DATABASE_URL not set. Make sure it's defined in Render environment variables.")
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+# Ensure sslmode=require is present
+if "sslmode" not in DATABASE_URL:
+    DATABASE_URL += "?sslmode=require"
+
+# ✅ Force SSL handshake explicitly
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"sslmode": "require"},
+    pool_pre_ping=True
+)
 
 def get_engine():
     """Return the global database engine."""
     return engine
+
 
 # --------------------------------------------------
 # IMAGE CONFIGURATION

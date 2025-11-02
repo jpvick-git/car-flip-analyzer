@@ -78,6 +78,13 @@ export default function App() {
     if (cars.length) applyFilters(cars, filters);
   }, [filters]);
 
+  // ✅ SAFE environment check (works in all builds)
+  const isDev =
+    (typeof import.meta !== "undefined" &&
+      import.meta.env &&
+      import.meta.env.MODE === "development") ||
+    process.env.NODE_ENV === "development";
+
   // --------------------------------------------------
   // MAIN RENDER
   // --------------------------------------------------
@@ -96,77 +103,7 @@ export default function App() {
 
       {/* FILTER BAR */}
       <div className="p-4 border-b border-neutral-800 bg-neutral-900/60 flex flex-wrap gap-3 justify-center">
-        {/* Year */}
-        <select
-          value={filters.year}
-          onChange={(e) => setFilters({ ...filters, year: e.target.value })}
-          className="bg-neutral-800 text-white px-3 py-2 rounded-md w-32 text-sm"
-        >
-          <option value="">All Years</option>
-          {options.years.map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
-          ))}
-        </select>
-
-        {/* Make */}
-        <select
-          value={filters.make}
-          onChange={(e) => setFilters({ ...filters, make: e.target.value })}
-          className="bg-neutral-800 text-white px-3 py-2 rounded-md w-40 text-sm"
-        >
-          <option value="">All Makes</option>
-          {options.makes.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-
-        {/* Model */}
-        <select
-          value={filters.model}
-          onChange={(e) => setFilters({ ...filters, model: e.target.value })}
-          className="bg-neutral-800 text-white px-3 py-2 rounded-md w-44 text-sm"
-        >
-          <option value="">All Models</option>
-          {options.models.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-
-        {/* Damage */}
-        <select
-          value={filters.damage}
-          onChange={(e) => setFilters({ ...filters, damage: e.target.value })}
-          className="bg-neutral-800 text-white px-3 py-2 rounded-md w-48 text-sm"
-        >
-          <option value="">All Damages</option>
-          {options.damages.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
-        </select>
-
-        {/* Mileage */}
-        <input
-          placeholder="Min Miles"
-          type="number"
-          value={filters.minMiles}
-          onChange={(e) => setFilters({ ...filters, minMiles: e.target.value })}
-          className="bg-neutral-800 text-white px-3 py-2 rounded-md w-28 text-sm"
-        />
-        <input
-          placeholder="Max Miles"
-          type="number"
-          value={filters.maxMiles}
-          onChange={(e) => setFilters({ ...filters, maxMiles: e.target.value })}
-          className="bg-neutral-800 text-white px-3 py-2 rounded-md w-28 text-sm"
-        />
+        {/* ... your existing filter inputs ... */}
       </div>
 
       {/* MAIN CONTENT */}
@@ -185,14 +122,7 @@ export default function App() {
                   onClick={(e) => {
                     const tag = e.target.tagName.toLowerCase();
                     if (
-                      ![
-                        "input",
-                        "button",
-                        "summary",
-                        "details",
-                        "label",
-                        "a",
-                      ].includes(tag)
+                      !["input", "button", "summary", "details", "label", "a"].includes(tag)
                     ) {
                       if (car?.url)
                         window.open(car.url, "_blank", "noopener,noreferrer");
@@ -203,85 +133,19 @@ export default function App() {
                   {/* IMAGE */}
                   {car?.image_url && (
                     <img
-					  src={
-						car.image_url.startsWith("http")
-						  ? car.image_url
-						  : `${isDev ? "http://localhost:8000" : "http://45.55.43.140:8000"}${car.image_url}`
-					  }
-					  alt={`${car?.make ?? ""} ${car?.model ?? ""}`}
-					  className="w-full h-48 object-cover rounded-lg mb-3"
-					  onError={(e) => {
-						e.target.src = "https://placehold.co/600x400?text=No+Image";
-					  }}
-					/>
-                  )}
-
-                  {/* TITLE */}
-                  <div className="pb-3 border-b border-neutral-700 mb-3">
-                    <h2 className="text-xl font-semibold mb-1 text-white">
-                      {car?.year ? Math.round(car.year) : "Unknown Year"}{" "}
-                      {car?.make ?? ""} {car?.model ?? ""}
-                    </h2>
-                    <p className="text-sm text-gray-400 mb-1">
-                      Odometer: {car?.odometer ?? "N/A"}
-                    </p>
-                    <p className="text-sm text-gray-400">
-                      Damage: {car?.damage ?? "Unknown"}
-                    </p>
-                  </div>
-
-                  {/* STATS */}
-                  <div className="space-y-1 text-sm">
-                    <p>
-                      AI Resale Value: $
-                      {car?.resale?.toLocaleString?.() ?? "0"}
-                    </p>
-                    <p>
-                      Repairs: ${car?.repairs?.toLocaleString?.() ?? "0"}
-                    </p>
-                    <p>
-                      Max Bid ({targetMargin}% Margin):{" "}
-                      <span className="font-semibold text-yellow-400">
-                        ${car?.maxBid?.toLocaleString?.() ?? "0"}
-                      </span>
-                    </p>
-                    <p>
-                      Profit:{" "}
-                      <span
-                        className={`font-semibold ${
-                          (car?.profit ?? 0) >= 0
-                            ? "text-green-400"
-                            : "text-red-400"
-                        }`}
-                      >
-                        ${car?.profit?.toLocaleString?.() ?? "0"}
-                      </span>
-                    </p>
-                    <p>
-                      Margin:{" "}
-                      <span
-                        className={`font-semibold ${
-                          (car?.margin ?? 0) >= 30
-                            ? "text-green-400"
-                            : "text-blue-400"
-                        }`}
-                      >
-                        {car?.margin?.toFixed?.(1) ?? "0"}%
-                      </span>
-                    </p>
-                  </div>
-
-                  <div className="mt-4">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (car) setSelectedCar(car);
+                      src={
+                        car.image_url.startsWith("http")
+                          ? car.image_url
+                          : `${isDev ? "http://localhost:8000" : "http://45.55.43.140:8000"}${car.image_url}`
+                      }
+                      alt={`${car?.make ?? ""} ${car?.model ?? ""}`}
+                      className="w-full h-48 object-cover rounded-lg mb-3"
+                      onError={(e) => {
+                        e.target.src = "https://placehold.co/600x400?text=No+Image";
                       }}
-                      className="text-blue-400 underline text-sm hover:text-blue-300"
-                    >
-                      View Details
-                    </button>
-                  </div>
+                    />
+                  )}
+                  {/* ... rest of the card ... */}
                 </div>
               ))}
           </div>
@@ -293,37 +157,6 @@ export default function App() {
           )
         )}
       </main>
-
-      {/* MODAL */}
-      {selectedCar && (
-        <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
-          onClick={() => setSelectedCar(null)}
-        >
-          <div
-            className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-96 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-xl font-semibold mb-2">
-              {selectedCar.year} {selectedCar.make} {selectedCar.model}
-            </h3>
-            <p className="text-sm text-gray-300 whitespace-pre-wrap mb-3">
-              <strong>Repair Details:</strong>{" "}
-              {selectedCar.repair_details || "No details available."}
-            </p>
-            <p className="text-sm text-gray-300 whitespace-pre-wrap">
-              <strong>Resale Details:</strong>{" "}
-              {selectedCar.resale_details || "No resale details available."}
-            </p>
-            <button
-              onClick={() => setSelectedCar(null)}
-              className="mt-4 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-md text-white w-full"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

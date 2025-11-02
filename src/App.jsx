@@ -198,19 +198,18 @@ export default function App() {
                 className="bg-neutral-800/80 border border-neutral-700 rounded-2xl p-5 shadow-md hover:bg-neutral-700/70 hover:ring-2 hover:ring-blue-500 cursor-pointer transition-all"
               >
                 {/* IMAGE */}
-                <img
-                  src={
-                    car?.image_url
-                      src={
-						  car?.image_url
-							? car.image_url
-							: "https://placehold.co/600x400?text=No+Image"
-						}
-                  }
-                  alt={`${car.make ?? ""} ${car.model ?? ""}`}
-                  className="w-full h-48 object-cover rounded-lg mb-3"
-                  onError={(e) => (e.target.src = "https://placehold.co/600x400?text=No+Image")}
-                />
+                {/* IMAGE */}
+				<img
+				  loading="lazy"
+				  src={
+					car?.image_url
+					  ? car.image_url
+					  : "https://placehold.co/600x400?text=No+Image"
+				  }
+				  alt={`${car.make ?? ""} ${car.model ?? ""}`}
+				  className="w-full h-48 object-cover rounded-lg mb-3"
+				  onError={(e) => (e.target.src = "https://placehold.co/600x400?text=No+Image")}
+				/>
 
                 {/* TITLE */}
                 <div className="pb-3 border-b border-neutral-700 mb-3">

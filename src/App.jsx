@@ -32,7 +32,7 @@ export default function App() {
         const baseUrl =
           process.env.NODE_ENV === "development"
             ? "http://localhost:8000"
-            : "https://carflipanalyzer.com";
+            : "https://api.carflipanalyzer.com";
 
 		const res = await fetch("https://api.carflipanalyzer.com/cars/with_estimates");
 		if (!res.ok) {

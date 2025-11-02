@@ -7,17 +7,10 @@ import os
 import re
 import time
 
-from fastapi.staticfiles import StaticFiles
-
-# Serve local images from /downloads
-app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
-
-
-load_dotenv()  # 👈 this must come BEFORE DATABASE_URL = os.getenv(...)
-
 # --------------------------------------------------
 # FASTAPI SETUP
 # --------------------------------------------------
+load_dotenv()  # 👈 must be before DATABASE_URL
 app = FastAPI()
 
 app.add_middleware(
@@ -29,32 +22,13 @@ app.add_middleware(
 )
 
 # --------------------------------------------------
-# DATABASE CONFIGURATION (SQL Server on AWS RDS)
-# --------------------------------------------------
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-if not DATABASE_URL:
-    raise RuntimeError("❌ DATABASE_URL not set")
-
-print(f"🌐 Connecting to {DATABASE_URL}")
-
-# ✅ SQL Server requires ODBC Driver 18 and uses TrustServerCertificate for SSL
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-    connect_args={"TrustServerCertificate": "yes"},
-)
-
-def get_engine():
-    """Return the global database engine."""
-    return engine
-
-
-# --------------------------------------------------
 # IMAGE CONFIGURATION
 # --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
+
+# ✅ Mount /downloads AFTER app is created
+app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
 def get_first_image(lot_id: str):
     """Return the first matching image for a given lot (handles _Image_1 filenames)."""
@@ -62,7 +36,6 @@ def get_first_image(lot_id: str):
     if not os.path.exists(lot_folder):
         return None
 
-    # Match typical patterns like 51168184_Image_1.jpg, .jpeg, or .png
     images = [
         f for f in os.listdir(lot_folder)
         if f.lower().endswith((".jpg", ".jpeg", ".png"))
@@ -72,10 +45,9 @@ def get_first_image(lot_id: str):
     if not images:
         return None
 
-    # Always prefer the _Image_1 file first if it exists
+    # Prefer _Image_1 if it exists
     images.sort(key=lambda x: ("_image_1" not in x.lower(), x.lower()))
     return f"/downloads/{lot_id}/{images[0]}"
-
 
 # --------------------------------------------------
 # ROUTES

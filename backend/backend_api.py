@@ -27,6 +27,8 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
+print(f"📂 Serving images from: {DOWNLOAD_DIR}")
+
 
 def get_first_image(lot_id: str):
     """Return the first matching image for a given lot (handles _Image_1 filenames)."""

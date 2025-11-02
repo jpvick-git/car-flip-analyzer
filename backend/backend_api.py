@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, text
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import os
 import re
@@ -11,7 +11,7 @@ import time
 # FASTAPI SETUP
 # --------------------------------------------------
 load_dotenv()
-app = FastAPI()
+app = FastAPI(title="Car Flip Analyzer API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,49 +26,48 @@ app.add_middleware(
 # --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
+
+# Ensure the folder exists
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+# Mount the /downloads route so frontend can load car photos
 app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 print(f"📂 Serving images from: {DOWNLOAD_DIR}")
 
 
-def get_first_image(lot_id):
-    """Return only the _Image_1 file for a given lot, if available."""
+def get_first_image(lot_id: str):
+    """Return the _Image_1.jpg path for a given lot, if available."""
     lot_id = str(lot_id).split(".")[0].strip()
     lot_folder = os.path.join(DOWNLOAD_DIR, lot_id)
 
     if not os.path.exists(lot_folder):
-        print(f"⚠️ No folder found for lot {lot_id} at {lot_folder}")
+        print(f"⚠️ No folder found for lot {lot_id}")
         return None
 
-    # Look specifically for "_Image_1" files first
+    # Prefer the _Image_1.* file first
     for ext in (".jpg", ".jpeg", ".png"):
-        preferred = f"{lot_id}_Image_1{ext}"
-        if preferred in os.listdir(lot_folder):
-            chosen = f"/downloads/{lot_id}/{preferred}"
-            print(f"✅ Image found for {lot_id}: {chosen}")
-            return chosen
+        candidate = f"{lot_id}_Image_1{ext}"
+        if os.path.exists(os.path.join(lot_folder, candidate)):
+            return f"/downloads/{lot_id}/{candidate}"
 
-    # Fallback: use first available image if _Image_1 not found
-    images = [
-        f for f in os.listdir(lot_folder)
-        if f.lower().endswith((".jpg", ".jpeg", ".png"))
-    ]
-    if not images:
-        print(f"⚠️ No image files found for lot {lot_id}")
+    # Otherwise pick the first image found
+    images = [f for f in os.listdir(lot_folder) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+    if images:
+        images.sort()
+        return f"/downloads/{lot_id}/{images[0]}"
+    else:
+        print(f"⚠️ No images found for {lot_id}")
         return None
 
-    images.sort()
-    chosen = f"/downloads/{lot_id}/{images[0]}"
-    print(f"✅ Fallback image used for {lot_id}: {chosen}")
-    return chosen
 
 # --------------------------------------------------
-# DATABASE CONFIGURATION (SQL Server on AWS RDS)
+# DATABASE CONFIGURATION
 # --------------------------------------------------
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise RuntimeError("❌ DATABASE_URL not set")
+    raise RuntimeError("❌ DATABASE_URL not set in environment")
 
-print(f"🌐 Connecting to {DATABASE_URL}")
+print(f"🌐 Connecting to database: {DATABASE_URL}")
 
 engine = create_engine(
     DATABASE_URL,
@@ -79,15 +78,18 @@ engine = create_engine(
 def get_engine():
     return engine
 
+
 # --------------------------------------------------
 # ROUTES
 # --------------------------------------------------
 @app.get("/")
 def root():
-    return {"status": "✅ Backend is running with SQL Server!"}
+    return {"status": "✅ Backend is running and serving images!"}
+
 
 @app.get("/test_db")
 def test_db():
+    """Check DB connection."""
     try:
         with engine.connect() as conn:
             row = conn.execute(text("SELECT DB_NAME(), SUSER_NAME();")).fetchone()
@@ -95,9 +97,10 @@ def test_db():
     except Exception as e:
         return {"error": str(e)}
 
+
 @app.get("/cars/with_estimates")
 def get_cars_with_estimates():
-    """Return cars where repair_estimate is not null, with calculated values and image URLs."""
+    """Return all cars with AI repair and resale estimates."""
     try:
         with engine.connect() as conn:
             rows = conn.execute(text("""
@@ -118,18 +121,15 @@ def get_cars_with_estimates():
             """)).fetchall()
 
         def to_float(value):
-            """Convert to float safely, removing $, commas, and text like 'USD'."""
             if value is None:
                 return 0.0
             if isinstance(value, (int, float)):
                 return float(value)
-
-            value = str(value)
-            cleaned = re.sub(r"[^0-9.\-]", "", value)
+            cleaned = re.sub(r"[^0-9.\-]", "", str(value))
             try:
                 return float(cleaned) if cleaned else 0.0
             except ValueError:
-                print(f"⚠️ Could not convert '{value}' to float, defaulting to 0.0")
+                print(f"⚠️ Could not convert '{value}' to float")
                 return 0.0
 
         cars = []
@@ -142,7 +142,6 @@ def get_cars_with_estimates():
             max_bid = max(0, round(resale - (repair + fees + resale * target_margin)))
             profit = resale - (repair + fees + max_bid)
             margin = round((profit / resale * 100), 1) if resale else 0.0
-
             image_url = get_first_image(lot_id)
 
             cars.append({
@@ -164,15 +163,16 @@ def get_cars_with_estimates():
                 "image_url": image_url or "",
             })
 
+        print(f"✅ Returned {len(cars)} cars with estimates")
         return {"cars": cars}
 
     except Exception as e:
-        print("❌ Error in /cars/with_estimates:", e)
+        print(f"❌ Error in /cars/with_estimates: {e}")
         return {"error": str(e)}
 
 
 # --------------------------------------------------
-# DB CONNECTION WAIT
+# DB CONNECTION RETRY
 # --------------------------------------------------
 def wait_for_db(max_retries=5, delay=3):
     for attempt in range(1, max_retries + 1):
@@ -185,6 +185,7 @@ def wait_for_db(max_retries=5, delay=3):
             print(f"⏳ DB not ready (attempt {attempt}/{max_retries}): {e}")
             time.sleep(delay)
     raise RuntimeError("❌ Could not connect to the database after several attempts.")
+
 
 # --------------------------------------------------
 # AUTO TABLE CREATION
@@ -210,7 +211,8 @@ def create_tables_if_needed():
             );
         """))
         conn.commit()
-    print("✅ Cars table ready!")
+    print("✅ Cars table verified and ready!")
+
 
 # --------------------------------------------------
 # MAIN ENTRYPOINT

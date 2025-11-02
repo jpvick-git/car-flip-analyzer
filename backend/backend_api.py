@@ -112,12 +112,26 @@ def get_cars_with_estimates():
                 WHERE repair_estimate IS NOT NULL
             """)).fetchall()
 
+        def to_float(value):
+            """Convert to float safely, removing $, commas, and text like 'USD'."""
+            if value is None:
+                return 0.0
+            if isinstance(value, (int, float)):
+                return float(value)
+
+            value = str(value)
+            cleaned = re.sub(r"[^0-9.\-]", "", value)
+            try:
+                return float(cleaned) if cleaned else 0.0
+            except ValueError:
+                print(f"⚠️ Could not convert '{value}' to float, defaulting to 0.0")
+                return 0.0
+
         cars = []
         for r in rows:
-            # Access by index (SQLAlchemy Row is tuple-like)
-            lot_id = str(r[0])
-            resale = float(r[6] or 0)
-            repair = float(r[7] or 0)
+            lot_id = str(r[0]).split(".")[0].strip()
+            resale = to_float(r[6])
+            repair = to_float(r[7])
             fees = resale * 0.0725
             target_margin = 0.30
             max_bid = max(0, round(resale - (repair + fees + resale * target_margin)))
@@ -142,7 +156,7 @@ def get_cars_with_estimates():
                 "url": r[8],
                 "repair_details": r[9] or "",
                 "resale_details": r[10] or "",
-                "image_url": image_url or "",  # 👈 added dynamically
+                "image_url": image_url or "",
             })
 
         return {"cars": cars}
@@ -150,6 +164,7 @@ def get_cars_with_estimates():
     except Exception as e:
         print("❌ Error in /cars/with_estimates:", e)
         return {"error": str(e)}
+
 
 # --------------------------------------------------
 # DB CONNECTION WAIT

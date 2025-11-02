@@ -50,19 +50,26 @@ def get_engine():
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 
-if not os.path.exists(DOWNLOAD_DIR):
-    os.makedirs(DOWNLOAD_DIR)
-
-app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
-
 def get_first_image(lot_id: str):
-    """Return the first matching image for a given lot."""
+    """Return the first matching image for a given lot (handles _Image_1 filenames)."""
     lot_folder = os.path.join(DOWNLOAD_DIR, str(lot_id))
     if not os.path.exists(lot_folder):
         return None
+
+    # Match typical patterns like 51168184_Image_1.jpg, .jpeg, or .png
     images = [
         f for f in os.listdir(lot_folder)
-        if f.lower().startswith(str(lot_id).lower()) and f.lower().endswith((".jpg", ".jpeg", ".png"))
+        if f.lower().endswith((".jpg", ".jpeg", ".png"))
+        and str(lot_id).lower() in f.lower()
+    ]
+
+    if not images:
+        return None
+
+    # Always prefer the _Image_1 file first if it exists
+    images.sort(key=lambda x: ("_image_1" not in x.lower(), x.lower()))
+    return f"/downloads/{lot_id}/{images[0]}"
+
     ]
     if not images:
         return None

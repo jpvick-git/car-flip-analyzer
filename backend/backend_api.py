@@ -48,13 +48,14 @@ def get_first_image(lot_id: str):
     for ext in (".jpg", ".jpeg", ".png"):
         candidate = f"{lot_id}_Image_1{ext}"
         if os.path.exists(os.path.join(lot_folder, candidate)):
-            return f"/downloads/{lot_id}/{candidate}"
+            return f"https://api.carflipanalyzer.com/downloads/{lot_id}/{candidate}"
+
 
     # Otherwise pick the first image found
     images = [f for f in os.listdir(lot_folder) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
     if images:
         images.sort()
-        return f"/downloads/{lot_id}/{images[0]}"
+        return f"https://api.carflipanalyzer.com/downloads/{lot_id}/{images[0]}"
     else:
         print(f"⚠️ No images found for {lot_id}")
         return None

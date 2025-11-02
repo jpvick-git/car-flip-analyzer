@@ -201,8 +201,11 @@ export default function App() {
                 <img
                   src={
                     car?.image_url
-                      ? `https://carflipanalyzer.com${car.image_url}`
-                      : "https://placehold.co/600x400?text=No+Image"
+                      src={
+						  car?.image_url
+							? car.image_url
+							: "https://placehold.co/600x400?text=No+Image"
+						}
                   }
                   alt={`${car.make ?? ""} ${car.model ?? ""}`}
                   className="w-full h-48 object-cover rounded-lg mb-3"

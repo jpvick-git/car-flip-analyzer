@@ -132,21 +132,80 @@ export default function App() {
                 >
                   {/* IMAGE */}
                   {car?.image_url && (
-                    <img
-                      src={
-                        car.image_url.startsWith("http")
-                          ? car.image_url
-                          : `${isDev ? "http://localhost:8000" : "http://45.55.43.140:8000"}${car.image_url}`
-                      }
-                      alt={`${car?.make ?? ""} ${car?.model ?? ""}`}
-                      className="w-full h-48 object-cover rounded-lg mb-3"
-                      onError={(e) => {
-                        e.target.src = "https://placehold.co/600x400?text=No+Image";
-                      }}
-                    />
-                  )}
-                  {/* ... rest of the card ... */}
-                </div>
+				 {/* IMAGE */}
+				<img
+				  src={
+					car?.image_url
+					  ? (car.image_url.startsWith("http")
+						  ? car.image_url
+						  : `${isDev ? "http://localhost:8000" : "http://45.55.43.140:8000"}${car.image_url}`)
+					  : "https://placehold.co/600x400?text=No+Image"
+				  }
+				  alt={`${car?.make ?? ""} ${car?.model ?? ""}`}
+				  className="w-full h-48 object-cover rounded-lg mb-3"
+				  onError={(e) => {
+					e.target.src = "https://placehold.co/600x400?text=No+Image";
+				  }}
+				/>
+
+				{/* TITLE */}
+				<div className="pb-3 border-b border-neutral-700 mb-3">
+				  <h2 className="text-xl font-semibold mb-1 text-white">
+					{car?.year ? Math.round(car.year) : "Unknown Year"}{" "}
+					{car?.make ?? ""} {car?.model ?? ""}
+				  </h2>
+				  <p className="text-sm text-gray-400 mb-1">
+					Odometer: {car?.odometer || "N/A"}
+				  </p>
+				  <p className="text-sm text-gray-400">
+					Damage: {car?.damage || "Unknown"}
+				  </p>
+				</div>
+
+				{/* STATS */}
+				<div className="space-y-1 text-sm">
+				  <p>AI Resale Value: ${Number(car?.resale || 0).toLocaleString()}</p>
+				  <p>Repairs: ${Number(car?.repairs || 0).toLocaleString()}</p>
+				  <p>
+					Max Bid ({targetMargin}% Margin):{" "}
+					<span className="font-semibold text-yellow-400">
+					  ${Number(car?.maxBid || 0).toLocaleString()}
+					</span>
+				  </p>
+				  <p>
+					Profit:{" "}
+					<span
+					  className={`font-semibold ${
+						(car?.profit ?? 0) >= 0 ? "text-green-400" : "text-red-400"
+					  }`}
+					>
+					  ${Number(car?.profit || 0).toLocaleString()}
+					</span>
+				  </p>
+				  <p>
+					Margin:{" "}
+					<span
+					  className={`font-semibold ${
+						(car?.margin ?? 0) >= 30 ? "text-green-400" : "text-blue-400"
+					  }`}
+					>
+					  {Number(car?.margin || 0).toFixed(1)}%
+					</span>
+				  </p>
+				</div>
+
+				<div className="mt-4">
+				  <button
+					onClick={(e) => {
+					  e.stopPropagation();
+					  if (car) setSelectedCar(car);
+					}}
+					className="text-blue-400 underline text-sm hover:text-blue-300"
+				  >
+					View Details
+				  </button>
+				</div>
+
               ))}
           </div>
         ) : (

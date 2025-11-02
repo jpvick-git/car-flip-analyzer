@@ -34,17 +34,29 @@ def get_first_image(lot_id: str):
     """Return the first matching image for a given lot (handles _Image_1 filenames)."""
     lot_folder = os.path.join(DOWNLOAD_DIR, str(lot_id))
     if not os.path.exists(lot_folder):
+        print(f"⚠️ No folder found for lot {lot_id} at {lot_folder}")
         return None
-    images = [
-        f for f in os.listdir(lot_folder)
-        if f.lower().endswith((".jpg", ".jpeg", ".png"))
-        and str(lot_id).lower() in f.lower()
-    ]
-    if not images:
-        return None
-    images.sort(key=lambda x: ("_image_1" not in x.lower(), x.lower()))
-    return f"/downloads/{lot_id}/{images[0]}"
 
+    all_files = os.listdir(lot_folder)
+    print(f"📸 Files for {lot_id}: {all_files}")
+
+    # Filter to only JPG/PNG files
+    images = [
+        f for f in all_files
+        if f.lower().endswith((".jpg", ".jpeg", ".png"))
+    ]
+
+    if not images:
+        print(f"⚠️ No image files found for lot {lot_id}")
+        return None
+
+    # Prefer _Image_1 if it exists
+    images.sort(key=lambda x: ("_image_1" not in x.lower(), x.lower()))
+
+    chosen_file = images[0]
+    chosen_url = f"/downloads/{lot_id}/{chosen_file}"
+    print(f"✅ Image chosen for lot {lot_id}: {chosen_url}")
+    return chosen_url
 # --------------------------------------------------
 # DATABASE CONFIGURATION (SQL Server on AWS RDS)
 # --------------------------------------------------

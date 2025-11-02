@@ -31,29 +31,34 @@ print(f"📂 Serving images from: {DOWNLOAD_DIR}")
 
 
 def get_first_image(lot_id):
-    """Return the first matching image for a given lot (handles _Image_1 filenames)."""
-    # Ensure lot_id is a clean string (no .0 from floats)
+    """Return only the _Image_1 file for a given lot, if available."""
     lot_id = str(lot_id).split(".")[0].strip()
-
     lot_folder = os.path.join(DOWNLOAD_DIR, lot_id)
+
     if not os.path.exists(lot_folder):
         print(f"⚠️ No folder found for lot {lot_id} at {lot_folder}")
         return None
 
-    all_files = os.listdir(lot_folder)
-    print(f"📸 Files for {lot_id}: {all_files}")
+    # Look specifically for "_Image_1" files first
+    for ext in (".jpg", ".jpeg", ".png"):
+        preferred = f"{lot_id}_Image_1{ext}"
+        if preferred in os.listdir(lot_folder):
+            chosen = f"/downloads/{lot_id}/{preferred}"
+            print(f"✅ Image found for {lot_id}: {chosen}")
+            return chosen
 
+    # Fallback: use first available image if _Image_1 not found
     images = [
-        f for f in all_files
+        f for f in os.listdir(lot_folder)
         if f.lower().endswith((".jpg", ".jpeg", ".png"))
     ]
     if not images:
         print(f"⚠️ No image files found for lot {lot_id}")
         return None
 
-    images.sort(key=lambda x: ("_image_1" not in x.lower(), x.lower()))
+    images.sort()
     chosen = f"/downloads/{lot_id}/{images[0]}"
-    print(f"✅ Image found for {lot_id}: {chosen}")
+    print(f"✅ Fallback image used for {lot_id}: {chosen}")
     return chosen
 
 # --------------------------------------------------

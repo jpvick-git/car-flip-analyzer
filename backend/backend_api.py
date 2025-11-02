@@ -76,12 +76,6 @@ def get_first_image(lot_id: str):
     images.sort(key=lambda x: ("_image_1" not in x.lower(), x.lower()))
     return f"/downloads/{lot_id}/{images[0]}"
 
-    ]
-    if not images:
-        return None
-    images.sort()
-    return f"/downloads/{lot_id}/{images[0]}"
-
 
 # --------------------------------------------------
 # ROUTES

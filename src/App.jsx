@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-export default function CarFlipAnalyzer() {
+export default function App() {
   const [cars, setCars] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -26,59 +26,51 @@ export default function CarFlipAnalyzer() {
   // LOAD CARS FROM BACKEND
   // --------------------------------------------------
   useEffect(() => {
-    const fetchCarsFromDB = async () => {
+    const fetchCars = async () => {
       setLoading(true);
       try {
         const res = await fetch("/api/cars/with_estimates");
         const data = await res.json();
-
-        // Handle both {cars: [...]} and raw arrays
         const carsArray = Array.isArray(data) ? data : data.cars || [];
 
-        if (carsArray.length > 0) {
-          setCars(carsArray);
-          setFiltered(carsArray);
+        setCars(carsArray);
+        setFiltered(carsArray);
 
-          const years = [...new Set(carsArray.map((c) => c.year))].sort(
-            (a, b) => b - a
-          );
-          const makes = [...new Set(carsArray.map((c) => c.make))].sort();
-          const models = [...new Set(carsArray.map((c) => c.model))].sort();
-          const damages = [...new Set(carsArray.map((c) => c.damage))].sort();
+        const years = [...new Set(carsArray.map((c) => c.year))].sort((a, b) => b - a);
+        const makes = [...new Set(carsArray.map((c) => c.make))].sort();
+        const models = [...new Set(carsArray.map((c) => c.model))].sort();
+        const damages = [...new Set(carsArray.map((c) => c.damage))].sort();
 
-          setOptions({ years, makes, models, damages });
-        } else {
-          console.warn("⚠️ No cars returned from backend");
-          setCars([]);
-          setFiltered([]);
-        }
+        setOptions({ years, makes, models, damages });
       } catch (err) {
         console.error("❌ Error fetching cars:", err);
+        setCars([]);
+        setFiltered([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCarsFromDB();
+    fetchCars();
   }, []);
 
   // --------------------------------------------------
   // FILTER LOGIC
   // --------------------------------------------------
-  const applyFilters = (source, filterSet) => {
+  const applyFilters = (source, filters) => {
     let result = [...source];
-    if (filterSet.year)
-      result = result.filter((c) => String(c.year) === String(filterSet.year));
-    if (filterSet.make)
-      result = result.filter((c) => c.make === filterSet.make);
-    if (filterSet.model)
-      result = result.filter((c) => c.model === filterSet.model);
-    if (filterSet.damage)
-      result = result.filter((c) => c.damage === filterSet.damage);
-    if (filterSet.minMiles)
-      result = result.filter((c) => c.odometer >= +filterSet.minMiles);
-    if (filterSet.maxMiles)
-      result = result.filter((c) => c.odometer <= +filterSet.maxMiles);
+    if (filters.year)
+      result = result.filter((c) => String(c.year) === String(filters.year));
+    if (filters.make)
+      result = result.filter((c) => c.make === filters.make);
+    if (filters.model)
+      result = result.filter((c) => c.model === filters.model);
+    if (filters.damage)
+      result = result.filter((c) => c.damage === filters.damage);
+    if (filters.minMiles)
+      result = result.filter((c) => +c.odometer >= +filters.minMiles);
+    if (filters.maxMiles)
+      result = result.filter((c) => +c.odometer <= +filters.maxMiles);
     setFiltered(result);
   };
 
@@ -87,18 +79,18 @@ export default function CarFlipAnalyzer() {
   }, [filters]);
 
   // --------------------------------------------------
-  // UI
+  // MAIN RENDER
   // --------------------------------------------------
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col relative">
       <header className="flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950/90">
         <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
-          Car Flip Analyzer (AI)
+          Car Flip Analyzer
         </h1>
         <img
           src="/logo.png"
-          alt="Automotive Analyst Logo"
-          className="h-16 md:h-20 lg:h-24 object-contain opacity-90 hover:opacity-100 transition-opacity duration-200"
+          alt="Logo"
+          className="h-14 md:h-16 object-contain opacity-90 hover:opacity-100 transition"
         />
       </header>
 
@@ -160,7 +152,7 @@ export default function CarFlipAnalyzer() {
           ))}
         </select>
 
-        {/* Mileage Range */}
+        {/* Mileage */}
         <input
           placeholder="Min Miles"
           type="number"
@@ -180,116 +172,123 @@ export default function CarFlipAnalyzer() {
       {/* MAIN CONTENT */}
       <main className="flex-1 overflow-y-auto p-6">
         {loading && (
-          <p className="text-center text-gray-400 mt-10">
-            ⏳ Loading vehicle data...
-          </p>
+          <p className="text-center text-gray-400 mt-10">⏳ Loading vehicles...</p>
         )}
 
         {!loading && Array.isArray(filtered) && filtered.length > 0 ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filtered.map((car) => (
-              <div
-                key={car.id}
-                onClick={(e) => {
-                  const tag = e.target.tagName.toLowerCase();
-                  if (
-                    ![
-                      "input",
-                      "button",
-                      "summary",
-                      "details",
-                      "label",
-                      "a",
-                    ].includes(tag)
-                  ) {
-                    window.open(car.url, "_blank", "noopener,noreferrer");
-                  }
-                }}
-                className="bg-neutral-800/80 border border-neutral-700 rounded-2xl p-5 shadow-md hover:bg-neutral-700/70 hover:ring-2 hover:ring-blue-500 cursor-pointer transition-all"
-              >
-                {/* IMAGE */}
-                {car.image_url && (
-                  <img
-                    src={
-                      car.image_url.startsWith("http")
-                        ? car.image_url
-                        : `${
-                            import.meta.env.MODE === "development"
-                              ? "http://localhost:8000"
-                              : "http://45.55.43.140:8000"
-                          }${car.image_url}`
+            {filtered
+              .filter((car) => car && typeof car === "object")
+              .map((car, idx) => (
+                <div
+                  key={car.id || idx}
+                  onClick={(e) => {
+                    const tag = e.target.tagName.toLowerCase();
+                    if (
+                      ![
+                        "input",
+                        "button",
+                        "summary",
+                        "details",
+                        "label",
+                        "a",
+                      ].includes(tag)
+                    ) {
+                      if (car?.url)
+                        window.open(car.url, "_blank", "noopener,noreferrer");
                     }
-                    alt={`${car.make} ${car.model}`}
-                    className="w-full h-48 object-cover rounded-lg mb-3"
-                    onError={(e) => {
-                      e.target.src =
-                        "https://placehold.co/600x400?text=No+Image";
-                    }}
-                  />
-                )}
+                  }}
+                  className="bg-neutral-800/80 border border-neutral-700 rounded-2xl p-5 shadow-md hover:bg-neutral-700/70 hover:ring-2 hover:ring-blue-500 cursor-pointer transition-all"
+                >
+                  {/* IMAGE */}
+                  {car?.image_url && (
+                    <img
+                      src={
+                        car.image_url.startsWith("http")
+                          ? car.image_url
+                          : `${
+                              import.meta.env.MODE === "development"
+                                ? "http://localhost:8000"
+                                : "http://45.55.43.140:8000"
+                            }${car.image_url}`
+                      }
+                      alt={`${car?.make ?? ""} ${car?.model ?? ""}`}
+                      className="w-full h-48 object-cover rounded-lg mb-3"
+                      onError={(e) => {
+                        e.target.src =
+                          "https://placehold.co/600x400?text=No+Image";
+                      }}
+                    />
+                  )}
 
-                {/* TITLE */}
-                <div className="pb-3 border-b border-neutral-700 mb-3">
-                  <h2 className="text-xl font-semibold mb-1 text-white">
-                    {car.year} {car.make} {car.model}
-                  </h2>
-                  <p className="text-sm text-gray-400 mb-1">
-                    Odometer: {car.odometer ?? "N/A"}
-                  </p>
-                  <p className="text-sm text-gray-400">
-                    Damage: {car.damage ?? "Unknown"}
-                  </p>
-                </div>
+                  {/* TITLE */}
+                  <div className="pb-3 border-b border-neutral-700 mb-3">
+                    <h2 className="text-xl font-semibold mb-1 text-white">
+                      {car?.year ? Math.round(car.year) : "Unknown Year"}{" "}
+                      {car?.make ?? ""} {car?.model ?? ""}
+                    </h2>
+                    <p className="text-sm text-gray-400 mb-1">
+                      Odometer: {car?.odometer ?? "N/A"}
+                    </p>
+                    <p className="text-sm text-gray-400">
+                      Damage: {car?.damage ?? "Unknown"}
+                    </p>
+                  </div>
 
-                {/* STATS */}
-                <div className="space-y-1 text-sm">
-                  <p>AI Resale Value: ${car.resale?.toLocaleString?.() ?? "0"}</p>
-                  <p>Repairs: ${car.repairs?.toLocaleString?.() ?? "0"}</p>
-                  <p>
-                    Max Bid ({targetMargin}% Margin):{" "}
-                    <span className="font-semibold text-yellow-400">
-                      ${car.maxBid?.toLocaleString?.() ?? "0"}
-                    </span>
-                  </p>
-                  <p>
-                    Profit:{" "}
-                    <span
-                      className={`font-semibold ${
-                        car.profit >= 0
-                          ? "text-green-400"
-                          : "text-red-400"
-                      }`}
+                  {/* STATS */}
+                  <div className="space-y-1 text-sm">
+                    <p>
+                      AI Resale Value: $
+                      {car?.resale?.toLocaleString?.() ?? "0"}
+                    </p>
+                    <p>
+                      Repairs: ${car?.repairs?.toLocaleString?.() ?? "0"}
+                    </p>
+                    <p>
+                      Max Bid ({targetMargin}% Margin):{" "}
+                      <span className="font-semibold text-yellow-400">
+                        ${car?.maxBid?.toLocaleString?.() ?? "0"}
+                      </span>
+                    </p>
+                    <p>
+                      Profit:{" "}
+                      <span
+                        className={`font-semibold ${
+                          (car?.profit ?? 0) >= 0
+                            ? "text-green-400"
+                            : "text-red-400"
+                        }`}
+                      >
+                        ${car?.profit?.toLocaleString?.() ?? "0"}
+                      </span>
+                    </p>
+                    <p>
+                      Margin:{" "}
+                      <span
+                        className={`font-semibold ${
+                          (car?.margin ?? 0) >= 30
+                            ? "text-green-400"
+                            : "text-blue-400"
+                        }`}
+                      >
+                        {car?.margin?.toFixed?.(1) ?? "0"}%
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="mt-4">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (car) setSelectedCar(car);
+                      }}
+                      className="text-blue-400 underline text-sm hover:text-blue-300"
                     >
-                      ${car.profit?.toLocaleString?.() ?? "0"}
-                    </span>
-                  </p>
-                  <p>
-                    Margin:{" "}
-                    <span
-                      className={`font-semibold ${
-                        car.margin >= 30
-                          ? "text-green-400"
-                          : "text-blue-400"
-                      }`}
-                    >
-                      {car.margin?.toFixed?.(1) ?? "0"}%
-                    </span>
-                  </p>
+                      View Details
+                    </button>
+                  </div>
                 </div>
-
-                <div className="mt-4">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedCar(car);
-                    }}
-                    className="text-blue-400 underline text-sm hover:text-blue-300"
-                  >
-                    View Details
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         ) : (
           !loading && (
@@ -300,7 +299,7 @@ export default function CarFlipAnalyzer() {
         )}
       </main>
 
-      {/* POPUP MODAL */}
+      {/* MODAL */}
       {selectedCar && (
         <div
           className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"

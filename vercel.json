@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://45.55.43.140/$1"
+      "destination": "http://45.55.43.140/api/$1"
     },
     {
       "source": "/downloads/(.*)",
-      "destination": "https://45.55.43.140/downloads/$1"
+      "destination": "http://45.55.43.140/downloads/$1"
     }
   ]
 }

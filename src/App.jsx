@@ -191,35 +191,102 @@ export default function CarFlipAnalyzer() {
           </p>
         )}
 
-        {!loading && filtered.length > 0 ? (
-			<div
-			  key={car.id}
-			  onClick={(e) => {
-				const tag = e.target.tagName.toLowerCase();
-				if (!["input", "button", "summary", "details", "label", "a"].includes(tag)) {
-				  window.open(car.url, "_blank", "noopener,noreferrer");
-				}
-			  }}
-			  className="bg-white rounded-2xl shadow hover:shadow-lg transition p-4 cursor-pointer"
-			>
-			  <img
-				src={car.image_url ? car.image_url : "/placeholder.jpg"}
-				alt={`${car.make || ""} ${car.model || ""}`}
-				className="rounded-xl w-full h-48 object-cover"
-				loading="lazy"
-			  />
-			  <h2 className="text-lg font-semibold mt-2">
-				{car.year ? Math.round(car.year) : "Unknown Year"} {car.make || ""} {car.model || ""}
-			  </h2>
-			  <p className="text-sm text-gray-500">{car.damage || "No damage info"}</p>
-			  <div className="flex justify-between text-sm mt-2">
-				<span>Repairs: ${car.repairs?.toLocaleString() ?? "0"}</span>
-				<span>Profit: ${car.profit?.toLocaleString() ?? "0"}</span>
+		{!loading && filtered.length > 0 ? (
+		  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+			{filtered.map((car) => (
+			  <div
+				key={car.id}
+				onClick={(e) => {
+				  const tag = e.target.tagName.toLowerCase();
+				  if (!["input", "button", "summary", "details", "label", "a"].includes(tag)) {
+					window.open(car.url, "_blank", "noopener,noreferrer");
+				  }
+				}}
+				className="bg-neutral-800/80 border border-neutral-700 rounded-2xl p-5 shadow-md hover:bg-neutral-700/70 hover:ring-2 hover:ring-blue-500 cursor-pointer transition-all"
+			  >
+				{/* IMAGE */}
+				{car.image_url && (
+				  <img
+					src={
+					  car.image_url.startsWith("http")
+						? car.image_url
+						: `${import.meta.env.MODE === "development"
+							? "http://localhost:8000"
+							: "http://45.55.43.140:8000"}${car.image_url}`
+					}
+					alt={`${car.make} ${car.model}`}
+					className="w-full h-48 object-cover rounded-lg mb-3"
+					onError={(e) => {
+					  e.target.src = "https://placehold.co/600x400?text=No+Image";
+					}}
+				  />
+				)}
+
+				{/* TITLE */}
+				<div className="pb-3 border-b border-neutral-700 mb-3">
+				  <h2 className="text-xl font-semibold mb-1 text-white">
+					{car.year} {car.make} {car.model}
+				  </h2>
+				  <p className="text-sm text-gray-400 mb-1">
+					Odometer: {car.odometer ?? "N/A"}
+				  </p>
+				  <p className="text-sm text-gray-400">Damage: {car.damage ?? "Unknown"}</p>
+				</div>
+
+				{/* STATS */}
+				<div className="space-y-1 text-sm">
+				  <p>AI Resale Value: ${car.resale?.toLocaleString?.() ?? "0"}</p>
+				  <p>Repairs: ${car.repairs?.toLocaleString?.() ?? "0"}</p>
+				  <p>
+					Max Bid ({targetMargin}% Margin):{" "}
+					<span className="font-semibold text-yellow-400">
+					  ${car.maxBid?.toLocaleString?.() ?? "0"}
+					</span>
+				  </p>
+				  <p>
+					Profit:{" "}
+					<span
+					  className={`font-semibold ${
+						car.profit >= 0 ? "text-green-400" : "text-red-400"
+					  }`}
+					>
+					  ${car.profit?.toLocaleString?.() ?? "0"}
+					</span>
+				  </p>
+				  <p>
+					Margin:{" "}
+					<span
+					  className={`font-semibold ${
+						car.margin >= 30 ? "text-green-400" : "text-blue-400"
+					  }`}
+					>
+					  {car.margin?.toFixed?.(1) ?? "0"}%
+					</span>
+				  </p>
+				</div>
+
+				<div className="mt-4">
+				  <button
+					onClick={(e) => {
+					  e.stopPropagation();
+					  setSelectedCar(car);
+					}}
+					className="text-blue-400 underline text-sm hover:text-blue-300"
+				  >
+					View Details
+				  </button>
+				</div>
 			  </div>
-			  <div className="text-sm text-gray-600 mt-1">
-				Margin: {car.margin ? `${car.margin.toFixed(1)}%` : "N/A"}
-			  </div>
-			</div>
+			))}
+		  </div>
+		) : (
+		  !loading && (
+			<p className="text-center text-gray-500 mt-10">
+			  No cars found. Try adjusting your filters.
+			</p>
+		  )
+		)}
+
 
                 className="bg-neutral-800/80 border border-neutral-700 rounded-2xl p-5 shadow-md hover:bg-neutral-700/70 hover:ring-2 hover:ring-blue-500 cursor-pointer transition-all"
               >

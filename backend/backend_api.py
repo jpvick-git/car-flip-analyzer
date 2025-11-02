@@ -98,7 +98,7 @@ def test_db():
         return {"error": str(e)}
 
 
-@app.get("/api/cars/with_estimates")
+@app.get("/cars/with_estimates")
 def get_cars_with_estimates():
     """Return all cars with AI repair and resale estimates."""
     try:

@@ -29,23 +29,29 @@ export default function CarFlipAnalyzer() {
     const fetchCarsFromDB = async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/cars/with_estimates");
-        const data = await res.json();
-        if (data && data.cars) {
-          const cars = data.cars;
-          setCars(cars);
-          setFiltered(cars);
+		const res = await fetch("/api/cars/with_estimates");
+		const data = await res.json();
 
-          // Extract unique dropdown options
-          const years = [...new Set(cars.map((c) => c.year))].sort((a, b) => b - a);
-          const makes = [...new Set(cars.map((c) => c.make))].sort();
-          const models = [...new Set(cars.map((c) => c.model))].sort();
-          const damages = [...new Set(cars.map((c) => c.damage))].sort();
+		// Handle both {cars: [...]} and raw arrays
+		const carsArray = Array.isArray(data) ? data : data.cars || [];
 
-          setOptions({ years, makes, models, damages });
-        } else {
-          console.warn("⚠️ No cars returned from backend");
-        }
+		if (carsArray.length > 0) {
+		  setCars(carsArray);
+		  setFiltered(carsArray);
+
+		  // Extract unique dropdown options
+		  const years = [...new Set(carsArray.map((c) => c.year))].sort((a, b) => b - a);
+		  const makes = [...new Set(carsArray.map((c) => c.make))].sort();
+		  const models = [...new Set(carsArray.map((c) => c.model))].sort();
+		  const damages = [...new Set(carsArray.map((c) => c.damage))].sort();
+
+		  setOptions({ years, makes, models, damages });
+		} else {
+		  console.warn("⚠️ No cars returned from backend");
+		  setCars([]);
+		  setFiltered([]);
+		}
+
       } catch (err) {
         console.error("❌ Error fetching cars:", err);
       } finally {

@@ -10,7 +10,7 @@ import time
 # --------------------------------------------------
 # FASTAPI SETUP
 # --------------------------------------------------
-load_dotenv()  # 👈 must be before DATABASE_URL
+load_dotenv()
 app = FastAPI()
 
 app.add_middleware(
@@ -26,8 +26,6 @@ app.add_middleware(
 # --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
-
-# ✅ Mount /downloads AFTER app is created
 app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
 def get_first_image(lot_id: str):
@@ -35,19 +33,33 @@ def get_first_image(lot_id: str):
     lot_folder = os.path.join(DOWNLOAD_DIR, str(lot_id))
     if not os.path.exists(lot_folder):
         return None
-
     images = [
         f for f in os.listdir(lot_folder)
         if f.lower().endswith((".jpg", ".jpeg", ".png"))
         and str(lot_id).lower() in f.lower()
     ]
-
     if not images:
         return None
-
-    # Prefer _Image_1 if it exists
     images.sort(key=lambda x: ("_image_1" not in x.lower(), x.lower()))
     return f"/downloads/{lot_id}/{images[0]}"
+
+# --------------------------------------------------
+# DATABASE CONFIGURATION (SQL Server on AWS RDS)
+# --------------------------------------------------
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("❌ DATABASE_URL not set")
+
+print(f"🌐 Connecting to {DATABASE_URL}")
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    connect_args={"TrustServerCertificate": "yes"},
+)
+
+def get_engine():
+    return engine
 
 # --------------------------------------------------
 # ROUTES
@@ -56,10 +68,8 @@ def get_first_image(lot_id: str):
 def root():
     return {"status": "✅ Backend is running with SQL Server!"}
 
-
 @app.get("/test_db")
 def test_db():
-    """Test connection to SQL Server database."""
     try:
         with engine.connect() as conn:
             row = conn.execute(text("SELECT DB_NAME(), SUSER_NAME();")).fetchone()
@@ -67,30 +77,26 @@ def test_db():
     except Exception as e:
         return {"error": str(e)}
 
-
 @app.get("/cars/with_estimates")
 def get_cars_with_estimates():
-    """Return cars where repair_estimate is not null, with calculated values and image URLs."""
     try:
         with engine.connect() as conn:
-            rows = conn.execute(
-                text("""
-                    SELECT
-                        lot_inv_num AS lot_number,
-                        year,
-                        make,
-                        model,
-                        odometer,
-                        damage_description AS damage,
-                        est_retail_value AS resale_value,
-                        repair_estimate,
-                        lot_url,
-                        repair_details,
-                        resale_details
-                    FROM cars
-                    WHERE repair_estimate IS NOT NULL
-                """)
-            ).fetchall()
+            rows = conn.execute(text("""
+                SELECT
+                    lot_inv_num AS lot_number,
+                    year,
+                    make,
+                    model,
+                    odometer,
+                    damage_description AS damage,
+                    est_retail_value AS resale_value,
+                    repair_estimate,
+                    lot_url,
+                    repair_details,
+                    resale_details
+                FROM cars
+                WHERE repair_estimate IS NOT NULL
+            """)).fetchall()
 
         cars = []
         for r in rows:
@@ -129,18 +135,14 @@ def get_cars_with_estimates():
                 "resale_details": r.resale_details or "",
                 "image_url": image_url or "",
             })
-
         return {"cars": cars}
-
     except Exception as e:
         return {"error": str(e)}
-
 
 # --------------------------------------------------
 # DB CONNECTION WAIT
 # --------------------------------------------------
 def wait_for_db(max_retries=5, delay=3):
-    """Wait for the database to be ready before continuing startup."""
     for attempt in range(1, max_retries + 1):
         try:
             with engine.connect() as conn:
@@ -151,7 +153,6 @@ def wait_for_db(max_retries=5, delay=3):
             print(f"⏳ DB not ready (attempt {attempt}/{max_retries}): {e}")
             time.sleep(delay)
     raise RuntimeError("❌ Could not connect to the database after several attempts.")
-
 
 # --------------------------------------------------
 # AUTO TABLE CREATION
@@ -179,11 +180,9 @@ def create_tables_if_needed():
         conn.commit()
     print("✅ Cars table ready!")
 
-
 # --------------------------------------------------
 # MAIN ENTRYPOINT
 # --------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 10000))
     uvicorn.run("backend_api:app", host="0.0.0.0", port=8000)

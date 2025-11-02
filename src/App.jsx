@@ -192,16 +192,35 @@ export default function CarFlipAnalyzer() {
         )}
 
         {!loading && filtered.length > 0 ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filtered.map((car) => (
-              <div
-                key={car.id}
-                onClick={(e) => {
-                  const tag = e.target.tagName.toLowerCase();
-                  if (!["input", "button", "summary", "details", "label", "a"].includes(tag)) {
-                    window.open(car.url, "_blank", "noopener,noreferrer");
-                  }
-                }}
+			<div
+			  key={car.id}
+			  onClick={(e) => {
+				const tag = e.target.tagName.toLowerCase();
+				if (!["input", "button", "summary", "details", "label", "a"].includes(tag)) {
+				  window.open(car.url, "_blank", "noopener,noreferrer");
+				}
+			  }}
+			  className="bg-white rounded-2xl shadow hover:shadow-lg transition p-4 cursor-pointer"
+			>
+			  <img
+				src={car.image_url ? car.image_url : "/placeholder.jpg"}
+				alt={`${car.make || ""} ${car.model || ""}`}
+				className="rounded-xl w-full h-48 object-cover"
+				loading="lazy"
+			  />
+			  <h2 className="text-lg font-semibold mt-2">
+				{car.year ? Math.round(car.year) : "Unknown Year"} {car.make || ""} {car.model || ""}
+			  </h2>
+			  <p className="text-sm text-gray-500">{car.damage || "No damage info"}</p>
+			  <div className="flex justify-between text-sm mt-2">
+				<span>Repairs: ${car.repairs?.toLocaleString() ?? "0"}</span>
+				<span>Profit: ${car.profit?.toLocaleString() ?? "0"}</span>
+			  </div>
+			  <div className="text-sm text-gray-600 mt-1">
+				Margin: {car.margin ? `${car.margin.toFixed(1)}%` : "N/A"}
+			  </div>
+			</div>
+
                 className="bg-neutral-800/80 border border-neutral-700 rounded-2xl p-5 shadow-md hover:bg-neutral-700/70 hover:ring-2 hover:ring-blue-500 cursor-pointer transition-all"
               >
                 {/* IMAGE */}

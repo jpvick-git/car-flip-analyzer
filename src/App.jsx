@@ -29,7 +29,14 @@ export default function App() {
     const fetchCars = async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/cars/with_estimates");
+        const baseUrl =
+          process.env.NODE_ENV === "development"
+            ? "http://localhost:8000"
+            : "https://carflipanalyzer.com";
+
+        const res = await fetch(`${baseUrl}/api/cars/with_estimates`);
+        if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+
         const data = await res.json();
         const carsArray = Array.isArray(data) ? data : data.cars || [];
 
@@ -71,13 +78,6 @@ export default function App() {
   useEffect(() => {
     if (cars.length) applyFilters(cars, filters);
   }, [filters]);
-
-  // ✅ SAFE environment check (works locally + Vercel)
-  const isDev =
-    (typeof import.meta !== "undefined" &&
-      import.meta.env &&
-      import.meta.env.MODE === "development") ||
-    process.env.NODE_ENV === "development";
 
   // --------------------------------------------------
   // MAIN RENDER
@@ -191,20 +191,16 @@ export default function App() {
                 className="bg-neutral-800/80 border border-neutral-700 rounded-2xl p-5 shadow-md hover:bg-neutral-700/70 hover:ring-2 hover:ring-blue-500 cursor-pointer transition-all"
               >
                 {/* IMAGE */}
-				<img
-				  src={
-					<img
-					  src={
-						car?.image_url
-						  ? `https://images.weserv.nl/?url=45.55.43.140${car.image_url}`
-						  : "https://placehold.co/600x400?text=No+Image"
-
-						   }
-						   
-				  alt={`${car.make ?? ""} ${car.model ?? ""}`}
-				  className="w-full h-48 object-cover rounded-lg mb-3"
-				  onError={(e) => (e.target.src = "https://placehold.co/600x400?text=No+Image")}
-				/>
+                <img
+                  src={
+                    car?.image_url
+                      ? `https://carflipanalyzer.com${car.image_url}`
+                      : "https://placehold.co/600x400?text=No+Image"
+                  }
+                  alt={`${car.make ?? ""} ${car.model ?? ""}`}
+                  className="w-full h-48 object-cover rounded-lg mb-3"
+                  onError={(e) => (e.target.src = "https://placehold.co/600x400?text=No+Image")}
+                />
 
                 {/* TITLE */}
                 <div className="pb-3 border-b border-neutral-700 mb-3">

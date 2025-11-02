@@ -34,14 +34,21 @@ export default function App() {
             ? "http://localhost:8000"
             : "https://carflipanalyzer.com";
 
-        const res = await fetch("https://api.carflipanalyzer.com/cars/with_estimates");
-        if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+		const res = await fetch("https://api.carflipanalyzer.com/cars/with_estimates");
+		if (!res.ok) {
+		  console.error("❌ API error:", res.status, await res.text());
+		  throw new Error(`Server responded with ${res.status}`);
+		}
 
-        const data = await res.json();
-        const carsArray = Array.isArray(data) ? data : data.cars || [];
+		const data = await res.json();
 
-        setCars(carsArray);
-        setFiltered(carsArray);
+		// ✅ The API returns { cars: [...] }
+		const carsArray = data?.cars || [];
+
+		console.log("✅ Loaded cars:", carsArray.length);
+		setCars(carsArray);
+		setFiltered(carsArray);
+
 
         const years = [...new Set(carsArray.map((c) => c.year))].sort((a, b) => b - a);
         const makes = [...new Set(carsArray.map((c) => c.make))].sort();

@@ -7,6 +7,12 @@ import os
 import re
 import time
 
+from fastapi.staticfiles import StaticFiles
+
+# Serve local images from /downloads
+app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
+
+
 load_dotenv()  # 👈 this must come BEFORE DATABASE_URL = os.getenv(...)
 
 # --------------------------------------------------

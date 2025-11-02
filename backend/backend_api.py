@@ -30,9 +30,12 @@ app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 print(f"📂 Serving images from: {DOWNLOAD_DIR}")
 
 
-def get_first_image(lot_id: str):
+def get_first_image(lot_id):
     """Return the first matching image for a given lot (handles _Image_1 filenames)."""
-    lot_folder = os.path.join(DOWNLOAD_DIR, str(lot_id))
+    # Ensure lot_id is a clean string (no .0 from floats)
+    lot_id = str(lot_id).split(".")[0].strip()
+
+    lot_folder = os.path.join(DOWNLOAD_DIR, lot_id)
     if not os.path.exists(lot_folder):
         print(f"⚠️ No folder found for lot {lot_id} at {lot_folder}")
         return None
@@ -40,23 +43,19 @@ def get_first_image(lot_id: str):
     all_files = os.listdir(lot_folder)
     print(f"📸 Files for {lot_id}: {all_files}")
 
-    # Filter to only JPG/PNG files
     images = [
         f for f in all_files
         if f.lower().endswith((".jpg", ".jpeg", ".png"))
     ]
-
     if not images:
         print(f"⚠️ No image files found for lot {lot_id}")
         return None
 
-    # Prefer _Image_1 if it exists
     images.sort(key=lambda x: ("_image_1" not in x.lower(), x.lower()))
+    chosen = f"/downloads/{lot_id}/{images[0]}"
+    print(f"✅ Image found for {lot_id}: {chosen}")
+    return chosen
 
-    chosen_file = images[0]
-    chosen_url = f"/downloads/{lot_id}/{chosen_file}"
-    print(f"✅ Image chosen for lot {lot_id}: {chosen_url}")
-    return chosen_url
 # --------------------------------------------------
 # DATABASE CONFIGURATION (SQL Server on AWS RDS)
 # --------------------------------------------------
@@ -93,17 +92,18 @@ def test_db():
 
 @app.get("/cars/with_estimates")
 def get_cars_with_estimates():
+    """Return cars where repair_estimate is not null, with calculated values and image URLs."""
     try:
         with engine.connect() as conn:
             rows = conn.execute(text("""
                 SELECT
-                    lot_inv_num AS lot_number,
+                    lot_inv_num,
                     year,
                     make,
                     model,
                     odometer,
-                    damage_description AS damage,
-                    est_retail_value AS resale_value,
+                    damage_description,
+                    est_retail_value,
                     repair_estimate,
                     lot_url,
                     repair_details,
@@ -114,43 +114,41 @@ def get_cars_with_estimates():
 
         cars = []
         for r in rows:
-            def to_float(v):
-                if not v:
-                    return 0.0
-                if isinstance(v, (int, float)):
-                    return float(v)
-                num = re.sub(r"[^0-9.]", "", str(v))
-                return float(num) if num else 0.0
-
-            resale = to_float(r.resale_value)
-            repair = to_float(r.repair_estimate)
+            # Access by index (SQLAlchemy Row is tuple-like)
+            lot_id = str(r[0])
+            resale = float(r[6] or 0)
+            repair = float(r[7] or 0)
             fees = resale * 0.0725
             target_margin = 0.30
             max_bid = max(0, round(resale - (repair + fees + resale * target_margin)))
             profit = resale - (repair + fees + max_bid)
             margin = round((profit / resale * 100), 1) if resale else 0.0
-            image_url = get_first_image(r.lot_number)
+
+            image_url = get_first_image(lot_id)
 
             cars.append({
-                "id": r.lot_number,
-                "year": r.year,
-                "make": r.make,
-                "model": r.model,
-                "odometer": r.odometer,
-                "damage": r.damage,
+                "id": lot_id,
+                "year": r[1],
+                "make": r[2],
+                "model": r[3],
+                "odometer": r[4],
+                "damage": r[5],
                 "resale": resale,
                 "repairs": repair,
                 "fees": round(fees, 2),
                 "maxBid": max_bid,
                 "profit": round(profit, 2),
                 "margin": margin,
-                "url": r.lot_url,
-                "repair_details": r.repair_details or "",
-                "resale_details": r.resale_details or "",
-                "image_url": image_url or "",
+                "url": r[8],
+                "repair_details": r[9] or "",
+                "resale_details": r[10] or "",
+                "image_url": image_url or "",  # 👈 added dynamically
             })
+
         return {"cars": cars}
+
     except Exception as e:
+        print("❌ Error in /cars/with_estimates:", e)
         return {"error": str(e)}
 
 # --------------------------------------------------

@@ -34,7 +34,7 @@ export default function App() {
             ? "http://localhost:8000"
             : "https://carflipanalyzer.com";
 
-        const res = await fetch("https://api.carflipanalyzer.com/api/cars/with_estimates");
+        const res = await fetch("https://api.carflipanalyzer.com/cars/with_estimates");
         if (!res.ok) throw new Error(`Server responded with ${res.status}`);
 
         const data = await res.json();

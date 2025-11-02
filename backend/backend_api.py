@@ -97,7 +97,7 @@ def test_db():
     except Exception as e:
         return {"error": str(e)}
 
-
+@app.get("/cars/with_estimates")
 @app.get("/cars/with_estimates")
 def get_cars_with_estimates():
     """Return all cars with AI repair and resale estimates."""

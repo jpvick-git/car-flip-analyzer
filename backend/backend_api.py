@@ -207,4 +207,4 @@ def create_tables_if_needed():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 10000))
-    uvicorn.run("backend_api:app", host="0.0.0.0", port=port)
+    uvicorn.run("backend_api:app", host="0.0.0.0", port=8000)

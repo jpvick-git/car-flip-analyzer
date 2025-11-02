@@ -193,10 +193,14 @@ export default function App() {
                 {/* IMAGE */}
 				<img
 				  src={
-					car?.image_url
-					  ? `${isDev ? "http://localhost:8000" : "http://45.55.43.140"}${car.image_url}`
-					  : "https://placehold.co/600x400?text=No+Image"
-				  }
+					<img
+					  src={
+						car?.image_url
+						  ? `https://images.weserv.nl/?url=45.55.43.140${car.image_url}`
+						  : "https://placehold.co/600x400?text=No+Image"
+
+						   }
+						   
 				  alt={`${car.make ?? ""} ${car.model ?? ""}`}
 				  className="w-full h-48 object-cover rounded-lg mb-3"
 				  onError={(e) => (e.target.src = "https://placehold.co/600x400?text=No+Image")}

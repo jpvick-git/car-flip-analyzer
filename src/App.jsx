@@ -89,7 +89,7 @@ export default function App() {
 return (
   <div className="min-h-screen bg-neutral-950 text-white flex flex-col relative">
     {/* STICKY HEADER */}
-    <header className="sticky top-0 z-50 flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950/90 backdrop-blur-sm">
+    <header className="sticky top-0 z-50 flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950 shadow-[0_2px_6px_rgba(0,0,0,0.4)]">
       <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
         Car Flip Analyzer
       </h1>

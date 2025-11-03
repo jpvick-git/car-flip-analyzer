@@ -22,3 +22,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 backend/.env
+
+# Ignore backend download files except the first image per lot
+backend/downloads/**
+!backend/downloads/**/*_Image_1.jpg
+!backend/downloads/**/
+
+# Ignore text and zip files anywhere
+*.txt
+*.zip

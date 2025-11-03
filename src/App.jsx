@@ -101,7 +101,7 @@ return (
     </header>
 
     {/* STICKY FILTER BAR */}
-    <div className="sticky top-[76px] z-40 p-4 border-b border-neutral-800 bg-neutral-900/80 backdrop-blur-sm flex flex-wrap gap-3 justify-center">
+    <div className="sticky top-[76px] z-40 border-b border-neutral-800 bg-neutral-900/90 backdrop-blur-sm flex flex-wrap gap-3 justify-center py-4 px-6">
       {/* Year */}
       <select
         value={filters.year}

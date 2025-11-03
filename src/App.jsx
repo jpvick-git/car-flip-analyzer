@@ -87,9 +87,9 @@ export default function App() {
   // MAIN RENDER
   // --------------------------------------------------
 return (
-  <div className="min-h-screen bg-neutral-950 text-white flex flex-col relative">
+  <div className="min-h-screen bg-neutral-950 text-white flex flex-col">
     {/* HEADER */}
-	<header className="sticky top-0 z-50 flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950">
+	<header className="sticky top-0 z-50 flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950 shadow-md">
 	  <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
 		Car Flip Analyzer
 	  </h1>
@@ -101,7 +101,7 @@ return (
 	</header>
 
 	{/* FILTER BAR */}
-	<div className="sticky top-[72px] z-40 flex flex-wrap gap-3 justify-center px-6 py-4 border-b border-neutral-800 bg-neutral-900 shadow-[0_2px_4px_rgba(0,0,0,0.3)]">
+	<div className="sticky top-[76px] z-40 flex flex-wrap gap-3 justify-center px-6 py-4 border-b border-neutral-800 bg-neutral-900 shadow-md">
 	  {/* Year */}
 	  <select
 		value={filters.year}

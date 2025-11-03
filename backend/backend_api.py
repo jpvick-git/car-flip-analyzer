@@ -118,7 +118,23 @@ def get_cars_with_estimates():
                     repair_details,
                     resale_details
                 FROM cars
-                WHERE repair_estimate IS NOT NULL
+                WHERE
+                    repair_estimate IS NOT NULL
+                    AND (
+                        title_code IS NULL OR
+                        title_code NOT IN (
+                            'BILL OF SALE - PARTS ONLY',
+                            'CERT OF TITLE-PARTS ONLY SALVG',
+                            'CERT OF TITLE - SALVAGE (P)',
+                            'CERT OF TITLE-SALVAGE TITLE (P)',
+                            'CERTIFICATE OF DESTRUCTION',
+                            'CERTIFICATE OF SALVAGE',
+                            'CERTIFICATE OF TITLE - JUNK',
+                            'SALVAGE CERTIFICATE',
+                            'SALVAGE CERTIFICATE OF A VEHIC',
+                            'SALVAGE CERTIFICATE OF TITLE'
+                        )
+                    )
             """)).fetchall()
 
         def to_float(value):

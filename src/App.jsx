@@ -34,21 +34,18 @@ export default function App() {
             ? "http://localhost:8000"
             : "https://api.carflipanalyzer.com";
 
-		const res = await fetch("https://api.carflipanalyzer.com/cars/with_estimates");
-		if (!res.ok) {
-		  console.error("❌ API error:", res.status, await res.text());
-		  throw new Error(`Server responded with ${res.status}`);
-		}
+        const res = await fetch("https://api.carflipanalyzer.com/cars/with_estimates");
+        if (!res.ok) {
+          console.error("❌ API error:", res.status, await res.text());
+          throw new Error(`Server responded with ${res.status}`);
+        }
 
-		const data = await res.json();
+        const data = await res.json();
+        const carsArray = data?.cars || [];
 
-		// ✅ The API returns { cars: [...] }
-		const carsArray = data?.cars || [];
-
-		console.log("✅ Loaded cars:", carsArray.length);
-		setCars(carsArray);
-		setFiltered(carsArray);
-
+        console.log("✅ Loaded cars:", carsArray.length);
+        setCars(carsArray);
+        setFiltered(carsArray);
 
         const years = [...new Set(carsArray.map((c) => c.year))].sort((a, b) => b - a);
         const makes = [...new Set(carsArray.map((c) => c.make))].sort();
@@ -91,7 +88,8 @@ export default function App() {
   // --------------------------------------------------
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col relative">
-      <header className="flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950/90">
+      {/* STICKY HEADER */}
+      <header className="sticky top-0 z-50 flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950/90 backdrop-blur-sm">
         <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
           Car Flip Analyzer
         </h1>
@@ -197,21 +195,20 @@ export default function App() {
                 }}
                 className="bg-neutral-800/80 border border-neutral-700 rounded-2xl p-5 shadow-md hover:bg-neutral-700/70 hover:ring-2 hover:ring-blue-500 cursor-pointer transition-all"
               >
-                {/* IMAGE */}
-                {/* IMAGE */}
-				<img
-				  loading="lazy"
-				  src={
-					car?.image_url
-					  ? car.image_url
-					  : "https://placehold.co/600x400?text=No+Image"
-				  }
-				  alt={`${car.make ?? ""} ${car.model ?? ""}`}
-				  className="w-full h-48 object-cover rounded-lg mb-3"
-				  onError={(e) => (e.target.src = "https://placehold.co/600x400?text=No+Image")}
-				/>
+                <img
+                  loading="lazy"
+                  src={
+                    car?.image_url
+                      ? car.image_url
+                      : "https://placehold.co/600x400?text=No+Image"
+                  }
+                  alt={`${car.make ?? ""} ${car.model ?? ""}`}
+                  className="w-full h-48 object-cover rounded-lg mb-3"
+                  onError={(e) =>
+                    (e.target.src = "https://placehold.co/600x400?text=No+Image")
+                  }
+                />
 
-                {/* TITLE */}
                 <div className="pb-3 border-b border-neutral-700 mb-3">
                   <h2 className="text-xl font-semibold mb-1 text-white">
                     {car?.year ? Math.round(car.year) : "Unknown Year"}{" "}
@@ -225,7 +222,6 @@ export default function App() {
                   </p>
                 </div>
 
-                {/* STATS */}
                 <div className="space-y-1 text-sm">
                   <p>AI Resale Value: ${Number(car?.resale || 0).toLocaleString()}</p>
                   <p>Repairs: ${Number(car?.repairs || 0).toLocaleString()}</p>

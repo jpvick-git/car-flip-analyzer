@@ -88,92 +88,93 @@ export default function App() {
   // --------------------------------------------------
 return (
   <div className="min-h-screen bg-neutral-950 text-white flex flex-col relative">
-    {/* STICKY HEADER */}
-    <header className="sticky top-0 z-50 flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950 shadow-[0_2px_6px_rgba(0,0,0,0.4)] after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-neutral-950">
-      <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
-        Car Flip Analyzer
-      </h1>
-      <img
-        src="/logo.png"
-        alt="Logo"
-        className="h-14 md:h-16 object-contain opacity-90 hover:opacity-100 transition"
-      />
-    </header>
+    {/* HEADER */}
+	<header className="sticky top-0 z-50 flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950">
+	  <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
+		Car Flip Analyzer
+	  </h1>
+	  <img
+		src="/logo.png"
+		alt="Logo"
+		className="h-14 md:h-16 object-contain opacity-90 hover:opacity-100 transition"
+	  />
+	</header>
 
-    {/* STICKY FILTER BAR */}
-    <div className="sticky top-[72px] z-40 flex flex-wrap gap-3 justify-center border-b border-neutral-800 bg-neutral-900 py-4 px-6 shadow-[0_-1px_4px_rgba(0,0,0,0.3)]">
-      {/* Year */}
-      <select
-        value={filters.year}
-        onChange={(e) => setFilters({ ...filters, year: e.target.value })}
-        className="bg-neutral-800 text-white px-3 py-2 rounded-md w-32 text-sm"
-      >
-        <option value="">All Years</option>
-        {options.years.map((y) => (
-          <option key={y} value={y}>
-            {y}
-          </option>
-        ))}
-      </select>
+	{/* FILTER BAR */}
+	<div className="sticky top-[72px] z-40 flex flex-wrap gap-3 justify-center px-6 py-4 border-b border-neutral-800 bg-neutral-900 shadow-[0_2px_4px_rgba(0,0,0,0.3)]">
+	  {/* Year */}
+	  <select
+		value={filters.year}
+		onChange={(e) => setFilters({ ...filters, year: e.target.value })}
+		className="bg-neutral-800 text-white px-3 py-2 rounded-md w-32 text-sm"
+	  >
+		<option value="">All Years</option>
+		{options.years.map((y) => (
+		  <option key={y} value={y}>
+			{y}
+		  </option>
+		))}
+	  </select>
 
-      {/* Make */}
-      <select
-        value={filters.make}
-        onChange={(e) => setFilters({ ...filters, make: e.target.value })}
-        className="bg-neutral-800 text-white px-3 py-2 rounded-md w-40 text-sm"
-      >
-        <option value="">All Makes</option>
-        {options.makes.map((m) => (
-          <option key={m} value={m}>
-            {m}
-          </option>
-        ))}
-      </select>
+	  {/* Make */}
+	  <select
+		value={filters.make}
+		onChange={(e) => setFilters({ ...filters, make: e.target.value })}
+		className="bg-neutral-800 text-white px-3 py-2 rounded-md w-40 text-sm"
+	  >
+		<option value="">All Makes</option>
+		{options.makes.map((m) => (
+		  <option key={m} value={m}>
+			{m}
+		  </option>
+		))}
+	  </select>
 
-      {/* Model */}
-      <select
-        value={filters.model}
-        onChange={(e) => setFilters({ ...filters, model: e.target.value })}
-        className="bg-neutral-800 text-white px-3 py-2 rounded-md w-44 text-sm"
-      >
-        <option value="">All Models</option>
-        {options.models.map((m) => (
-          <option key={m} value={m}>
-            {m}
-          </option>
-        ))}
-      </select>
+	  {/* Model */}
+	  <select
+		value={filters.model}
+		onChange={(e) => setFilters({ ...filters, model: e.target.value })}
+		className="bg-neutral-800 text-white px-3 py-2 rounded-md w-44 text-sm"
+	  >
+		<option value="">All Models</option>
+		{options.models.map((m) => (
+		  <option key={m} value={m}>
+			{m}
+		  </option>
+		))}
+	  </select>
 
-      {/* Damage */}
-      <select
-        value={filters.damage}
-        onChange={(e) => setFilters({ ...filters, damage: e.target.value })}
-        className="bg-neutral-800 text-white px-3 py-2 rounded-md w-48 text-sm"
-      >
-        <option value="">All Damages</option>
-        {options.damages.map((d) => (
-          <option key={d} value={d}>
-            {d}
-          </option>
-        ))}
-      </select>
+	  {/* Damage */}
+	  <select
+		value={filters.damage}
+		onChange={(e) => setFilters({ ...filters, damage: e.target.value })}
+		className="bg-neutral-800 text-white px-3 py-2 rounded-md w-48 text-sm"
+	  >
+		<option value="">All Damages</option>
+		{options.damages.map((d) => (
+		  <option key={d} value={d}>
+			{d}
+		  </option>
+		))}
+	  </select>
 
-      {/* Mileage */}
-      <input
-        placeholder="Min Miles"
-        type="number"
-        value={filters.minMiles}
-        onChange={(e) => setFilters({ ...filters, minMiles: e.target.value })}
-        className="bg-neutral-800 text-white px-3 py-2 rounded-md w-28 text-sm"
-      />
-      <input
-        placeholder="Max Miles"
-        type="number"
-        value={filters.maxMiles}
-        onChange={(e) => setFilters({ ...filters, maxMiles: e.target.value })}
-        className="bg-neutral-800 text-white px-3 py-2 rounded-md w-28 text-sm"
-      />
-    </div>
+	  {/* Mileage */}
+	  <input
+		placeholder="Min Miles"
+		type="number"
+		value={filters.minMiles}
+		onChange={(e) => setFilters({ ...filters, minMiles: e.target.value })}
+		className="bg-neutral-800 text-white px-3 py-2 rounded-md w-28 text-sm"
+	  />
+	  <input
+		placeholder="Max Miles"
+		type="number"
+		value={filters.maxMiles}
+		onChange={(e) => setFilters({ ...filters, maxMiles: e.target.value })}
+		className="bg-neutral-800 text-white px-3 py-2 rounded-md w-28 text-sm"
+	  />
+	</div>
+
 
     {/* MAIN CONTENT */}
     <main className="flex-1 overflow-y-auto p-6">

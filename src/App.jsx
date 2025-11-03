@@ -87,7 +87,6 @@ export default function App() {
   // MAIN RENDER
   // --------------------------------------------------
   return (
-	{/* STICKY HEADER */}
 	<header className="sticky top-0 z-50 flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950/90 backdrop-blur-sm">
 	  <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
 		Car Flip Analyzer

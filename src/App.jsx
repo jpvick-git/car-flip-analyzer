@@ -136,20 +136,20 @@ function App() {
                   {car.year} {car.make} {car.model}
                 </h2>
                 <p className="text-sm text-neutral-400 mb-2">
-                  {car.damage_description || "No damage info"}
+                  {car.damage || "No damage info"}
                 </p>
                 <div className="text-sm text-neutral-300 space-y-1">
                   <p>
                     <span className="text-neutral-500">Est. Retail:</span>{" "}
-                    ${car.resale_value?.toLocaleString() || "N/A"}
+                    ${car.resale?.toLocaleString() || "N/A"}
                   </p>
                   <p>
                     <span className="text-neutral-500">Est. Repair:</span>{" "}
-                    ${car.repair_estimate?.toLocaleString() || "N/A"}
+                    ${car.repairs?.toLocaleString() || "N/A"}
                   </p>
                 </div>
                 <a
-                  href={car.lot_url}
+                  href={car.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block mt-3 text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition"

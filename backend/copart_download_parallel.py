@@ -9,7 +9,6 @@ from playwright.sync_api import sync_playwright
 from sqlalchemy import create_engine, text
 
 
-
 # --------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------
@@ -20,39 +19,45 @@ DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 
 DB_NAME = "cars"
 TABLE_NAME = "cars"
-SERVER = "localhost\\SQLEXPRESS"
+SERVER = "carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com,1433"
+USERNAME = "admin"         # 🔒 your actual RDS username
+PASSWORD = "1K0xi*rfMR!r4VN7" # 🔒 your actual RDS password
 DRIVER = "ODBC Driver 18 for SQL Server"
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
+
 # --------------------------------------------------
-# DATABASE CONNECTION
+# DATABASE CONNECTION (RDS)
 # --------------------------------------------------
 
 def get_engine():
-    """Create SQLAlchemy engine for SQL Server."""
+    """Create SQLAlchemy engine for AWS RDS SQL Server."""
     try:
         connection_string = (
             f"Driver={{{DRIVER}}};"
             f"Server={SERVER};"
             f"Database={DB_NAME};"
-            "Trusted_Connection=yes;"
-            "Encrypt=no;"
+            f"Uid={USERNAME};"
+            f"Pwd={PASSWORD};"
+            "Encrypt=yes;"
+            "TrustServerCertificate=yes;"
         )
         params = urllib.parse.quote_plus(connection_string)
         engine = create_engine(f"mssql+pyodbc:///?odbc_connect={params}")
-        print(f"✅ Connected successfully to SQL Server database '{DB_NAME}'!")
+        print(f"✅ Connected successfully to RDS SQL Server database '{DB_NAME}'!")
         return engine
     except Exception as e:
         print("❌ Database connection failed:", e)
         raise
+
 
 # --------------------------------------------------
 # LOAD CSV INTO DATABASE
 # --------------------------------------------------
 
 def load_csv_to_db(engine):
-    print(f"📦 Loading {CSV_PATH} into SQL Server database '{DB_NAME}'...")
+    print(f"📦 Loading {CSV_PATH} into RDS SQL Server database '{DB_NAME}'...")
     df = pd.read_csv(CSV_PATH)
 
     df.rename(columns={
@@ -86,6 +91,7 @@ def load_csv_to_db(engine):
     df.to_sql(TABLE_NAME, con=engine, if_exists='replace', index=False)
     print(f"✅ Loaded {len(df)} rows into table '{TABLE_NAME}' successfully.")
 
+
 # --------------------------------------------------
 # RETRIEVE LOT URLS FROM DATABASE
 # --------------------------------------------------
@@ -105,15 +111,13 @@ def get_urls_from_db(engine, limit=1000):
     print(f"🔗 Found {len(urls)} URLs needing download.")
     return urls
 
+
 # --------------------------------------------------
 # MOVE & UNZIP DOWNLOADED FILES
 # --------------------------------------------------
 
 def move_and_unzip(target_folder):
-    """
-    Finds and extracts any .zip files in the target folder.
-    Cleans up the .zip after extraction.
-    """
+    """Find and extract any .zip files in the target folder."""
     zip_files = [f for f in os.listdir(target_folder) if f.endswith(".zip")]
     if not zip_files:
         print("⚠️ No ZIP files found in target folder.")
@@ -122,7 +126,6 @@ def move_and_unzip(target_folder):
     for file in zip_files:
         zip_path = os.path.join(target_folder, file)
         try:
-            # Extract contents
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall(target_folder)
             os.remove(zip_path)
@@ -136,15 +139,13 @@ def move_and_unzip(target_folder):
 # --------------------------------------------------
 
 def download_images(lot_url):
-    """Opens Edge, navigates to Copart lot, downloads all images with a 60s timeout."""
+    """Opens Edge, navigates to Copart lot, downloads all images with a timeout."""
     lot_id = lot_url.split("/lot/")[1].split("/")[0]
     lot_folder = os.path.join(DOWNLOAD_DIR, lot_id)
     os.makedirs(lot_folder, exist_ok=True)
 
-    existing_images = [
-        f for f in os.listdir(lot_folder)
-        if f.lower().endswith((".jpg", ".jpeg", ".png"))
-    ]
+    existing_images = [f for f in os.listdir(lot_folder)
+                       if f.lower().endswith((".jpg", ".jpeg", ".png"))]
     if len(existing_images) >= 5:
         print(f"[⏭️] Skipping {lot_id} — already has {len(existing_images)} images.")
         return True
@@ -159,12 +160,11 @@ def download_images(lot_url):
                 args=["--disable-blink-features=AutomationControlled", "--start-maximized"]
             )
 
-            # 🕒 Watchdog thread — force-close browser after 60s if still open
             def watchdog():
-                time.sleep(45) # change this for the seconds before a edge window will close
+                time.sleep(45)
                 try:
                     browser.close()
-                    print(f"⏰ Timeout: Closed browser for lot {lot_id} after 60s.")
+                    print(f"⏰ Timeout: Closed browser for lot {lot_id}.")
                 except Exception:
                     pass
 
@@ -200,20 +200,7 @@ def download_images(lot_url):
                     continue
 
             if not download_clicked:
-                print("⚠️ Could not click download arrow — trying hover...")
-                page.hover("div.lot-image-container, img")
-                page.wait_for_timeout(1000)
-                for sel in selectors:
-                    try:
-                        page.locator(sel).first.click()
-                        print(f"⬇️ Clicked after hover: {sel}")
-                        download_clicked = True
-                        break
-                    except Exception:
-                        continue
-
-            if not download_clicked:
-                print(f"❌ Still couldn’t find download button for {lot_id}.")
+                print(f"❌ Could not find download button for {lot_id}.")
                 browser.close()
                 return False
 
@@ -229,11 +216,9 @@ def download_images(lot_url):
                 print(f"📦 Saved ZIP to {zip_path}")
 
                 move_and_unzip(lot_folder)
-
             except Exception as e:
                 print(f"⚠️ Could not click 'Download all': {e}")
 
-            time.sleep(6)
             browser.close()
 
         print(f"✅ Finished lot {lot_id}.")
@@ -242,6 +227,7 @@ def download_images(lot_url):
     except Exception as e:
         print(f"⚠️ Error during download for {lot_id}: {e}")
         return False
+
 
 # --------------------------------------------------
 # MAIN (Parallel)
@@ -258,10 +244,8 @@ def main():
 
     print(f"🚀 Starting parallel downloads ({total} lots)...\n")
 
-    # Limit to 3 concurrent visible browsers
     with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {executor.submit(download_images, url): url for url in urls}
-
         for i, future in enumerate(as_completed(futures), 1):
             url = futures[future]
             try:
@@ -272,6 +256,7 @@ def main():
                 print(f"[{i}/{total}] ❌ Error processing {url}: {e}")
 
     print("\n🎉 All done — parallel Copart downloads complete!")
+
 
 # --------------------------------------------------
 

@@ -231,7 +231,7 @@ return (
                 <p>
                   AI Resale Value: ${Number(car?.resale || 0).toLocaleString()}
                 </p>
-                <p>Repairs: ${Number(car?.repairs || 0).toLocaleString()}</p>
+                <p>Est. Repairs: ${Number(car?.repairs || 0).toLocaleString()}</p>
                 <p>
                   Max Bid ({targetMargin}% Margin):{" "}
                   <span className="font-semibold text-yellow-400">

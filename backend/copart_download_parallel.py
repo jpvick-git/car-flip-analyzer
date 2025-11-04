@@ -57,9 +57,9 @@ def get_engine():
 # --------------------------------------------------
 
 def load_csv_to_db(engine):
-    print(f"📦 Loading {CSV_PATH} into RDS SQL Server database '{DB_NAME}'...")
-    df = pd.read_csv(CSV_PATH)
+    print(f"📦 Loading {CSV_PATH} into temporary table...")
 
+    df = pd.read_csv(CSV_PATH)
     df.rename(columns={
         'Lot URL': 'lot_url',
         'Lot/Inv #': 'lot_inv_num',
@@ -84,14 +84,36 @@ def load_csv_to_db(engine):
         'Announcements': 'announcements'
     }, inplace=True)
 
-    for col in ["repair_estimate", "repair_details"]:
-        if col not in df.columns:
-            df[col] = None
+    # load to temp table
+    df.to_sql("cars_temp", con=engine, if_exists='replace', index=False)
+    print("✅ Loaded CSV into temporary table 'cars_temp'.")
 
-    df.to_sql(TABLE_NAME, con=engine, if_exists='replace', index=False)
-    print(f"✅ Loaded {len(df)} rows into table '{TABLE_NAME}' successfully.")
-
-
+    # merge into main table
+    with engine.begin() as conn:
+        conn.execute(text("""
+            MERGE cars AS target
+            USING cars_temp AS source
+            ON target.lot_url = source.lot_url
+            WHEN MATCHED THEN
+                UPDATE SET
+                    target.year = source.year,
+                    target.make = source.make,
+                    target.model = source.model,
+                    target.odometer = source.odometer,
+                    target.damage_description = source.damage_description,
+                    target.sale_date = source.sale_date
+            WHEN NOT MATCHED THEN
+                INSERT (lot_url, lot_inv_num, est_retail_value, sale_date, year, make, model,
+                        engine_type, cylinders, vin, title_code, odometer, odometer_description,
+                        damage_description, current_bid, my_bid, item_number, sale_name,
+                        auto_grade, sale_light, announcements)
+                VALUES (source.lot_url, source.lot_inv_num, source.est_retail_value, source.sale_date,
+                        source.year, source.make, source.model, source.engine_type, source.cylinders,
+                        source.vin, source.title_code, source.odometer, source.odometer_description,
+                        source.damage_description, source.current_bid, source.my_bid, source.item_number,
+                        source.sale_name, source.auto_grade, source.sale_light, source.announcements);
+        """))
+        print("✅ Merged new CSV data into 'cars' successfully.")
 # --------------------------------------------------
 # RETRIEVE LOT URLS FROM DATABASE
 # --------------------------------------------------
@@ -160,6 +182,7 @@ def download_images(lot_url):
                 args=["--disable-blink-features=AutomationControlled", "--start-maximized"]
             )
 
+            # Auto timeout safety
             def watchdog():
                 time.sleep(45)
                 try:
@@ -181,6 +204,16 @@ def download_images(lot_url):
                 browser.close()
                 return False
 
+            # 🌀 Handle 360° image case — click the next image button
+            try:
+                if page.is_visible("span.p-galleria-item-next-icon.pi.pi-chevron-right"):
+                    page.click("span.p-galleria-item-next-icon.pi.pi-chevron-right")
+                    print(f"➡️ Clicked next image to skip 360° view for {lot_id}.")
+                    time.sleep(1.5)  # give it time to update the image
+            except Exception as e:
+                print(f"⚠️ Could not click next image (maybe already normal image): {e}")
+
+            # 🎯 Now look for the download arrow
             selectors = [
                 "a.lot-image-floating-CTA span.download-image-sprite-icon",
                 "span.lot-details-header-sprite.download-image-sprite-icon",
@@ -199,14 +232,23 @@ def download_images(lot_url):
                 except Exception:
                     continue
 
+            # 🖼️ Fallback: open image viewer if no download arrow
             if not download_clicked:
-                print(f"❌ Could not find download button for {lot_id}.")
-                browser.close()
-                return False
+                try:
+                    print(f"🔍 No download arrow found — opening image viewer for {lot_id}...")
+                    page.click("#media-lot-image", timeout=5000)
+                    page.wait_for_selector("a.p-pb-5.text-dark-gray-3.p-decor-none", timeout=8000)
+                    print(f"🖼️ Image viewer opened — retrying download all...")
+                    download_clicked = True
+                except Exception as e:
+                    print(f"❌ Could not open image viewer for {lot_id}: {e}")
+                    browser.close()
+                    return False
 
+            # 📦 Try clicking "Download all"
             try:
-                page.wait_for_selector("text=Download all", timeout=8000)
-                download_all = page.locator("text=Download all")
+                page.wait_for_selector("a.p-pb-5.text-dark-gray-3.p-decor-none", timeout=8000)
+                download_all = page.locator("a.p-pb-5.text-dark-gray-3.p-decor-none")
                 with page.expect_download() as dl_info:
                     download_all.first.click()
                 dl = dl_info.value
@@ -217,17 +259,17 @@ def download_images(lot_url):
 
                 move_and_unzip(lot_folder)
             except Exception as e:
-                print(f"⚠️ Could not click 'Download all': {e}")
+                print(f"⚠️ Could not click 'Download all' for {lot_id}: {e}")
+                browser.close()
+                return False
 
             browser.close()
-
         print(f"✅ Finished lot {lot_id}.")
         return True
 
     except Exception as e:
         print(f"⚠️ Error during download for {lot_id}: {e}")
         return False
-
 
 # --------------------------------------------------
 # MAIN (Parallel)
@@ -243,19 +285,51 @@ def main():
         return
 
     print(f"🚀 Starting parallel downloads ({total} lots)...\n")
+    failed_lots = []  # store failed lot IDs
 
+    # First pass
     with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {executor.submit(download_images, url): url for url in urls}
         for i, future in enumerate(as_completed(futures), 1):
             url = futures[future]
+            lot_id = url.split("/lot/")[1].split("/")[0]
             try:
                 success = future.result()
-                status = "✅" if success else "❌"
-                print(f"[{i}/{total}] {status} {url}")
+                if success:
+                    print(f"[{i}/{total}] ✅ Success for {lot_id}")
+                else:
+                    print(f"[{i}/{total}] ❌ Failed for {lot_id}")
+                    failed_lots.append(lot_id)
             except Exception as e:
-                print(f"[{i}/{total}] ❌ Error processing {url}: {e}")
+                print(f"[{i}/{total}] ❌ Error for {lot_id}: {e}")
+                failed_lots.append(lot_id)
 
-    print("\n🎉 All done — parallel Copart downloads complete!")
+    # Retry failed lots once
+    if failed_lots:
+        print(f"\n🔁 Retrying {len(failed_lots)} failed lots...\n")
+        retry_success = []
+        retry_fail = []
+
+        for lot_id in failed_lots:
+            retry_url = f"https://www.copart.com/lot/{lot_id}"
+            success = download_images(retry_url)
+            if success:
+                print(f"✅ Retry succeeded for {lot_id}")
+                retry_success.append(lot_id)
+            else:
+                print(f"❌ Retry failed for {lot_id}")
+                retry_fail.append(lot_id)
+
+        # Write remaining failures to file
+        if retry_fail:
+            fail_path = os.path.join(BASE_DIR, "failed_lots.txt")
+            with open(fail_path, "w") as f:
+                f.write("\n".join(retry_fail))
+            print(f"📄 Saved {len(retry_fail)} unrecoverable failures to {fail_path}")
+        else:
+            print("🎉 All failed lots succeeded on retry!")
+
+    print("\n✅ All downloads complete.")
 
 
 # --------------------------------------------------

@@ -5,7 +5,7 @@ import base64
 import urllib
 import random
 import threading
-import re 
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from openai import OpenAI
 from sqlalchemy import create_engine, text
@@ -13,102 +13,66 @@ from dotenv import load_dotenv
 from PIL import Image
 import io
 
-
 # --------------------------------------------------
 # LOAD ENVIRONMENT VARIABLES
 # --------------------------------------------------
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_PROJECT_ID = os.getenv("OPENAI_PROJECT_ID")
-
 if not OPENAI_API_KEY:
-    raise EnvironmentError("❌ OPENAI_API_KEY not found. Make sure it’s in your environment or .env file.")
+    raise EnvironmentError("❌ OPENAI_API_KEY not found. Make sure it’s in your .env file.")
 
 print(f"🔑 Using OpenAI key prefix: {OPENAI_API_KEY[:12]}...")
-if OPENAI_PROJECT_ID:
-    print(f"📁 Project ID: {OPENAI_PROJECT_ID}")
 
 # --------------------------------------------------
-# CONFIGURATION
+# CONFIGURATION (RDS ONLY)
 # --------------------------------------------------
+DB_NAME = "cars"
+TABLE_NAME = "cars"
+SERVER = "carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com,1433"
+USERNAME = "admin"
+PASSWORD = "1K0xi*rfMR!r4VN7"
+DRIVER = "ODBC Driver 18 for SQL Server"
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
-
-DB_NAME = "cars"
-SERVER = "localhost\\SQLEXPRESS"
-DRIVER = "ODBC Driver 18 for SQL Server"
-DATABASE_URL="mssql+pyodbc:///?odbc_connect=Driver%3D%7BODBC+Driver+18+for+SQL+Server%7D%3BServer%3Dcarflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com%2C1433%3BDatabase%3Dcars%3BUid%3Dyouruser%3BPwd%3Dyourpassword%3BEncrypt%3Dyes%3BTrustServerCertificate%3Dyes%3B"
 
 MAX_WORKERS = 2
 MAX_IMAGES = 8
 RETRY_LIMIT = 3
 SLEEP_BETWEEN_LOTS = 1.5
-MIN_INTERVAL = 10  # seconds between requests
+MIN_INTERVAL = 10  # seconds between API calls
+
+params = urllib.parse.quote_plus(
+    f"Driver={{{DRIVER}}};"
+    f"Server={SERVER};"
+    f"Database={DB_NAME};"
+    f"Uid={USERNAME};"
+    f"Pwd={PASSWORD};"
+    "Encrypt=yes;"
+    "TrustServerCertificate=yes;"
+)
+DATABASE_URL = f"mssql+pyodbc:///?odbc_connect={params}"
 
 client = OpenAI()
 rate_lock = threading.Semaphore(1)
 _last_request_time = 0
 
 # --------------------------------------------------
-# DATABASE CONNECTIONS
+# DATABASE CONNECTION
 # --------------------------------------------------
 def get_engine():
-    """Local SQL Server (localhost\SQLEXPRESS)"""
-    connection_string = (
-        f"Driver={{{DRIVER}}};"
-        f"Server={SERVER};"
-        f"Database={DB_NAME};"
-        "Trusted_Connection=yes;"
-        "Encrypt=no;"
-    )
-    params = urllib.parse.quote_plus(connection_string)
-    return create_engine(
-        f"mssql+pyodbc:///?odbc_connect={params}",
-        pool_pre_ping=True,   # Ensures connections are checked before use
-        pool_size=5,          # Keeps up to 5 connections ready for threads
-        max_overflow=10       # Allows temporary extra connections if needed
-    )
-
-
-def get_rds_engine():
-    """AWS RDS SQL Server using DATABASE_URL from environment"""
-    db_url = os.getenv("DATABASE_URL")
-    if not db_url:
-        raise EnvironmentError("❌ DATABASE_URL not found. Add it to your .env file.")
-    
     print("🌐 Connecting to AWS RDS database...")
-    return create_engine(
-        db_url,
-        pool_pre_ping=True,
-        connect_args={"TrustServerCertificate": "yes"},
-    )
-
+    return create_engine(DATABASE_URL, pool_pre_ping=True)
 
 # --------------------------------------------------
-# TEST THE RDS CONNECTION
+# TEST CONNECTION
 # --------------------------------------------------
-print("\n🔍 Testing RDS connection after security group update...")
-
 try:
-    # ✅ Create the engine before testing
-    rds_engine = get_rds_engine()
-
-    with rds_engine.connect() as conn:
+    engine = get_engine()
+    with engine.connect() as conn:
         dbname = conn.execute(text("SELECT DB_NAME()")).scalar()
         print(f"✅ Connected to RDS database: {dbname}")
-
-        # Optional: confirm record visibility
-        lot_id = "40852084"
-        row = conn.execute(
-            text("SELECT TOP 1 lot_url, year, make, model FROM cars WHERE lot_url LIKE :pattern"),
-            {"pattern": f"%{lot_id}%"},
-        ).fetchone()
-        if row:
-            print(f"✅ Found RDS record for lot {lot_id}: {row}")
-        else:
-            print(f"⚠️ No RDS record found for lot {lot_id}")
-
 except Exception as e:
     print(f"❌ Could not connect to RDS: {e}")
 
@@ -116,35 +80,22 @@ except Exception as e:
 # JSON PARSER
 # --------------------------------------------------
 def safe_json_parse(raw):
-    """Try to extract and parse valid JSON even if wrapped or messy."""
     raw = raw.strip()
-
-    # Remove code fences or language tags
     raw = re.sub(r"^```[a-zA-Z0-9]*", "", raw)
     raw = raw.replace("```", "").strip()
-
-    # Remove invisible or non-ASCII whitespace
     raw = raw.encode("utf-8", "ignore").decode("utf-8", "ignore")
-
-    # Fix common invalid numeric formats (e.g. 5,000 -> 5000)
     raw = re.sub(r"(\d),(\d)", r"\1\2", raw)
 
-    # Attempt direct JSON load
     try:
         return json.loads(raw)
     except Exception:
         pass
 
-    # Fallback: extract first and last curly brace region
     start = raw.find("{")
     end = raw.rfind("}")
     if start != -1 and end != -1:
         fragment = raw[start:end + 1]
-        try:
-            return json.loads(fragment)
-        except Exception as e:
-            raise ValueError(f"Invalid JSON fragment: {e}\n{fragment}")
-
+        return json.loads(fragment)
     raise ValueError(f"Invalid JSON: {raw}")
 
 # --------------------------------------------------
@@ -158,7 +109,7 @@ def encode_image(image_path):
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 # --------------------------------------------------
-# CALL 1: REPAIR ANALYSIS (IMAGES)
+# AI CALL 1: REPAIR ANALYSIS
 # --------------------------------------------------
 def analyze_repair(folder_path, year=None, make=None, model=None, mileage=None):
     global _last_request_time
@@ -188,23 +139,14 @@ def analyze_repair(folder_path, year=None, make=None, model=None, mileage=None):
 You are "Auto Mate", a professional used-car flipper and repair cost estimator.
 
 Analyze the attached vehicle photos and estimate:
-1. The minimum realistic repair cost (in USD) to make the car presentable and roadworthy (not showroom perfect).
+1. The minimum realistic repair cost (in USD) to make the car presentable and roadworthy.
 2. A short, precise summary describing visible damage and required repairs.
-
-Guidelines:
-- Use numeric precision (e.g., 2175 not "around 2000").
-- Avoid vague words like "roughly" or "approximately".
-- Base labor and parts costs on typical 2025 U.S. market averages.
-- Write 1–3 concise sentences for details.
-
-Vehicle details:
-{vehicle_info}
 
 Respond ONLY in this JSON format:
 {{
   "repair": {{
     "estimate": number,
-    "details": "summary of visible damage and required repairs (1–3 sentences)"
+    "details": "summary of visible damage and required repairs"
   }}
 }}
 """
@@ -228,23 +170,20 @@ Respond ONLY in this JSON format:
             raw = response.choices[0].message.content.strip()
             parsed = safe_json_parse(raw)
             repair = parsed.get("repair", {})
-
             return float(repair.get("estimate", 0)), repair.get("details", "")
-
         except Exception as e:
             err = str(e)
             if "rate limit" in err.lower() or "429" in err:
                 cooldown = min(45, 5 * (2 ** attempt)) + random.uniform(0, 3)
-                print(f"⏳ Rate limit hit (repair) — waiting {cooldown:.1f}s before retry...")
+                print(f"⏳ Rate limit hit — waiting {cooldown:.1f}s before retry...")
                 time.sleep(cooldown)
                 continue
             print(f"⚠️ Repair attempt {attempt} failed: {err}")
             time.sleep(3)
-
     raise RuntimeError("Max retries reached for repair analysis.")
 
 # --------------------------------------------------
-# CALL 2: RESALE + EVALUATION (TEXT ONLY)
+# AI CALL 2: RESALE ANALYSIS
 # --------------------------------------------------
 def analyze_resale(year, make, model, mileage, repair_est, repair_details):
     global _last_request_time
@@ -252,32 +191,26 @@ def analyze_resale(year, make, model, mileage, repair_est, repair_details):
     prompt = f"""
 You are "Auto Mate", a used-car market valuation analyst.
 
-Estimate the realistic resale value and flipping potential of this vehicle,
-based on the provided repair summary and vehicle details.
+Estimate the realistic resale value of this vehicle based on the following details:
 
-Vehicle:
-Year: {year or 'Unknown'}
-Make: {make or 'Unknown'}
-Model: {model or 'Unknown'}
-Mileage: {mileage or 'Unknown'}
-
-Condition after repairs:
-{repair_details}
-Repair cost estimate: ${repair_est:.0f}
+Vehicle Information:
+- Year: {year or 'Unknown'}
+- Make: {make or 'Unknown'}
+- Model: {model or 'Unknown'}
+- Mileage: {mileage or 'Unknown'}
+- Estimated repair cost: ${repair_est:.0f}
+- Repair summary: {repair_details}
 
 Guidelines:
-- Provide a resale estimate in USD based on 2025 U.S. market data (KBB, Edmunds, AutoTrader trends).
-- Be realistic and avoid extreme or rounded numbers.
-- Write concise professional text.
+- Use realistic U.S. 2025 market data trends (KBB, Edmunds, AutoTrader).
+- Avoid extreme or rounded numbers; use a fair market estimate.
+- Keep reasoning short and professional.
 
 Respond ONLY in this JSON format:
 {{
   "resale": {{
     "estimate": number,
-    "details": "brief reasoning for resale value based on mileage, condition, and market demand"
-  }},
-  "evaluation": {{
-    "summary": "2–3 sentence summary describing if this is a good flip opportunity considering repair cost vs resale potential"
+    "details": "brief reasoning for resale value based on condition and market demand"
   }}
 }}
 """
@@ -301,13 +234,12 @@ Respond ONLY in this JSON format:
             raw = response.choices[0].message.content.strip()
             parsed = safe_json_parse(raw)
             resale = parsed.get("resale", {})
-            evaluation = parsed.get("evaluation", {})
 
-            return (
-                float(resale.get("estimate", 0)),
-                resale.get("details", ""),
-                evaluation.get("summary", "")
-            )
+            # Fallback if the model responds with plain text
+            if not resale or "estimate" not in resale:
+                raise ValueError(f"Invalid resale JSON: {raw}")
+
+            return float(resale.get("estimate", 0)), resale.get("details", "")
 
         except Exception as e:
             err = str(e)
@@ -318,123 +250,61 @@ Respond ONLY in this JSON format:
                 continue
             print(f"⚠️ Resale attempt {attempt} failed: {err}")
             time.sleep(3)
-
     raise RuntimeError("Max retries reached for resale analysis.")
-
 # --------------------------------------------------
-# MASTER ANALYSIS WRAPPER (TWO CALLS)
+# MASTER ANALYSIS
 # --------------------------------------------------
 def analyze_vehicle(folder_path, year=None, make=None, model=None, mileage=None):
     repair_est, repair_details = analyze_repair(folder_path, year, make, model, mileage)
-    resale_est, resale_details, evaluation_text = analyze_resale(
-        year, make, model, mileage, repair_est, repair_details
-    )
-    return repair_est, repair_details, resale_est, resale_details, evaluation_text
+    resale_est, resale_details = analyze_resale(year, make, model, mileage, repair_est, repair_details)
+    return repair_est, repair_details, resale_est, resale_details
 
 # --------------------------------------------------
 # LOT PROCESSING
 # --------------------------------------------------
-
 def process_lot(lot_id, engine):
     folder_path = os.path.join(DOWNLOAD_DIR, lot_id)
     if not os.path.exists(folder_path):
         print(f"⚠️ Missing folder for {lot_id}, skipping.")
         return False
 
-def process_lot(lot_id, local_engine, rds_engine):
-    folder_path = os.path.join(DOWNLOAD_DIR, lot_id)
-    if not os.path.exists(folder_path):
-        print(f"⚠️ Missing folder for {lot_id}, skipping.")
-        return False
-
-    # --------------------------------------------------
-    # 🧩 Fetch car info from either Local or RDS
-    # --------------------------------------------------
-    row = None
-    for engine, label in [(local_engine, "Local"), (rds_engine, "RDS")]:
-        try:
-            with engine.connect() as conn:
-                result = conn.execute(
-                    text("SELECT TOP 1 year, make, model, odometer FROM cars WHERE lot_url LIKE :pattern"),
-                    {"pattern": f"%{lot_id}%"},
-                ).fetchone()
-                if result:
-                    row = result
-                    print(f"✅ Found car info in {label} DB for lot {lot_id}: {result}")
-                    break
-        except Exception as e:
-            print(f"⚠️ Could not fetch car info from {label} DB: {e}")
-
-    if not row:
-        print(f"⚠️ No car record found for {lot_id} in either DB, skipping.")
-        return False
-
-    year = row.year if hasattr(row, "year") else None
-    make = row.make if hasattr(row, "make") else None
-    model = row.model if hasattr(row, "model") else None
-    mileage = row.odometer if hasattr(row, "odometer") else None
-
-    # 🖨️ Print car info to console
-    print(f"\n🚗 Lot {lot_id}: {year or 'Unknown'} {make or ''} {model or ''} ({mileage or 'N/A'} mi)")
-
-    # --------------------------------------------------
-    # 🗂️ Skip already processed lots
-    # --------------------------------------------------
-    estimate_path = os.path.join(folder_path, "repair_estimate.txt")
-    details_path = os.path.join(folder_path, "repair_details.txt")
-    resale_path = os.path.join(folder_path, "resale_details.txt")
-    evaluation_path = os.path.join(folder_path, "evaluation.txt")
-
-    if os.path.exists(estimate_path):
-        print(f"⏭️ Skipping {lot_id} — already analyzed.")
-        return True
-
-    # --------------------------------------------------
-    # 🔍 Run AI analysis and write results
-    # --------------------------------------------------
+    # Fetch car info from RDS
     try:
-        print(f"🧠 Analyzing vehicle for lot {lot_id} ...")
-        repair_est, repair_det, resale_est, resale_det, evaluation_text = analyze_vehicle(
-            folder_path, year, make, model, mileage
-        )
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT TOP 1 year, make, model, odometer FROM cars WHERE lot_url LIKE :pattern"),
+                {"pattern": f"%{lot_id}%"},
+            ).fetchone()
+        if not row:
+            print(f"⚠️ No record found for lot {lot_id}")
+            return False
+    except Exception as e:
+        print(f"⚠️ Error fetching car info for {lot_id}: {e}")
+        return False
 
-        # 💾 Save results locally
-        with open(estimate_path, "w", encoding="utf-8") as f:
-            f.write(f"{repair_est:.2f}")
-        with open(details_path, "w", encoding="utf-8") as f:
-            f.write(repair_det)
-        with open(resale_path, "w", encoding="utf-8") as f:
-            f.write(resale_det)
-        with open(evaluation_path, "w", encoding="utf-8") as f:
-            f.write(evaluation_text)
+    year, make, model, mileage = row.year, row.make, row.model, row.odometer
+    print(f"🚗 Lot {lot_id}: {year or 'Unknown'} {make or ''} {model or ''} ({mileage or 'N/A'} mi)")
 
-        # --------------------------------------------------
-        # 🧱 Update both Local + RDS databases
-        # --------------------------------------------------
-        for engine, label in [(local_engine, "Local"), (rds_engine, "RDS")]:
-            try:
-                with engine.begin() as conn:
-                    result = conn.execute(
-                        text("""
-                            UPDATE cars
-                            SET repair_estimate = :repair_estimate,
-                                repair_details = :repair_details,
-                                est_retail_value = :est_retail_value,
-                                resale_details = :resale_details
-                            WHERE lot_url LIKE :pattern
-                        """),
-                        {
-                            "repair_estimate": repair_est,
-                            "repair_details": repair_det,
-                            "est_retail_value": resale_est,
-                            "resale_details": resale_det,
-                            "pattern": f"%{lot_id}%",
-                        },
-                    )
-                print(f"✅ {label} DB updated for lot {lot_id} (rows affected: {result.rowcount})")
-            except Exception as db_err:
-                print(f"⚠️ {label} DB update failed for {lot_id}: {db_err}")
+    try:
+        repair_est, repair_det, resale_est, resale_det = analyze_vehicle(folder_path, year, make, model, mileage)
 
+        with engine.begin() as conn:
+            result = conn.execute(
+                text("""
+                    UPDATE cars
+                    SET repair_estimate = :repair_estimate,
+                        repair_details = :repair_details,
+                        est_retail_value = :est_retail_value
+                    WHERE lot_url LIKE :pattern
+                """),
+                {
+                    "repair_estimate": repair_est,
+                    "repair_details": repair_det,
+                    "est_retail_value": resale_est,
+                    "pattern": f"%{lot_id}%",
+                },
+            )
+        print(f"✅ RDS DB updated for lot {lot_id} (rows affected: {result.rowcount})")
         return True
 
     except Exception as e:
@@ -461,97 +331,26 @@ def main():
     done = failed = 0
     start_time = time.time()
 
-# --------------------------------------------------
-# 📂 Collect all lot folders to process
-# --------------------------------------------------
-local_engine = get_engine()
-rds_engine = get_rds_engine()
+    print(f"🚀 Starting thread pool for {total} lots...")
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = []
+        for lot in all_folders:
+            print(f"▶️ Queuing lot {lot} for processing...")
+            futures.append(executor.submit(process_lot, lot, engine))
+            time.sleep(SLEEP_BETWEEN_LOTS)
 
-# --------------------------------------------------
-# 🧹 Delete sold/expired lots from DBs and local folders
-# --------------------------------------------------
-cleanup_query = """
-DELETE FROM cars
-OUTPUT DELETED.lot_url
-WHERE 
-    sale_date <> 'future'
-    OR TRY_CONVERT(DATE, sale_date) < CAST(GETDATE() AS DATE);
-"""
-
-def extract_lot_id_from_url(url):
-    """Return the Copart lot number from a Copart URL."""
-    if not url:
-        return None
-    import re
-    match = re.search(r'/lot/(\d+)/', url)
-    return match.group(1) if match else None
-
-deleted_lots = set()
-
-try:
-    # 🧹 Remove expired lots from LOCAL DB
-    with local_engine.begin() as conn:
-        result = conn.execute(text(cleanup_query))
-        deleted_lots.update([extract_lot_id_from_url(row[0]) for row in result if row[0]])
-        print(f"🧹 Local cleanup complete. Removed {len(deleted_lots)} records.")
-
-    # 🧹 Remove expired lots from RDS
-    with rds_engine.begin() as conn:
-        result = conn.execute(text(cleanup_query))
-        deleted_lots.update([extract_lot_id_from_url(row[0]) for row in result if row[0]])
-        print(f"🧹 RDS cleanup complete. Removed {len(deleted_lots)} records.")
-
-    # 🗑️ Delete local folders that match removed lots
-    removed_count = 0
-    for lot_id in deleted_lots:
-        if not lot_id:
-            continue
-        folder_path = os.path.join(DOWNLOAD_DIR, lot_id)
-        if os.path.exists(folder_path):
-            import shutil
-            shutil.rmtree(folder_path, ignore_errors=True)
-            removed_count += 1
-    print(f"🗑️ Deleted {removed_count} local folders for sold/expired lots.")
-
-except Exception as e:
-    print(f"⚠️ Cleanup failed: {e}")
-
-
-all_folders = [
-    folder
-    for folder in os.listdir(DOWNLOAD_DIR)
-    if os.path.isdir(os.path.join(DOWNLOAD_DIR, folder))
-]
-
-print(f"📦 Found {len(all_folders)} lots to process.")
-
-done = 0
-failed = 0
-
-print(f"🚀 Starting thread pool for {len(all_folders)} lots...")
-
-with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-    futures = []
-    for lot in all_folders:
-        print(f"▶️ Queuing lot {lot} for processing...")
-        # pass both engines to process_lot
-        futures.append(executor.submit(process_lot, lot, local_engine, rds_engine))
-        time.sleep(SLEEP_BETWEEN_LOTS)
-
-    for future in as_completed(futures):
-        try:
-            # use timeout to avoid indefinite hangs
-            if future.result(timeout=300):
-                done += 1
-            else:
+        for future in as_completed(futures):
+            try:
+                if future.result(timeout=300):
+                    done += 1
+                else:
+                    failed += 1
+            except Exception as e:
+                print(f"⚠️ Thread exception: {e}")
                 failed += 1
-        except Exception as e:
-            print(f"⚠️ Thread exception: {e}")
-            failed += 1
 
-elapsed = time.time() - start_time
-print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
-
+    elapsed = time.time() - start_time
+    print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
 
 # --------------------------------------------------
 # ENTRY POINT

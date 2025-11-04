@@ -1,49 +1,168 @@
 import React, { useState, useEffect } from "react";
 
 export default function App() {
+  const [token, setToken] = useState(localStorage.getItem("token") || null);
+  const [mode, setMode] = useState("login"); // "login" or "register"
+  const [form, setForm] = useState({ username: "", password: "" });
+  const [message, setMessage] = useState("");
+
+  const API_URL =
+    process.env.NODE_ENV === "development"
+      ? "http://localhost:8000"
+      : "https://api.carflipanalyzer.com";
+
+  // --------------------------------------------------
+  // AUTH HANDLERS
+  // --------------------------------------------------
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setMessage("");
+
+    const endpoint = mode === "login" ? "login" : "register";
+    const body = new URLSearchParams({
+      username: form.username,
+      password: form.password,
+    });
+
+    try {
+      const res = await fetch(`${API_URL}/${endpoint}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body,
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed");
+      }
+
+      const data = await res.json();
+
+      if (mode === "login" && data.access_token) {
+        localStorage.setItem("token", data.access_token);
+        setToken(data.access_token);
+      } else if (mode === "register") {
+        setMessage("✅ Account created! Please log in.");
+        setMode("login");
+      }
+    } catch (err) {
+      setMessage(`❌ ${err.message}`);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setToken(null);
+  };
+
+  // --------------------------------------------------
+  // CONDITIONAL RENDERING
+  // --------------------------------------------------
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center">
+        <div className="bg-neutral-900 p-8 rounded-2xl shadow-md w-96 border border-neutral-700">
+          <h1 className="text-2xl font-bold mb-4 text-center">
+            {mode === "login" ? "Login" : "Create Account"}
+          </h1>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <input
+              type="email"
+              placeholder="Email"
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              required
+              className="w-full px-3 py-2 rounded-md bg-neutral-800 text-white"
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              required
+              className="w-full px-3 py-2 rounded-md bg-neutral-800 text-white"
+            />
+            <button
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded-md font-semibold"
+            >
+              {mode === "login" ? "Login" : "Register"}
+            </button>
+          </form>
+
+          {message && (
+            <p className="mt-3 text-center text-sm text-gray-300">{message}</p>
+          )}
+
+          <p className="mt-4 text-center text-sm text-gray-400">
+            {mode === "login" ? (
+              <>
+                Don’t have an account?{" "}
+                <button
+                  className="text-blue-400 hover:text-blue-300"
+                  onClick={() => setMode("register")}
+                >
+                  Register
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <button
+                  className="text-blue-400 hover:text-blue-300"
+                  onClick={() => setMode("login")}
+                >
+                  Login
+                </button>
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // --------------------------------------------------
+  // MAIN APP WHEN LOGGED IN
+  // --------------------------------------------------
+  return <MainApp token={token} onLogout={handleLogout} API_URL={API_URL} />;
+}
+
+// --------------------------------------------------
+// MAIN APP COMPONENT
+// --------------------------------------------------
+
+function MainApp({ token, onLogout, API_URL }) {
   const [cars, setCars] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(false);
   const [targetMargin, setTargetMargin] = useState(30);
-  const [selectedCar, setSelectedCar] = useState(null);
   const [options, setOptions] = useState({
     years: [],
     makes: [],
     models: [],
     damages: [],
   });
-
   const [filters, setFilters] = useState({
     year: "",
     make: "",
     model: "",
     damage: "",
-    minMiles: "",
-    maxMiles: "",
   });
 
-  // --------------------------------------------------
-  // LOAD CARS FROM BACKEND
-  // --------------------------------------------------
   useEffect(() => {
     const fetchCars = async () => {
       setLoading(true);
       try {
-        const baseUrl =
-          process.env.NODE_ENV === "development"
-            ? "http://localhost:8000"
-            : "https://api.carflipanalyzer.com";
-
-        const res = await fetch("https://api.carflipanalyzer.com/cars/with_estimates");
-        if (!res.ok) {
-          console.error("❌ API error:", res.status, await res.text());
-          throw new Error(`Server responded with ${res.status}`);
-        }
-
+        const res = await fetch(`${API_URL}/cars/with_estimates`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`Server ${res.status}`);
         const data = await res.json();
-        const carsArray = data?.cars || [];
-
-        console.log("✅ Loaded cars:", carsArray.length);
+        const carsArray = data?.cars || data || [];
         setCars(carsArray);
         setFiltered(carsArray);
 
@@ -54,269 +173,125 @@ export default function App() {
 
         setOptions({ years, makes, models, damages });
       } catch (err) {
-        console.error("❌ Error fetching cars:", err);
-        setCars([]);
-        setFiltered([]);
+        console.error(err);
       } finally {
         setLoading(false);
       }
     };
-
     fetchCars();
-  }, []);
+  }, [token, API_URL]);
 
-  // --------------------------------------------------
-  // FILTER LOGIC
-  // --------------------------------------------------
-  const applyFilters = (source, filters) => {
-    let result = [...source];
-    if (filters.year) result = result.filter((c) => String(c.year) === String(filters.year));
-    if (filters.make) result = result.filter((c) => c.make === filters.make);
-    if (filters.model) result = result.filter((c) => c.model === filters.model);
-    if (filters.damage) result = result.filter((c) => c.damage === filters.damage);
-    if (filters.minMiles) result = result.filter((c) => +c.odometer >= +filters.minMiles);
-    if (filters.maxMiles) result = result.filter((c) => +c.odometer <= +filters.maxMiles);
-    setFiltered(result);
+  const applyFilters = () => {
+    let results = [...cars];
+    if (filters.year) results = results.filter((c) => c.year === parseInt(filters.year));
+    if (filters.make) results = results.filter((c) => c.make === filters.make);
+    if (filters.model) results = results.filter((c) => c.model === filters.model);
+    if (filters.damage) results = results.filter((c) => c.damage === filters.damage);
+    setFiltered(results);
   };
 
-  useEffect(() => {
-    if (cars.length) applyFilters(cars, filters);
-  }, [filters]);
-
-  // --------------------------------------------------
-  // MAIN RENDER
-  // --------------------------------------------------
-return (
-  <div className="min-h-screen bg-neutral-950 text-white flex flex-col">
-    {/* HEADER */}
-	<header className="sticky top-0 z-50 flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950 shadow-md">
-	  <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
-		Car Flip Analyzer
-	  </h1>
-	  <img
-		src="/logo.png"
-		alt="Logo"
-		className="h-14 md:h-16 object-contain opacity-90 hover:opacity-100 transition"
-	  />
-	</header>
-
-	{/* FILTER BAR */}
-	<div className="sticky top-[76px] z-40 flex flex-wrap gap-3 justify-center px-6 py-4 border-b border-neutral-800 bg-neutral-900 shadow-md">
-	  {/* Year */}
-	  <select
-		value={filters.year}
-		onChange={(e) => setFilters({ ...filters, year: e.target.value })}
-		className="bg-neutral-800 text-white px-3 py-2 rounded-md w-32 text-sm"
-	  >
-		<option value="">All Years</option>
-		{options.years.map((y) => (
-		  <option key={y} value={y}>
-			{y}
-		  </option>
-		))}
-	  </select>
-
-	  {/* Make */}
-	  <select
-		value={filters.make}
-		onChange={(e) => setFilters({ ...filters, make: e.target.value })}
-		className="bg-neutral-800 text-white px-3 py-2 rounded-md w-40 text-sm"
-	  >
-		<option value="">All Makes</option>
-		{options.makes.map((m) => (
-		  <option key={m} value={m}>
-			{m}
-		  </option>
-		))}
-	  </select>
-
-	  {/* Model */}
-	  <select
-		value={filters.model}
-		onChange={(e) => setFilters({ ...filters, model: e.target.value })}
-		className="bg-neutral-800 text-white px-3 py-2 rounded-md w-44 text-sm"
-	  >
-		<option value="">All Models</option>
-		{options.models.map((m) => (
-		  <option key={m} value={m}>
-			{m}
-		  </option>
-		))}
-	  </select>
-
-	  {/* Damage */}
-	  <select
-		value={filters.damage}
-		onChange={(e) => setFilters({ ...filters, damage: e.target.value })}
-		className="bg-neutral-800 text-white px-3 py-2 rounded-md w-48 text-sm"
-	  >
-		<option value="">All Damages</option>
-		{options.damages.map((d) => (
-		  <option key={d} value={d}>
-			{d}
-		  </option>
-		))}
-	  </select>
-
-	  {/* Mileage */}
-	  <input
-		placeholder="Min Miles"
-		type="number"
-		value={filters.minMiles}
-		onChange={(e) => setFilters({ ...filters, minMiles: e.target.value })}
-		className="bg-neutral-800 text-white px-3 py-2 rounded-md w-28 text-sm"
-	  />
-	  <input
-		placeholder="Max Miles"
-		type="number"
-		value={filters.maxMiles}
-		onChange={(e) => setFilters({ ...filters, maxMiles: e.target.value })}
-		className="bg-neutral-800 text-white px-3 py-2 rounded-md w-28 text-sm"
-	  />
-	</div>
-
-
-    {/* MAIN CONTENT */}
-    <main className="flex-1 overflow-y-auto p-6">
-      {loading && (
-        <p className="text-center text-gray-400 mt-10">
-          ⏳ Loading vehicles...
-        </p>
-      )}
-
-      {!loading && Array.isArray(filtered) && filtered.length > 0 ? (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((car, idx) => (
-            <div
-              key={car.id || idx}
-              onClick={(e) => {
-                const tag = e.target.tagName.toLowerCase();
-                if (
-                  !["input", "button", "summary", "details", "label", "a"].includes(tag)
-                ) {
-                  if (car?.url)
-                    window.open(car.url, "_blank", "noopener,noreferrer");
-                }
-              }}
-              className="bg-neutral-800/80 border border-neutral-700 rounded-2xl p-5 shadow-md hover:bg-neutral-700/70 hover:ring-2 hover:ring-blue-500 cursor-pointer transition-all"
-            >
-              <img
-                loading="lazy"
-                src={
-                  car?.image_url
-                    ? car.image_url
-                    : "https://placehold.co/600x400?text=No+Image"
-                }
-                alt={`${car.make ?? ""} ${car.model ?? ""}`}
-                className="w-full h-48 object-cover rounded-lg mb-3"
-                onError={(e) =>
-                  (e.target.src = "https://placehold.co/600x400?text=No+Image")
-                }
-              />
-
-              <div className="pb-3 border-b border-neutral-700 mb-3">
-                <h2 className="text-xl font-semibold mb-1 text-white">
-                  {car?.year ? Math.round(car.year) : "Unknown Year"}{" "}
-                  {car?.make ?? ""} {car?.model ?? ""}
-                </h2>
-                <p className="text-sm text-gray-400 mb-1">
-                  Odometer: {car?.odometer || "N/A"}
-                </p>
-                <p className="text-sm text-gray-400">
-                  Damage: {car?.damage || "Unknown"}
-                </p>
-              </div>
-
-              <div className="space-y-1 text-sm">
-                <p>
-                  AI Resale Value: ${Number(car?.resale || 0).toLocaleString()}
-                </p>
-                <p>Est. Repairs: ${Number(car?.repairs || 0).toLocaleString()}</p>
-                <p>
-                  Max Bid ({targetMargin}% Margin):{" "}
-                  <span className="font-semibold text-yellow-400">
-                    ${Number(car?.maxBid || 0).toLocaleString()}
-                  </span>
-                </p>
-                <p>
-                  Profit:{" "}
-                  <span
-                    className={`font-semibold ${
-                      (car?.profit ?? 0) >= 0
-                        ? "text-green-400"
-                        : "text-red-400"
-                    }`}
-                  >
-                    ${Number(car?.profit || 0).toLocaleString()}
-                  </span>
-                </p>
-                <p>
-                  Margin:{" "}
-                  <span
-                    className={`font-semibold ${
-                      (car?.margin ?? 0) >= 30
-                        ? "text-green-400"
-                        : "text-blue-400"
-                    }`}
-                  >
-                    {Number(car?.margin || 0).toFixed(1)}%
-                  </span>
-                </p>
-              </div>
-
-              <div className="mt-4">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedCar(car);
-                  }}
-                  className="text-blue-400 underline text-sm hover:text-blue-300"
-                >
-                  View Details
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        !loading && (
-          <p className="text-center text-gray-500 mt-10">
-            No cars found. Try adjusting your filters.
-          </p>
-        )
-      )}
-    </main>
-
-    {/* MODAL */}
-    {selectedCar && (
-      <div
-        className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
-        onClick={() => setSelectedCar(null)}
-      >
-        <div
-          className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 w-96 shadow-xl"
-          onClick={(e) => e.stopPropagation()}
+  return (
+    <div className="min-h-screen bg-neutral-950 text-white flex flex-col">
+      <header className="sticky top-0 z-50 flex items-center justify-between px-8 py-4 border-b border-neutral-800 bg-neutral-950 shadow-md">
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
+          Car Flip Analyzer
+        </h1>
+        <button
+          onClick={onLogout}
+          className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-md"
         >
-          <h3 className="text-xl font-semibold mb-2">
-            {selectedCar.year} {selectedCar.make} {selectedCar.model}
-          </h3>
-          <p className="text-sm text-gray-300 whitespace-pre-wrap mb-3">
-            <strong>Repair Details:</strong>{" "}
-            {selectedCar.repair_details || "No details available."}
-          </p>
-          <p className="text-sm text-gray-300 whitespace-pre-wrap">
-            <strong>Resale Details:</strong>{" "}
-            {selectedCar.resale_details || "No resale details available."}
-          </p>
-          <button
-            onClick={() => setSelectedCar(null)}
-            className="mt-4 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-md text-white w-full"
+          Logout
+        </button>
+      </header>
+
+      <div className="p-6 space-y-6">
+        {/* Filters */}
+        <div className="bg-neutral-900 p-4 rounded-xl shadow-md flex flex-wrap gap-4">
+          <select
+            value={filters.year}
+            onChange={(e) => setFilters({ ...filters, year: e.target.value })}
+            className="bg-neutral-800 rounded-md px-3 py-2"
           >
-            Close
+            <option value="">Year</option>
+            {options.years.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.make}
+            onChange={(e) => setFilters({ ...filters, make: e.target.value })}
+            className="bg-neutral-800 rounded-md px-3 py-2"
+          >
+            <option value="">Make</option>
+            {options.makes.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.model}
+            onChange={(e) => setFilters({ ...filters, model: e.target.value })}
+            className="bg-neutral-800 rounded-md px-3 py-2"
+          >
+            <option value="">Model</option>
+            {options.models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.damage}
+            onChange={(e) => setFilters({ ...filters, damage: e.target.value })}
+            className="bg-neutral-800 rounded-md px-3 py-2"
+          >
+            <option value="">Damage</option>
+            {options.damages.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={applyFilters}
+            className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-md font-semibold"
+          >
+            Apply Filters
           </button>
         </div>
+
+        {/* Vehicle Grid */}
+        {loading ? (
+          <p>Loading...</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filtered.map((car) => (
+              <div
+                key={car.lot_number}
+                className="bg-neutral-900 p-4 rounded-xl shadow hover:shadow-lg transition"
+              >
+                <h2 className="text-lg font-semibold mb-2">
+                  {car.year} {car.make} {car.model}
+                </h2>
+                <p className="text-sm text-gray-400">{car.damage}</p>
+                <p className="text-sm mt-2">Repair: ${car.repair_estimate}</p>
+                <p className="text-sm">Resale: ${car.resale_estimate}</p>
+                <a
+                  href={car.lot_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 mt-2 block"
+                >
+                  View Lot →
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-    )}
-  </div>
-);
+    </div>
+  );
 }

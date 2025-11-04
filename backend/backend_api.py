@@ -231,9 +231,21 @@ def create_tables_if_needed():
     print("✅ Cars table verified and ready!")
 
 
+
+# --------------------------------------------------
+# ROUTER REGISTRATION
+# --------------------------------------------------
+
+from auth import router as auth_router
+from user_vehicles import router as vehicles_router
+
 # --------------------------------------------------
 # MAIN ENTRYPOINT
 # --------------------------------------------------
+
+app.include_router(auth_router)
+app.include_router(vehicles_router)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend_api:app", host="0.0.0.0", port=8000)

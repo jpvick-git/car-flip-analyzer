@@ -117,11 +117,17 @@ def load_csv_to_user(engine, user_id):
 
     with engine.begin() as conn:
         # Fetch existing lots for any user
-        all_existing = pd.read_sql(
-            text("SELECT * FROM user_vehicles WHERE lot_inv_num IN :lots"),
-            conn,
-            params={"lots": tuple(df["lot_inv_num"].tolist())},
-        )
+        lot_nums = df["lot_inv_num"].tolist()
+        if not lot_nums:
+            print("⚠️ No lots found in CSV.")
+            return
+
+        # Build a dynamic SQL-safe IN clause
+        placeholders = ", ".join([f"'{lot}'" for lot in lot_nums])
+        query = f"SELECT * FROM user_vehicles WHERE lot_inv_num IN ({placeholders})"
+
+        all_existing = pd.read_sql(query, conn)
+
         existing_lots = set(all_existing["lot_inv_num"].astype(str).tolist())
 
         # Fetch lots that this user already owns

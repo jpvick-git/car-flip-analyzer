@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from playwright.sync_api import sync_playwright
 from sqlalchemy import create_engine, text
 from datetime import datetime
-
+import platform
 # --------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------
@@ -189,7 +189,9 @@ def download_images(lot_url):
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False, slow_mo=250)
+            import platform
+            is_linux = "linux" in platform.system().lower()
+            browser = p.chromium.launch(headless=is_linux, slow_mo=0 if is_linux else 250)
             context = browser.new_context(accept_downloads=True)
             page = context.new_page()
 

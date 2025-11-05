@@ -29,22 +29,6 @@ DRIVER = "ODBC Driver 18 for SQL Server"
 MAX_WORKERS = 3
 SLEEP_BETWEEN_LOTS = 2
 
-def get_latest_csv():
-    """
-    Return the CSV path passed from uploads.py, or fall back to latest in uploads folder.
-    """
-    # ✅ Use file path passed from the backend
-    if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
-        print(f"📂 Using CSV file from argument: {sys.argv[1]}")
-        return sys.argv[1]
-
-    # Fallback: most recent CSV
-    csv_files = glob.glob(os.path.join(UPLOADS_DIR, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"❌ No CSV files found in {UPLOADS_DIR}")
-    latest = max(csv_files, key=os.path.getmtime)
-    print(f"📂 Using latest CSV fallback: {latest}")
-    return latest
 
 # --------------------------------------------------
 # DATABASE CONNECTION
@@ -77,26 +61,14 @@ def get_image_url(lot_id):
 
     for f in sorted(os.listdir(folder)):
         if f.lower().endswith((".jpg", ".jpeg", ".png")):
-            # ✅ Match backend_api.py static mount path
             return f"https://api.carflipanalyzer.com/backend/downloads/{lot_id}/{f}"
     return None
 
 
 # --------------------------------------------------
-# CSV LOADER (LOAD / COPY EXISTING LOTS)
+# CSV LOADER
 # --------------------------------------------------
-def normalize_column_name(col):
-    return col.strip().lower().replace(" ", "_")
-
-
 def load_csv_to_user(engine, user_id):
-    """
-    Loads the latest uploaded CSV into user_vehicles.
-    For each lot:
-      • If it already exists for ANY user, copy it for the current user.
-      • Otherwise, insert the new row from the CSV (to be downloaded later).
-      • Ensures image_url is set if local images exist.
-    """
     csv_files = glob.glob(os.path.join(UPLOADS_DIR, "*.csv"))
     if not csv_files:
         print(f"❌ No CSV files found in {UPLOADS_DIR}")
@@ -106,16 +78,12 @@ def load_csv_to_user(engine, user_id):
     print(f"📂 Using latest uploaded CSV: {latest_csv}")
 
     df = pd.read_csv(latest_csv)
-
-    # --------------------------------------------------
-    # CLEAN & NORMALIZE CSV HEADERS
-    # --------------------------------------------------
     df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
 
     rename_map = {
         "lot/inv_#": "lot_inv_num",
         "lot_url": "lot_url",
-        "est._retail_value": "est_retail_value",  # fix invalid '.'
+        "est._retail_value": "est_retail_value",
         "est._retail_value_usd": "est_retail_value",
         "sale_date": "sale_date",
         "year": "year",
@@ -143,9 +111,6 @@ def load_csv_to_user(engine, user_id):
 
     df["lot_inv_num"] = df["lot_inv_num"].astype(str)
 
-    # --------------------------------------------------
-    # DATABASE OPERATIONS
-    # --------------------------------------------------
     with engine.begin() as conn:
         lot_nums = df["lot_inv_num"].tolist()
         if not lot_nums:
@@ -182,7 +147,6 @@ def load_csv_to_user(engine, user_id):
                 return get_image_url(row["lot_inv_num"])
 
             existing_to_copy["image_url"] = existing_to_copy.apply(ensure_image_url, axis=1)
-
             existing_to_copy.to_sql("user_vehicles", con=conn, if_exists="append", index=False)
             print(f"📋 Duplicated {len(existing_to_copy)} existing lots for user {user_id}.")
 
@@ -193,7 +157,6 @@ def load_csv_to_user(engine, user_id):
             new_rows["created_at"] = pd.Timestamp.now()
             new_rows["image_url"] = new_rows["lot_inv_num"].apply(get_image_url)
 
-            # Drop any unexpected columns to avoid SQL errors
             allowed_cols = conn.execute(text("SELECT TOP 0 * FROM user_vehicles")).keys()
             new_rows = new_rows[[c for c in new_rows.columns if c in allowed_cols]]
 
@@ -202,6 +165,7 @@ def load_csv_to_user(engine, user_id):
         else:
             print(f"ℹ️ No new lots to insert for user {user_id}.")
 
+
 # --------------------------------------------------
 # IMAGE DOWNLOAD FUNCTION
 # --------------------------------------------------
@@ -209,22 +173,16 @@ def download_images(lot_url):
     lot_id = lot_url.split("/lot/")[1].split("/")[0]
     lot_folder = os.path.join(DOWNLOAD_DIR, lot_id)
 
-    # ✅ Skip download if images already exist
-    if os.path.exists(lot_folder) and any(
-        f.lower().endswith((".jpg", ".jpeg", ".png")) for f in os.listdir(lot_folder)
-    ):
-        print(f"🖼️ Skipping {lot_id} (images already exist in {lot_folder})")
+    # ✅ Skip if already downloaded
+    if os.path.exists(lot_folder) and any(f.lower().endswith((".jpg", ".jpeg", ".png")) for f in os.listdir(lot_folder)):
+        print(f"🖼️ Skipping {lot_id} (already exists)")
         image_url = get_image_url(lot_id)
         with get_engine().begin() as conn:
             conn.execute(
-                text("""
-                    UPDATE user_vehicles
-                    SET image_url = :url
-                    WHERE lot_inv_num = :lot
-                """),
+                text("UPDATE user_vehicles SET image_url = :url WHERE lot_inv_num = :lot"),
                 {"url": image_url, "lot": lot_id},
             )
-        return lot_id  # ✅ Return lot_id for DB sync
+        return lot_id
 
     os.makedirs(lot_folder, exist_ok=True)
     print(f"🚗 Downloading lot {lot_id}...")
@@ -238,7 +196,6 @@ def download_images(lot_url):
             page.goto(lot_url, timeout=90000)
             page.wait_for_selector("img", timeout=25000)
 
-            # Skip 360° image if present
             try:
                 if page.is_visible("span.p-galleria-item-next-icon.pi.pi-chevron-right"):
                     page.click("span.p-galleria-item-next-icon.pi.pi-chevron-right")
@@ -247,7 +204,6 @@ def download_images(lot_url):
             except Exception:
                 pass
 
-            # Click download arrow
             arrow_selectors = [
                 "span.lot-details-header-sprite.download-image-sprite-icon",
                 "button.download-image-sprite-icon",
@@ -266,11 +222,10 @@ def download_images(lot_url):
                     continue
 
             if not arrow_clicked:
-                print(f"❌ Could not find download arrow for {lot_id}")
+                print(f"❌ No download arrow for {lot_id}")
                 browser.close()
                 return None
 
-            # Download all images
             selectors = [
                 "a:has-text('Download all')",
                 "a:has-text('Download All')",
@@ -292,11 +247,7 @@ def download_images(lot_url):
                     image_url = get_image_url(lot_id)
                     with get_engine().begin() as conn:
                         conn.execute(
-                            text("""
-                                UPDATE user_vehicles
-                                SET image_url = :url
-                                WHERE lot_inv_num = :lot
-                            """),
+                            text("UPDATE user_vehicles SET image_url = :url WHERE lot_inv_num = :lot"),
                             {"url": image_url, "lot": lot_id},
                         )
                     return lot_id
@@ -305,24 +256,19 @@ def download_images(lot_url):
 
             browser.close()
             return None
-
     except Exception as e:
         print(f"⚠️ Error on {lot_id}: {e}")
         return None
 
 
 # --------------------------------------------------
-# MAIN BATCH EXECUTION
+# MAIN
 # --------------------------------------------------
 def main(user_id: int):
     engine = get_engine()
     load_csv_to_user(engine, user_id)
 
-    folders = [
-        folder
-        for folder in os.listdir(DOWNLOAD_DIR)
-        if os.path.isdir(os.path.join(DOWNLOAD_DIR, folder))
-    ]
+    folders = [f for f in os.listdir(DOWNLOAD_DIR) if os.path.isdir(os.path.join(DOWNLOAD_DIR, f))]
     if not folders:
         print("⚠️ No lot folders found.")
         return
@@ -332,10 +278,7 @@ def main(user_id: int):
     start = time.time()
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [
-            executor.submit(download_images, f"https://www.copart.com/lot/{lot}")
-            for lot in folders
-        ]
+        futures = [executor.submit(download_images, f"https://www.copart.com/lot/{lot}") for lot in folders]
         for future in as_completed(futures):
             try:
                 lot_id = future.result()
@@ -345,16 +288,10 @@ def main(user_id: int):
                     if image_url:
                         with engine.begin() as conn:
                             conn.execute(
-                                text("""
-                                    UPDATE user_vehicles
-                                    SET image_url = :image_url
-                                    WHERE lot_inv_num = :lot
-                                """),
+                                text("UPDATE user_vehicles SET image_url = :image_url WHERE lot_inv_num = :lot"),
                                 {"image_url": image_url, "lot": str(lot_id)},
                             )
-                        print(f"🖼️ Image URL updated for lot {lot_id}: {image_url}")
-                    else:
-                        print(f"⚠️ No image found for lot {lot_id}")
+                        print(f"🖼️ Updated image_url for lot {lot_id}: {image_url}")
                 else:
                     failed += 1
             except Exception as e:
@@ -373,10 +310,8 @@ if __name__ == "__main__":
         print("❌ Usage: python3 copart_download_parallel.py /path/to/file.csv <user_id>")
         sys.exit(1)
 
-    csv_path = get_latest_csv()
+    csv_path = sys.argv[1]
     USER_ID = int(sys.argv[2])
     print(f"✅ Starting Copart load for user {USER_ID}")
     print(f"📄 CSV path: {csv_path}")
     main(USER_ID)
-
-

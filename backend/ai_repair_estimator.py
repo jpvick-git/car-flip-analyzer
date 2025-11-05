@@ -1,6 +1,6 @@
 import os
 import time
-import json
+import re, json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import create_engine, text
 from openai import OpenAI
@@ -51,7 +51,7 @@ Make: {make}
 Model: {model}
 Damage: {damage}
 
-Respond in strict JSON format:
+Respond ONLY in JSON format:
 {{
   "repair_estimate": number,
   "repair_details": "string",
@@ -59,26 +59,37 @@ Respond in strict JSON format:
   "resale_details": "string"
 }}
 """
+
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.4,
     )
 
+    raw = response.choices[0].message.content.strip()
+
+    # 🧹 Remove code fences and language hints
+    if raw.startswith("```"):
+        raw = raw.strip("`")
+        raw = raw.replace("json", "", 1).strip()
+    if raw.endswith("```"):
+        raw = raw[:-3].strip()
+    # 🧹 Clean invalid commas and currency symbols before parsing
+    clean = re.sub(r'(?<=\d),(?=\d)', '', raw)   # remove commas inside numbers (e.g. 45,000 → 45000)
+    clean = clean.replace('$', '')               # remove dollar signs
+    clean = clean.strip()
+
     try:
-        result = json.loads(response.choices[0].message.content)
-    except Exception:
-        text_response = response.choices[0].message.content
-        print(f"⚠️ Invalid JSON for {lot_number}, raw output:\n{text_response}")
-        result = {
+        parsed = json.loads(clean)
+    except json.JSONDecodeError as e:
+        print(f"⚠️ Invalid JSON for {lot_number}: {e}\nRaw:\n{raw}")
+        parsed = {
             "repair_estimate": None,
-            "repair_details": text_response,
+            "repair_details": raw,
             "resale_estimate": None,
             "resale_details": "",
         }
-
-    return result
-
+    return parsed
 
 # --------------------------------------------------
 # LOT PROCESSING FUNCTION
@@ -89,12 +100,16 @@ def process_lot(lot, rds_engine):
     try:
         with rds_engine.connect() as conn:
             row = conn.execute(
-                text("SELECT TOP 1 year, make, model, damage_description FROM cars WHERE lot_url LIKE :pattern"),
-                {"pattern": f"%{lot}%"},
+                text("""
+                    SELECT TOP 1 year, make, model, damage_description
+                    FROM user_vehicles
+                    WHERE lot_inv_num = :lot
+                """),
+                {"lot": lot},
             ).fetchone()
 
         if not row:
-            print(f"⚠️ No RDS record found for lot {lot}")
+            print(f"⚠️ No user_vehicles record found for lot {lot}")
             return False
 
         year, make, model, damage = row
@@ -111,23 +126,28 @@ def process_lot(lot, rds_engine):
         ai_result = analyze_vehicle(vehicle)
 
         with rds_engine.begin() as conn:
-            conn.execute(
+            result = conn.execute(
                 text("""
-                UPDATE cars
-                SET repair_estimate = :repair_estimate,
-                    repair_details = :repair_details,
-                    resale_estimate = :resale_estimate,
-                    resale_details = :resale_details
-                WHERE lot_url LIKE :pattern
+                    UPDATE user_vehicles
+                    SET repair_estimate = :repair_estimate,
+                        repair_details = :repair_details,
+                        resale_estimate = :resale_estimate,
+                        resale_details = :resale_details,
+                        updated_at = GETDATE()
+                    WHERE lot_inv_num = :lot;
                 """),
                 {
-                    "pattern": f"%{lot}%",
+                    "lot": lot,
                     "repair_estimate": ai_result.get("repair_estimate"),
                     "repair_details": ai_result.get("repair_details"),
                     "resale_estimate": ai_result.get("resale_estimate"),
                     "resale_details": ai_result.get("resale_details"),
                 },
             )
+
+        if result.rowcount == 0:
+            print(f"⚠️ No rows updated for lot {lot}")
+            return False
 
         print(f"✅ Updated lot {lot}")
         return True
@@ -141,7 +161,7 @@ def process_lot(lot, rds_engine):
 # MAIN BATCH EXECUTION
 # --------------------------------------------------
 
-def main():
+def main(user_id: int):
     if not os.path.exists(DOWNLOAD_DIR):
         print("❌ No downloads folder found.")
         return
@@ -188,4 +208,11 @@ def main():
 # ENTRY POINT
 # --------------------------------------------------
 if __name__ == "__main__":
-    main()
+    import sys
+    if len(sys.argv) > 1:
+        USER_ID = int(sys.argv[1])
+    else:
+        print("❌ No user ID provided. Example: python ai_repair_estimator.py 2")
+        sys.exit(1)
+
+    main(USER_ID)

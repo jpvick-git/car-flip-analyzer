@@ -6,7 +6,7 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from sqlalchemy import text
 import os
-from db import get_engine
+from .db import get_engine
 
 router = APIRouter()
 engine = get_engine()
@@ -29,14 +29,18 @@ def create_access_token(data: dict):
     data.update({"exp": expire})
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
-def get_user_by_email(email: str):
+def get_user_by_email(email):
     with engine.connect() as conn:
-        row = conn.execute(
-            text("SELECT * FROM users WHERE email=:email"),
-            {"email": email}
-        ).fetchone()
-        return dict(row._mapping) if row else None
+        row = conn.execute(text("""
+            SELECT id, email, password_hash
+            FROM users
+            WHERE email = :email
+        """), {"email": email}).fetchone()
 
+        if not row:
+            return None
+
+        return dict(row._mapping)
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
@@ -46,10 +50,14 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
             raise HTTPException(status_code=401, detail="Invalid token")
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
     user = get_user_by_email(email)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+
+    # ✅ Explicitly return only these fields
+    return {"id": user["id"], "email": user["email"]}
+
 
 @router.post("/register")
 def register(form: OAuth2PasswordRequestForm = Depends()):
@@ -68,5 +76,8 @@ def login(form: OAuth2PasswordRequestForm = Depends()):
     user = get_user_by_email(form.username)
     if not user or not verify_password(form.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_access_token({"sub": user["email"]})
+
+    # ✅ include both id and email in the token
+    token = create_access_token({"sub": user["email"], "id": user["id"]})
     return {"access_token": token, "token_type": "bearer"}
+

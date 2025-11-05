@@ -64,11 +64,11 @@ def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
 @router.get("/get_vehicles")
 def get_user_vehicles(user=Depends(get_current_user)):
     """
-    Return all vehicles belonging to the authenticated user.
+    Return all vehicles belonging to the authenticated user,
+    including their first available image.
     """
+    from .backend_api import get_first_image  # 👈 import your image finder
     engine = get_engine()
-    print("🧠 Logged in user:", user)  # 👈 Add this
-
     user_id = user["id"]
 
     with engine.connect() as conn:
@@ -88,11 +88,16 @@ def get_user_vehicles(user=Depends(get_current_user)):
             FROM user_vehicles
             WHERE user_id = :uid
             ORDER BY created_at DESC
-        """), {"uid": user["id"]}).fetchall()
+        """), {"uid": user_id}).fetchall()
 
-        vehicles = [dict(r._mapping) for r in rows]
+    vehicles = []
+    for r in rows:
+        v = dict(r._mapping)
+        v["image_url"] = get_first_image(v["lot_number"])  # 👈 add image dynamically
+        vehicles.append(v)
 
     return {"vehicles": vehicles}
+
 # --------------------------------------------------
 # 3️⃣ Analyze a specific vehicle (trigger AI estimator)
 # --------------------------------------------------

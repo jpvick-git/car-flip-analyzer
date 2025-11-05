@@ -195,8 +195,28 @@ def download_images(lot_url):
             context = browser.new_context(accept_downloads=True)
             page = context.new_page()
 
+            print(f"🌐 Navigating to {lot_url} ...")
             page.goto(lot_url, timeout=90000)
-            page.wait_for_selector("img", timeout=25000)
+
+            # Give the page some breathing room (Copart lazy loads images)
+            time.sleep(5)
+
+            # 📸 Take a screenshot so we can see what Playwright sees
+            try:
+                screenshot_path = os.path.join(lot_folder, "page_loaded.png")
+                page.screenshot(path=screenshot_path)
+                print(f"📷 Saved screenshot: {screenshot_path}")
+            except Exception as e:
+                print(f"⚠️ Could not save screenshot for {lot_url}: {e}")
+
+            # Wait longer and for visible images only
+            try:
+                page.wait_for_selector("div.p-galleria-content img", state="visible", timeout=60000)
+            except Exception as e:
+                print(f"⚠️ Image selector timeout for {lot_url}: {e}")
+                # Optional: take another screenshot before failing
+                page.screenshot(path=os.path.join(lot_folder, "after_timeout.png"))
+
 
             try:
                 if page.is_visible("span.p-galleria-item-next-icon.pi.pi-chevron-right"):

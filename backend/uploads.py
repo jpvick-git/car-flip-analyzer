@@ -29,26 +29,21 @@ async def upload_and_process_file(file: UploadFile, user=Depends(get_current_use
 
         # Run the Copart download with the exact file path and user id
         # --- Step 2: Trigger Copart download ---
+        VENV_PYTHON = "/root/car-flip-analyzer/backend/venv/bin/python3"
+
         subprocess.Popen(
-            [
-                "python3",
-                "copart_download_parallel.py",
-                os.path.join(UPLOAD_DIR, new_filename),
-                str(user["id"]),
-            ],
+            [VENV_PYTHON, "copart_download_parallel.py", file_path, str(user["id"])],
             cwd="/root/car-flip-analyzer/backend"
         )
 
-        # Run the AI estimator next
         subprocess.Popen(
-            ["python3", "ai_repair_estimator.py", str(user["id"])],
+            [VENV_PYTHON, "ai_repair_estimator.py", str(user["id"])],
             cwd="/root/car-flip-analyzer/backend"
-        )
 
-        return JSONResponse(content={
-            "message": "✅ File uploaded and processing started",
-            "filename": new_filename
-        })
+                return JSONResponse(content={
+                    "message": "✅ File uploaded and processing started",
+                    "filename": new_filename
+                })
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})

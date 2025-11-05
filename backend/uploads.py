@@ -6,7 +6,7 @@ from fastapi import APIRouter, UploadFile, Depends
 from fastapi.responses import JSONResponse
 from .auth import get_current_user
 
-UPLOAD_DIR = "/root/car-flip-analyzer/backend/user_uploads"
+UPLOAD_DIR = "/root/car-flip-analyzer/user_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 router = APIRouter()
@@ -14,7 +14,7 @@ router = APIRouter()
 @router.post("/upload_file")
 async def upload_and_process_file(file: UploadFile, user=Depends(get_current_user)):
     """
-    1. Save uploaded file to backend/user_uploads
+    1. Save uploaded file to /user_uploads
     2. Trigger Copart download + AI estimator
     """
     try:

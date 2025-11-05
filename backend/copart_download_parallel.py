@@ -85,9 +85,46 @@ def get_image_url(lot_id):
 # --------------------------------------------------
 # CSV LOADER (LOAD / COPY EXISTING LOTS)
 # --------------------------------------------------
-def normalize_column_name(col):
-    return col.strip().lower().replace(" ", "_")
+# --------------------------------------------------
+# CLEAN & NORMALIZE CSV HEADERS
+# --------------------------------------------------
+df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
 
+# ✅ Map your known Copart spreadsheet columns to match DB fields
+rename_map = {
+    "lot/inv_#": "lot_inv_num",
+    "lot_url": "lot_url",
+    "est._retail_value": "est_retail_value",  # fixes the invalid '.' issue
+    "est._retail_value_usd": "est_retail_value",
+    "sale_date": "sale_date",
+    "year": "year",
+    "make": "make",
+    "model": "model",
+    "engine_type": "engine_type",
+    "cylinders": "cylinders",
+    "vin": "vin",
+    "title_code": "title_code",
+    "odometer": "odometer",
+    "odometer_description": "odometer_description",
+    "damage_description": "damage_description",
+    "current_bid": "current_bid",
+    "my_bid": "my_bid",
+    "item_number": "item_number",
+    "sale_name": "sale_name",
+    "auto_grade": "auto_grade",
+    "sale_light": "sale_light",
+    "announcements": "announcements",
+}
+
+df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns}, inplace=True)
+
+# ✅ Verify required column exists
+if "lot_inv_num" not in df.columns:
+    raise ValueError(
+        f"❌ 'lot_inv_num' column missing from CSV. Found: {list(df.columns)}"
+    )
+
+df["lot_inv_num"] = df["lot_inv_num"].astype(str)
 
 def load_csv_to_user(engine, user_id):
     """

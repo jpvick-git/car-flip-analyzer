@@ -2,53 +2,41 @@ import os
 import shutil
 import datetime
 import subprocess
-import platform
 from fastapi import APIRouter, UploadFile, Depends
 from fastapi.responses import JSONResponse
 from .auth import get_current_user
 
-router = APIRouter()
-
-# Detect OS for correct paths
-if platform.system() == "Windows":
-    UPLOAD_DIR = r"C:\car-flip-data\user_uploads"
-    BACKEND_DIR = r"C:\car-flip-analyzer\backend"
-    PYTHON_BIN = "python"
-else:
-    UPLOAD_DIR = "/root/car-flip-analyzer/user_uploads"
-    BACKEND_DIR = "/root/car-flip-analyzer/backend"
-    PYTHON_BIN = "/root/car-flip-analyzer/backend/venv/bin/python3"
-
+UPLOAD_DIR = "/root/car-flip-analyzer/backend/user_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+router = APIRouter()
 
 @router.post("/upload_file")
 async def upload_and_process_file(file: UploadFile, user=Depends(get_current_user)):
+    """
+    1. Save uploaded file to backend/user_uploads
+    2. Trigger Copart download + AI estimator
+    """
     try:
-        # --- Step 1: Save uploaded file ---
         ext = os.path.splitext(file.filename)[1]
         date_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_username = user["email"].replace("@", "_").replace(".", "_")
-        new_filename = f"{date_str}_{safe_username}{ext}"
+        new_filename = f"{date_str}_user{user['id']}{ext}"
         file_path = os.path.join(UPLOAD_DIR, new_filename)
 
+        # Save uploaded CSV file
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # --- Step 2: Run background scripts (with logging) ---
-        log_file = os.path.join(BACKEND_DIR, "upload_log.txt")
-
+        # Run the Copart download with the exact file path and user id
         subprocess.Popen(
-            [PYTHON_BIN, "copart_download_parallel.py", str(user["id"])],
-            cwd=BACKEND_DIR,
-            stdout=open(log_file, "a"),
-            stderr=subprocess.STDOUT
+            ["python3", "copart_download_parallel.py", file_path, str(user["id"])],
+            cwd="/root/car-flip-analyzer/backend"
         )
 
+        # Run the AI estimator next
         subprocess.Popen(
-            [PYTHON_BIN, "ai_repair_estimator.py", str(user["id"])],
-            cwd=BACKEND_DIR,
-            stdout=open(log_file, "a"),
-            stderr=subprocess.STDOUT
+            ["python3", "ai_repair_estimator.py", str(user["id"])],
+            cwd="/root/car-flip-analyzer/backend"
         )
 
         return JSONResponse(content={

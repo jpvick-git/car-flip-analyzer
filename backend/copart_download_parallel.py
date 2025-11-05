@@ -3,6 +3,7 @@ import time
 import glob
 import zipfile
 import pandas as pd
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from playwright.sync_api import sync_playwright
 from sqlalchemy import create_engine, text
@@ -28,6 +29,18 @@ DRIVER = "ODBC Driver 18 for SQL Server"
 MAX_WORKERS = 3
 SLEEP_BETWEEN_LOTS = 2
 
+def get_latest_csv():
+    """Return the CSV path provided as an argument, or the latest in uploads folder."""
+    if len(sys.argv) > 2 and os.path.exists(sys.argv[1]):
+        # If both CSV path and user_id are provided
+        print(f"📂 Using provided CSV file: {sys.argv[1]}")
+        return sys.argv[1]
+    csv_files = glob.glob(os.path.join(UPLOADS_DIR, "*.csv"))
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV files found in {UPLOADS_DIR}")
+    latest = max(csv_files, key=os.path.getmtime)
+    print(f"📂 Using latest uploaded CSV: {latest}")
+    return latest
 
 # --------------------------------------------------
 # DATABASE CONNECTION
@@ -323,10 +336,15 @@ def main(user_id: int):
 # ENTRY POINT
 # --------------------------------------------------
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) > 1:
-        USER_ID = int(sys.argv[1])
+    if len(sys.argv) >= 3:
+        csv_path = sys.argv[1]
+        user_id = int(sys.argv[2])
+    elif len(sys.argv) == 2:
+        csv_path = get_latest_csv()
+        user_id = int(sys.argv[1])
     else:
-        print("❌ No user ID provided. Example: python copart_download_parallel.py 2")
+        print("❌ Usage: python copart_download_parallel.py <csv_path> <user_id>")
         sys.exit(1)
-    main(USER_ID)
+
+    main(user_id)
+

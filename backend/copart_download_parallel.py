@@ -85,46 +85,9 @@ def get_image_url(lot_id):
 # --------------------------------------------------
 # CSV LOADER (LOAD / COPY EXISTING LOTS)
 # --------------------------------------------------
-# --------------------------------------------------
-# CLEAN & NORMALIZE CSV HEADERS
-# --------------------------------------------------
-df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+def normalize_column_name(col):
+    return col.strip().lower().replace(" ", "_")
 
-# ✅ Map your known Copart spreadsheet columns to match DB fields
-rename_map = {
-    "lot/inv_#": "lot_inv_num",
-    "lot_url": "lot_url",
-    "est._retail_value": "est_retail_value",  # fixes the invalid '.' issue
-    "est._retail_value_usd": "est_retail_value",
-    "sale_date": "sale_date",
-    "year": "year",
-    "make": "make",
-    "model": "model",
-    "engine_type": "engine_type",
-    "cylinders": "cylinders",
-    "vin": "vin",
-    "title_code": "title_code",
-    "odometer": "odometer",
-    "odometer_description": "odometer_description",
-    "damage_description": "damage_description",
-    "current_bid": "current_bid",
-    "my_bid": "my_bid",
-    "item_number": "item_number",
-    "sale_name": "sale_name",
-    "auto_grade": "auto_grade",
-    "sale_light": "sale_light",
-    "announcements": "announcements",
-}
-
-df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns}, inplace=True)
-
-# ✅ Verify required column exists
-if "lot_inv_num" not in df.columns:
-    raise ValueError(
-        f"❌ 'lot_inv_num' column missing from CSV. Found: {list(df.columns)}"
-    )
-
-df["lot_inv_num"] = df["lot_inv_num"].astype(str)
 
 def load_csv_to_user(engine, user_id):
     """
@@ -138,36 +101,63 @@ def load_csv_to_user(engine, user_id):
     if not csv_files:
         print(f"❌ No CSV files found in {UPLOADS_DIR}")
         return
+
     latest_csv = max(csv_files, key=os.path.getmtime)
     print(f"📂 Using latest uploaded CSV: {latest_csv}")
 
     df = pd.read_csv(latest_csv)
-    df.columns = [normalize_column_name(c) for c in df.columns]
-# ✅ Rename the known CSV column "Lot/Inv #" → "lot_inv_num"
-    if "lot/inv_#" in df.columns:
-        df.rename(columns={"lot/inv_#": "lot_inv_num"}, inplace=True)
+
+    # --------------------------------------------------
+    # CLEAN & NORMALIZE CSV HEADERS
+    # --------------------------------------------------
+    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+
+    rename_map = {
+        "lot/inv_#": "lot_inv_num",
+        "lot_url": "lot_url",
+        "est._retail_value": "est_retail_value",  # fix invalid '.'
+        "est._retail_value_usd": "est_retail_value",
+        "sale_date": "sale_date",
+        "year": "year",
+        "make": "make",
+        "model": "model",
+        "engine_type": "engine_type",
+        "cylinders": "cylinders",
+        "vin": "vin",
+        "title_code": "title_code",
+        "odometer": "odometer",
+        "odometer_description": "odometer_description",
+        "damage_description": "damage_description",
+        "current_bid": "current_bid",
+        "my_bid": "my_bid",
+        "item_number": "item_number",
+        "sale_name": "sale_name",
+        "auto_grade": "auto_grade",
+        "sale_light": "sale_light",
+        "announcements": "announcements",
+    }
+    df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns}, inplace=True)
 
     if "lot_inv_num" not in df.columns:
-        raise ValueError(f"❌ 'lot_inv_num' column is missing from CSV. Found: {list(df.columns)}")
+        raise ValueError(f"❌ 'lot_inv_num' column missing from CSV. Found: {list(df.columns)}")
 
     df["lot_inv_num"] = df["lot_inv_num"].astype(str)
 
+    # --------------------------------------------------
+    # DATABASE OPERATIONS
+    # --------------------------------------------------
     with engine.begin() as conn:
-        # Fetch existing lots for any user
         lot_nums = df["lot_inv_num"].tolist()
         if not lot_nums:
             print("⚠️ No lots found in CSV.")
             return
 
-        # Build a dynamic SQL-safe IN clause
         placeholders = ", ".join([f"'{lot}'" for lot in lot_nums])
         query = f"SELECT * FROM user_vehicles WHERE lot_inv_num IN ({placeholders})"
 
         all_existing = pd.read_sql(query, conn)
-
         existing_lots = set(all_existing["lot_inv_num"].astype(str).tolist())
 
-        # Fetch lots that this user already owns
         user_existing = pd.read_sql(
             text("SELECT lot_inv_num FROM user_vehicles WHERE user_id = :uid"),
             conn,
@@ -175,19 +165,12 @@ def load_csv_to_user(engine, user_id):
         )
         user_existing_lots = set(user_existing["lot_inv_num"].astype(str).tolist())
 
-        # Decide which lots to copy / download
         to_copy = [lot for lot in existing_lots if lot not in user_existing_lots]
-        to_download = [
-            lot
-            for lot in df["lot_inv_num"].tolist()
-            if lot not in existing_lots and lot not in user_existing_lots
-        ]
+        to_download = [lot for lot in lot_nums if lot not in existing_lots and lot not in user_existing_lots]
 
         # ✅ Copy existing lots from other users
         if to_copy:
-            existing_to_copy = all_existing[
-                all_existing["lot_inv_num"].isin(to_copy)
-            ].copy()
+            existing_to_copy = all_existing[all_existing["lot_inv_num"].isin(to_copy)].copy()
             existing_to_copy["user_id"] = user_id
             existing_to_copy["created_at"] = pd.Timestamp.now()
             existing_to_copy.drop(columns=["id"], inplace=True, errors="ignore")
@@ -198,26 +181,26 @@ def load_csv_to_user(engine, user_id):
                     return current
                 return get_image_url(row["lot_inv_num"])
 
-            existing_to_copy["image_url"] = existing_to_copy.apply(
-                ensure_image_url, axis=1
-            )
+            existing_to_copy["image_url"] = existing_to_copy.apply(ensure_image_url, axis=1)
 
-            existing_to_copy.to_sql(
-                "user_vehicles", con=conn, if_exists="append", index=False
-            )
+            existing_to_copy.to_sql("user_vehicles", con=conn, if_exists="append", index=False)
             print(f"📋 Duplicated {len(existing_to_copy)} existing lots for user {user_id}.")
 
-        # ✅ Insert new lots (not in DB yet)
+        # ✅ Insert brand new lots
         if to_download:
             new_rows = df[df["lot_inv_num"].isin(to_download)].copy()
             new_rows["user_id"] = user_id
             new_rows["created_at"] = pd.Timestamp.now()
             new_rows["image_url"] = new_rows["lot_inv_num"].apply(get_image_url)
+
+            # Drop any unexpected columns to avoid SQL errors
+            allowed_cols = [col.name for col in conn.execute(text("SELECT TOP 0 * FROM user_vehicles")).keys()]
+            new_rows = new_rows[[c for c in new_rows.columns if c in allowed_cols]]
+
             new_rows.to_sql("user_vehicles", con=conn, if_exists="append", index=False)
             print(f"🆕 Inserted {len(new_rows)} brand new lots for user {user_id}.")
         else:
             print(f"ℹ️ No new lots to insert for user {user_id}.")
-
 
 # --------------------------------------------------
 # IMAGE DOWNLOAD FUNCTION

@@ -39,11 +39,12 @@ async def upload_and_process_file(file: UploadFile, user=Depends(get_current_use
         subprocess.Popen(
             [VENV_PYTHON, "ai_repair_estimator.py", str(user["id"])],
             cwd="/root/car-flip-analyzer/backend"
+        )
 
-                return JSONResponse(content={
-                    "message": "✅ File uploaded and processing started",
-                    "filename": new_filename
-                })
+        return JSONResponse(content={
+            "message": "✅ File uploaded and processing started",
+            "filename": new_filename
+        })
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})

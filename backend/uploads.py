@@ -18,17 +18,20 @@ async def upload_and_process_file(file: UploadFile, user=Depends(get_current_use
     2. Trigger Copart download + AI estimator
     """
     try:
+        # --- Step 1: Save uploaded file ---
         ext = os.path.splitext(file.filename)[1]
         date_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        new_filename = f"{date_str}_user{user['id']}{ext}"
+
+        # Create a readable + unique filename
+        safe_email = user["email"].replace("@", "_").replace(".", "_")
+        token_fragment = user.get("access_token", "no_token")[:8]
+        new_filename = f"{date_str}_{safe_email}_{token_fragment}{ext}"
         file_path = os.path.join(UPLOAD_DIR, new_filename)
 
-        # Save uploaded CSV file
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # Run the Copart download with the exact file path and user id
-        # --- Step 2: Trigger Copart download ---
+        # --- Step 2: Trigger Copart + AI estimator using the venv Python ---
         VENV_PYTHON = "/root/car-flip-analyzer/backend/venv/bin/python3"
 
         subprocess.Popen(
@@ -48,3 +51,4 @@ async def upload_and_process_file(file: UploadFile, user=Depends(get_current_use
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+

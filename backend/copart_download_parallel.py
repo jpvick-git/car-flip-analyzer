@@ -122,7 +122,6 @@ def load_csv_to_user(engine, user_id):
             conn,
             params={"lots": tuple(df["lot_inv_num"].tolist())},
         )
-
         existing_lots = set(all_existing["lot_inv_num"].astype(str).tolist())
 
         # Fetch lots that this user already owns

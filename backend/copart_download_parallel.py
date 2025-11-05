@@ -30,16 +30,20 @@ MAX_WORKERS = 3
 SLEEP_BETWEEN_LOTS = 2
 
 def get_latest_csv():
-    """Return the CSV path provided as an argument, or the latest in uploads folder."""
-    if len(sys.argv) > 2 and os.path.exists(sys.argv[1]):
-        # If both CSV path and user_id are provided
-        print(f"📂 Using provided CSV file: {sys.argv[1]}")
+    """
+    Return the CSV path passed from uploads.py, or fall back to latest in uploads folder.
+    """
+    # ✅ Use file path passed from the backend
+    if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
+        print(f"📂 Using CSV file from argument: {sys.argv[1]}")
         return sys.argv[1]
+
+    # Fallback: most recent CSV
     csv_files = glob.glob(os.path.join(UPLOADS_DIR, "*.csv"))
     if not csv_files:
-        raise FileNotFoundError(f"No CSV files found in {UPLOADS_DIR}")
+        raise FileNotFoundError(f"❌ No CSV files found in {UPLOADS_DIR}")
     latest = max(csv_files, key=os.path.getmtime)
-    print(f"📂 Using latest uploaded CSV: {latest}")
+    print(f"📂 Using latest CSV fallback: {latest}")
     return latest
 
 # --------------------------------------------------
@@ -336,15 +340,14 @@ def main(user_id: int):
 # ENTRY POINT
 # --------------------------------------------------
 if __name__ == "__main__":
-    if len(sys.argv) >= 3:
-        csv_path = sys.argv[1]
-        user_id = int(sys.argv[2])
-    elif len(sys.argv) == 2:
-        csv_path = get_latest_csv()
-        user_id = int(sys.argv[1])
-    else:
-        print("❌ Usage: python copart_download_parallel.py <csv_path> <user_id>")
+    if len(sys.argv) < 3:
+        print("❌ Usage: python3 copart_download_parallel.py /path/to/file.csv <user_id>")
         sys.exit(1)
 
-    main(user_id)
+    csv_path = get_latest_csv()
+    USER_ID = int(sys.argv[2])
+    print(f"✅ Starting Copart load for user {USER_ID}")
+    print(f"📄 CSV path: {csv_path}")
+    main(USER_ID)
+
 

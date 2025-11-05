@@ -28,8 +28,14 @@ async def upload_and_process_file(file: UploadFile, user=Depends(get_current_use
             shutil.copyfileobj(file.file, buffer)
 
         # Run the Copart download with the exact file path and user id
+        # --- Step 2: Trigger Copart download ---
         subprocess.Popen(
-            ["python3", "copart_download_parallel.py", file_path, str(user["id"])],
+            [
+                "python3",
+                "copart_download_parallel.py",
+                os.path.join(UPLOAD_DIR, new_filename),
+                str(user["id"]),
+            ],
             cwd="/root/car-flip-analyzer/backend"
         )
 

@@ -194,7 +194,7 @@ def load_csv_to_user(engine, user_id):
             new_rows["image_url"] = new_rows["lot_inv_num"].apply(get_image_url)
 
             # Drop any unexpected columns to avoid SQL errors
-            allowed_cols = [col.name for col in conn.execute(text("SELECT TOP 0 * FROM user_vehicles")).keys()]
+            allowed_cols = conn.execute(text("SELECT TOP 0 * FROM user_vehicles")).keys()
             new_rows = new_rows[[c for c in new_rows.columns if c in allowed_cols]]
 
             new_rows.to_sql("user_vehicles", con=conn, if_exists="append", index=False)

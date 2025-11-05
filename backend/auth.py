@@ -1,5 +1,5 @@
 # auth.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -11,24 +11,42 @@ from .db import get_engine
 router = APIRouter()
 engine = get_engine()
 
-
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 1 day
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-def verify_password(plain, hashed):
-    return pwd_context.verify(plain, hashed)
+# --------------------------------------------------
+# PASSWORD HELPERS
+# --------------------------------------------------
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Safely verify a password without triggering bcrypt 72-byte errors."""
+    if not hashed_password or not plain_password:
+        return False
+    try:
+        # bcrypt only supports up to 72 bytes; truncate if longer
+        return pwd_context.verify(plain_password[:72], hashed_password)
+    except ValueError as e:
+        print(f"⚠️ bcrypt verify error: {e}")
+        return False
 
-def hash_password(password):
-    return pwd_context.hash(password)
+def hash_password(password: str) -> str:
+    """Generate bcrypt hash (auto-handled by passlib)."""
+    return pwd_context.hash(password[:72])
 
+# --------------------------------------------------
+# TOKEN HELPERS
+# --------------------------------------------------
 def create_access_token(data: dict):
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    data.update({"exp": expire})
-    return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
+    to_encode = data.copy()
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
+# --------------------------------------------------
+# DATABASE HELPERS
+# --------------------------------------------------
 def get_user_by_email(email):
     with engine.connect() as conn:
         row = conn.execute(text("""
@@ -36,10 +54,8 @@ def get_user_by_email(email):
             FROM users
             WHERE email = :email
         """), {"email": email}).fetchone()
-
         if not row:
             return None
-
         return dict(row._mapping)
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
@@ -55,18 +71,22 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # ✅ Explicitly return only these fields
     return {"id": user["id"], "email": user["email"]}
 
-
+# --------------------------------------------------
+# ROUTES
+# --------------------------------------------------
 @router.post("/register")
 def register(form: OAuth2PasswordRequestForm = Depends()):
     with engine.begin() as conn:
-        existing = conn.execute(text("SELECT 1 FROM users WHERE email=:email"), {"email": form.username}).fetchone()
+        existing = conn.execute(
+            text("SELECT 1 FROM users WHERE email=:email"), {"email": form.username}
+        ).fetchone()
         if existing:
             raise HTTPException(status_code=400, detail="User already exists")
+
         conn.execute(
-            text("INSERT INTO users (username,email,password_hash) VALUES (:u,:e,:p)"),
+            text("INSERT INTO users (username, email, password_hash) VALUES (:u, :e, :p)"),
             {"u": form.username, "e": form.username, "p": hash_password(form.password)},
         )
     return {"message": "User created successfully"}
@@ -77,7 +97,5 @@ def login(form: OAuth2PasswordRequestForm = Depends()):
     if not user or not verify_password(form.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # ✅ include both id and email in the token
     token = create_access_token({"sub": user["email"], "id": user["id"]})
     return {"access_token": token, "token_type": "bearer"}
-

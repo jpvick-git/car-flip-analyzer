@@ -106,8 +106,12 @@ def load_csv_to_user(engine, user_id):
 
     df = pd.read_csv(latest_csv)
     df.columns = [normalize_column_name(c) for c in df.columns]
+# ✅ Rename the known CSV column "Lot/Inv #" → "lot_inv_num"
+    if "lot/inv_#" in df.columns:
+        df.rename(columns={"lot/inv_#": "lot_inv_num"}, inplace=True)
+
     if "lot_inv_num" not in df.columns:
-        raise ValueError("❌ 'lot_inv_num' column is missing from CSV")
+        raise ValueError(f"❌ 'lot_inv_num' column is missing from CSV. Found: {list(df.columns)}")
 
     df["lot_inv_num"] = df["lot_inv_num"].astype(str)
 

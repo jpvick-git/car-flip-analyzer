@@ -28,10 +28,11 @@ app.add_middleware(
 # --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
-print(f"📂 Serving images from: {DOWNLOAD_DIR}")
+print(f"📂 Serving static images from: {DOWNLOAD_DIR}")
+
+# ✅ Serve static images
+app.mount("/backend/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
 
 def get_first_image(lot_id: str):
@@ -46,14 +47,14 @@ def get_first_image(lot_id: str):
         candidate = f"{lot_id}_Image_1{ext}"
         path = os.path.join(lot_folder, candidate)
         if os.path.exists(path):
-            return f"https://api.carflipanalyzer.com/downloads/{lot_id}/{candidate}"
+            return f"https://api.carflipanalyzer.com/backend/downloads/{lot_id}/{candidate}"
 
     # Fallback: first image in folder
     for file in sorted(os.listdir(lot_folder)):
         if file.lower().endswith((".jpg", ".jpeg", ".png")):
-            return f"https://api.carflipanalyzer.com/downloads/{lot_id}/{file}"
-    return None
+            return f"https://api.carflipanalyzer.com/backend/downloads/{lot_id}/{file}"
 
+    return None
 
 # --------------------------------------------------
 # DATABASE CONFIGURATION

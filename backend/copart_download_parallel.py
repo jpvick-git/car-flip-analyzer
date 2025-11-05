@@ -26,7 +26,7 @@ USERNAME = "admin"
 PASSWORD = "1K0xi*rfMR!r4VN7"
 DRIVER = "ODBC Driver 18 for SQL Server"
 
-MAX_WORKERS = 3
+MAX_WORKERS = 1
 SLEEP_BETWEEN_LOTS = 2
 
 

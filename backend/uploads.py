@@ -13,9 +13,11 @@ router = APIRouter()
 if platform.system() == "Windows":
     UPLOAD_DIR = r"C:\car-flip-data\user_uploads"
     BACKEND_DIR = r"C:\car-flip-analyzer\backend"
+    PYTHON_BIN = "python"
 else:
     UPLOAD_DIR = "/root/car-flip-analyzer/user_uploads"
     BACKEND_DIR = "/root/car-flip-analyzer/backend"
+    PYTHON_BIN = "/root/car-flip-analyzer/backend/venv/bin/python3"
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -32,9 +34,22 @@ async def upload_and_process_file(file: UploadFile, user=Depends(get_current_use
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # --- Step 2: Run background scripts ---
-        subprocess.Popen(["python3", "copart_download_parallel.py", str(user["id"])], cwd=BACKEND_DIR)
-        subprocess.Popen(["python3", "ai_repair_estimator.py", str(user["id"])], cwd=BACKEND_DIR)
+        # --- Step 2: Run background scripts (with logging) ---
+        log_file = os.path.join(BACKEND_DIR, "upload_log.txt")
+
+        subprocess.Popen(
+            [PYTHON_BIN, "copart_download_parallel.py", str(user["id"])],
+            cwd=BACKEND_DIR,
+            stdout=open(log_file, "a"),
+            stderr=subprocess.STDOUT
+        )
+
+        subprocess.Popen(
+            [PYTHON_BIN, "ai_repair_estimator.py", str(user["id"])],
+            cwd=BACKEND_DIR,
+            stdout=open(log_file, "a"),
+            stderr=subprocess.STDOUT
+        )
 
         return JSONResponse(content={
             "message": "✅ File uploaded and processing started",

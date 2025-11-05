@@ -25,7 +25,7 @@ async def upload_and_process_file(file: UploadFile, user=Depends(get_current_use
         # Create a readable + unique filename
         safe_email = user["email"].replace("@", "_").replace(".", "_")
         token_fragment = user.get("access_token", "no_token")[:8]
-        new_filename = f"{date_str}_{safe_email}_{token_fragment}{ext}"
+        new_filename = f"{date_str}_{safe_email}{ext}"
         file_path = os.path.join(UPLOAD_DIR, new_filename)
 
         with open(file_path, "wb") as buffer:

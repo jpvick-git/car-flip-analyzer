@@ -267,6 +267,20 @@ def download_images(lot_url):
 def main(user_id: int):
     engine = get_engine()
     load_csv_to_user(engine, user_id)
+    
+    # Create lot folders for every lot in the uploaded CSV
+    csv_df = pd.read_csv(csv_path)
+    if "Lot/Inv #" in csv_df.columns:
+        lot_nums = csv_df["Lot/Inv #"].astype(str).tolist()
+    elif "lot_inv_num" in csv_df.columns:
+        lot_nums = csv_df["lot_inv_num"].astype(str).tolist()
+    else:
+        lot_nums = []
+
+    for lot in lot_nums:
+        lot_folder = os.path.join(DOWNLOAD_DIR, lot)
+        os.makedirs(lot_folder, exist_ok=True)
+
 
     folders = [f for f in os.listdir(DOWNLOAD_DIR) if os.path.isdir(os.path.join(DOWNLOAD_DIR, f))]
     if not folders:

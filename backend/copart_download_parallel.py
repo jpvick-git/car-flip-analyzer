@@ -18,7 +18,7 @@ DOWNLOAD_DIR = (
     if "backend" not in BASE_DIR.lower()
     else os.path.join(BASE_DIR, "downloads")
 )
-UPLOADS_DIR = os.path.join(BASE_DIR, "user_uploads")
+UPLOADS_DIR = "/root/car-flip-analyzer/user_uploads"
 
 SERVER = "carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com,1433"
 DB_NAME = "cars"

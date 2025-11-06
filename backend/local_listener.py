@@ -1,55 +1,37 @@
+from flask import Flask, request
 import os
-import shutil
-import datetime
 import subprocess
-import requests
-from fastapi import APIRouter, UploadFile, Depends
-from fastapi.responses import JSONResponse
-from .auth import get_current_user
+import threading
 
-UPLOAD_DIR = "/root/car-flip-analyzer/user_uploads"
+app = Flask(__name__)
+
+UPLOAD_DIR = r"C:\car-flip-analyzer\user_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-router = APIRouter()
+@app.route("/trigger", methods=["POST"])
+def trigger_download():
+    user_id = request.form.get("user_id", "2")
+    uploaded_file = request.files.get("file")
 
-@router.post("/upload_file")
-async def upload_and_process_file(file: UploadFile, user=Depends(get_current_user)):
-    try:
-        # --- Step 1: Save uploaded file on Ubuntu ---
-        ext = os.path.splitext(file.filename)[1]
-        date_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_email = user["email"].replace("@", "_").replace(".", "_")
-        new_filename = f"{date_str}_{safe_email}{ext}"
-        file_path = os.path.join(UPLOAD_DIR, new_filename)
+    if not uploaded_file:
+        return {"error": "No file received"}, 400
 
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+    # Save the uploaded CSV locally
+    file_path = os.path.join(UPLOAD_DIR, uploaded_file.filename)
+    uploaded_file.save(file_path)
+    print(f"📄 Received and saved CSV: {file_path}")
 
-        print(f"📄 Saved upload to {file_path}")
+    # Start the Copart download script in a background thread
+    def run_scraper():
+        print(f"🚀 Starting Copart download for user {user_id}")
+        subprocess.run([
+            "python", "copart_download_parallel.py",
+            file_path, str(user_id)
+        ], cwd=r"C:\car-flip-analyzer\backend")
 
-        # --- Step 2: Send the actual CSV to local machine via ngrok ---
-        LOCAL_TRIGGER_URL = " https://quinquevalent-hayley-unhackneyed.ngrok-free.dev/trigger"
+    threading.Thread(target=run_scraper).start()
 
-        try:
-            with open(file_path, "rb") as f:
-                files = {"file": (os.path.basename(file_path), f, "text/csv")}
-                data = {"user_id": user["id"]}
-                response = requests.post(LOCAL_TRIGGER_URL, data=data, files=files, timeout=30)
-            print(f"🚀 Trigger sent successfully for {file_path}: {response.status_code}")
-        except Exception as e:
-            print(f"⚠️ Could not send trigger to local machine: {e}")
+    return {"status": "success", "saved": file_path}
 
-        # --- Step 3: (optional) run local scripts on Ubuntu too if needed ---
-        VENV_PYTHON = "/root/car-flip-analyzer/backend/venv/bin/python3"
-        subprocess.Popen(
-            [VENV_PYTHON, "ai_repair_estimator.py", str(user["id"])],
-            cwd="/root/car-flip-analyzer/backend"
-        )
-
-        return JSONResponse(content={
-            "message": "✅ File uploaded and sent to local machine",
-            "filename": new_filename
-        })
-
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+if __name__ == "__main__":
+    app.run(port=5001)

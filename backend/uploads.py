@@ -43,17 +43,26 @@ async def upload_and_process_file(file: UploadFile, user=Depends(get_current_use
 
         print(f"📄 Saved upload to {file_path}")
 
-        # --- Step 2: Trigger Windows scraper through ngrok ---
+        # --- Step 2: Send the actual CSV to local Windows machine via ngrok ---
         try:
-            resp = requests.post(
-                LOCAL_TRIGGER_URL,
-                json={"csv_path": file_path, "user_id": user["id"]},
-                timeout=10
-            )
+            print(f"📤 Sending CSV to {LOCAL_TRIGGER_URL} ...")
+
+            with open(file_path, "rb") as f:
+                files = {"file": (os.path.basename(file_path), f, "text/csv")}
+                data = {"user_id": str(user["id"])}
+
+                resp = requests.post(
+                    LOCAL_TRIGGER_URL,
+                    data=data,          # form fields
+                    files=files,        # attach CSV
+                    timeout=30
+                )
+
             if resp.status_code == 200:
                 print(f"🚀 Trigger sent successfully for {file_path}")
             else:
                 print(f"⚠️ Trigger failed with status {resp.status_code}: {resp.text}")
+
         except Exception as e:
             print(f"⚠️ Could not send trigger to local machine: {e}")
 

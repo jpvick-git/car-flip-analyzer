@@ -11,6 +11,10 @@ def trigger_download():
     csv_path = data.get("csv_path")
     user_id = data.get("user_id", 2)
 
+    # --- Fix: Convert Ubuntu path to Windows path ---
+    if csv_path.startswith("/root/car-flip-analyzer/"):
+        csv_path = csv_path.replace("/root/car-flip-analyzer/", "C:/car-flip-analyzer/").replace("/", "\\")
+
     print(f"🚀 Received trigger for CSV: {csv_path}")
 
     def run_scraper():

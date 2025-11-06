@@ -2,20 +2,30 @@ import os
 import shutil
 import datetime
 import subprocess
+import requests
 from fastapi import APIRouter, UploadFile, Depends
 from fastapi.responses import JSONResponse
 from .auth import get_current_user
 
+# --------------------------------------------------
+# CONFIGURATION
+# --------------------------------------------------
 UPLOAD_DIR = "/root/car-flip-analyzer/user_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+LOCAL_TRIGGER_URL = "https://quinquevalent-hayley-unhackneyed.ngrok-free.dev/trigger"
+
 router = APIRouter()
 
+# --------------------------------------------------
+# ROUTE: Upload and process CSV
+# --------------------------------------------------
 @router.post("/upload_file")
 async def upload_and_process_file(file: UploadFile, user=Depends(get_current_user)):
     """
     1. Save uploaded file to /user_uploads
-    2. Trigger Copart download + AI estimator
+    2. Trigger Copart download on Windows via ngrok
+    3. Run AI estimator (optional, local)
     """
     try:
         # --- Step 1: Save uploaded file ---
@@ -31,13 +41,24 @@ async def upload_and_process_file(file: UploadFile, user=Depends(get_current_use
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # --- Step 2: Trigger Copart + AI estimator using the venv Python ---
-        VENV_PYTHON = "/root/car-flip-analyzer/backend/venv/bin/python3"
+        print(f"📄 Saved upload to {file_path}")
 
-        subprocess.Popen(
-            [VENV_PYTHON, "copart_download_parallel.py", file_path, str(user["id"])],
-            cwd="/root/car-flip-analyzer/backend"
-        )
+        # --- Step 2: Trigger Windows scraper through ngrok ---
+        try:
+            resp = requests.post(
+                LOCAL_TRIGGER_URL,
+                json={"csv_path": file_path, "user_id": user["id"]},
+                timeout=10
+            )
+            if resp.status_code == 200:
+                print(f"🚀 Trigger sent successfully for {file_path}")
+            else:
+                print(f"⚠️ Trigger failed with status {resp.status_code}: {resp.text}")
+        except Exception as e:
+            print(f"⚠️ Could not send trigger to local machine: {e}")
+
+        # --- Step 3: Optionally run local processing (if enabled) ---
+        VENV_PYTHON = "/root/car-flip-analyzer/backend/venv/bin/python3"
 
         subprocess.Popen(
             [VENV_PYTHON, "ai_repair_estimator.py", str(user["id"])],
@@ -50,5 +71,5 @@ async def upload_and_process_file(file: UploadFile, user=Depends(get_current_use
         })
 
     except Exception as e:
+        print(f"❌ Error in upload_and_process_file: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
-

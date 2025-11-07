@@ -4,6 +4,8 @@ import glob
 import zipfile
 import pandas as pd
 import sys
+import shutil
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from playwright.sync_api import sync_playwright
 from sqlalchemy import create_engine, text
@@ -27,9 +29,11 @@ USERNAME = "admin"
 PASSWORD = "1K0xi*rfMR!r4VN7"
 DRIVER = "ODBC Driver 18 for SQL Server"
 
-MAX_WORKERS = 1
+MAX_WORKERS = 2
 SLEEP_BETWEEN_LOTS = 2
 
+# 🔗 GitHub base for serving public images
+GITHUB_BASE = "https://raw.githubusercontent.com/jpvick-git/car-images/main/downloads"
 
 # --------------------------------------------------
 # DATABASE CONNECTION
@@ -41,7 +45,6 @@ def get_engine():
     )
     return create_engine(conn_str, fast_executemany=True)
 
-
 # --------------------------------------------------
 # FILE HELPERS
 # --------------------------------------------------
@@ -52,23 +55,19 @@ def move_and_unzip(lot_folder):
             zip_ref.extractall(lot_folder)
         os.remove(z)
 
-
 def get_image_url(lot_id):
     folder = os.path.join(DOWNLOAD_DIR, str(lot_id))
     if not os.path.exists(folder):
         return None
-
     for f in sorted(os.listdir(folder)):
         if f.lower().endswith((".jpg", ".jpeg", ".png")):
-            return f"https://api.carflipanalyzer.com/backend/downloads/{lot_id}/{f}"
+            return f"{GITHUB_BASE}/{lot_id}/{f}"
     return None
-
 
 # --------------------------------------------------
 # CSV LOADER
 # --------------------------------------------------
 def load_csv_to_user(engine, user_id, csv_path=None):
-    """Load the CSV directly if provided; otherwise fallback to latest in UPLOADS_DIR."""
     if csv_path and os.path.exists(csv_path):
         print(f"📂 Using provided CSV: {csv_path}")
         df = pd.read_csv(csv_path)
@@ -82,7 +81,6 @@ def load_csv_to_user(engine, user_id, csv_path=None):
         df = pd.read_csv(latest_csv)
 
     df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
-
     rename_map = {
         "lot/inv_#": "lot_inv_num",
         "est._retail_value": "est_retail_value",
@@ -111,7 +109,6 @@ def load_csv_to_user(engine, user_id, csv_path=None):
 
         placeholders = ", ".join([f"'{lot}'" for lot in lot_nums])
         query = f"SELECT * FROM user_vehicles WHERE lot_inv_num IN ({placeholders})"
-
         all_existing = pd.read_sql(query, conn)
         existing_lots = set(all_existing["lot_inv_num"].astype(str).tolist())
 
@@ -149,12 +146,147 @@ def load_csv_to_user(engine, user_id, csv_path=None):
 
             allowed_cols = conn.execute(text("SELECT TOP 0 * FROM user_vehicles")).keys()
             new_rows = new_rows[[c for c in new_rows.columns if c in allowed_cols]]
-
             new_rows.to_sql("user_vehicles", con=conn, if_exists="append", index=False)
             print(f"🆕 Inserted {len(new_rows)} brand new lots for user {user_id}.")
         else:
             print(f"ℹ️ No new lots to insert for user {user_id}.")
 
+# --------------------------------------------------
+# IMAGE DOWNLOAD FUNCTION
+# --------------------------------------------------
+def download_images(lot_url):
+    lot_id = lot_url.split("/lot/")[1].split("/")[0]
+    lot_folder = os.path.join(DOWNLOAD_DIR, lot_id)
+
+    if os.path.exists(lot_folder) and any(f.lower().endswith((".jpg", ".jpeg", ".png")) for f in os.listdir(lot_folder)):
+        print(f"🖼️ Skipping {lot_id} (already exists)")
+        image_url = get_image_url(lot_id)
+        with get_engine().begin() as conn:
+            conn.execute(
+                text("UPDATE user_vehicles SET image_url = :url WHERE lot_inv_num = :lot"),
+                {"url": image_url, "lot": lot_id},
+            )
+        return lot_id
+
+    os.makedirs(lot_folder, exist_ok=True)
+    print(f"🚗 Downloading lot {lot_id}...")
+
+    try:
+        with sync_playwright() as p:
+            is_linux = "linux" in platform.system().lower()
+            browser = p.chromium.launch(headless=is_linux, slow_mo=0 if is_linux else 200)
+            context = browser.new_context(accept_downloads=True)
+            page = context.new_page()
+            page.goto(lot_url, timeout=90000)
+            time.sleep(5)
+
+            try:
+                page.wait_for_selector("div.p-galleria-content img", state="visible", timeout=60000)
+            except Exception:
+                pass
+
+            # Skip 360° spinner if present
+            try:
+                if page.is_visible("span.p-galleria-item-next-icon.pi.pi-chevron-right"):
+                    page.click("span.p-galleria-item-next-icon.pi.pi-chevron-right")
+                    time.sleep(2)
+            except Exception:
+                pass
+
+            arrow_selectors = [
+                "span.lot-details-header-sprite.download-image-sprite-icon",
+                "button.download-image-sprite-icon",
+                "a.lot-image-floating-CTA span.download-image-sprite-icon",
+            ]
+            arrow_clicked = False
+            for sel in arrow_selectors:
+                try:
+                    page.wait_for_selector(sel, timeout=8000)
+                    page.locator(sel).first.click()
+                    arrow_clicked = True
+                    break
+                except Exception:
+                    continue
+
+            if not arrow_clicked:
+                print(f"❌ No download arrow for {lot_id}")
+                browser.close()
+                return None
+
+            for sel in ["a:has-text('Download all')", "button:has-text('Download all')"]:
+                try:
+                    page.wait_for_selector(sel, timeout=15000)
+                    with page.expect_download(timeout=60000) as dl_info:
+                        page.locator(sel).first.click()
+                    dl = dl_info.value
+                    zip_path = os.path.join(lot_folder, f"{lot_id}.zip")
+                    dl.save_as(zip_path)
+                    move_and_unzip(lot_folder)
+                    print(f"✅ Downloaded {lot_id}")
+                    browser.close()
+
+                    image_url = get_image_url(lot_id)
+                    with get_engine().begin() as conn:
+                        conn.execute(
+                            text("UPDATE user_vehicles SET image_url = :url WHERE lot_inv_num = :lot"),
+                            {"url": image_url, "lot": lot_id},
+                        )
+                    return lot_id
+                except Exception:
+                    continue
+
+            browser.close()
+            return None
+    except Exception as e:
+        print(f"⚠️ Error on {lot_id}: {e}")
+        return None
+
+# --------------------------------------------------
+# COPY AND PUSH ONLY *_Image_1.JPG (SKIP IF EXISTS)
+# --------------------------------------------------
+def push_images_to_git():
+    try:
+        local_dir = r"C:\car-flip-analyzer\backend\downloads"
+        repo_dir = r"C:\car-images"
+        repo_downloads = os.path.join(repo_dir, "downloads")
+        os.makedirs(repo_downloads, exist_ok=True)
+
+        copied = 0
+        lot_folders = [f for f in os.listdir(local_dir) if os.path.isdir(os.path.join(local_dir, f))]
+
+        for lot in lot_folders:
+            src_folder = os.path.join(local_dir, lot)
+            dest_folder = os.path.join(repo_downloads, lot)
+            os.makedirs(dest_folder, exist_ok=True)
+
+            src_img = os.path.join(src_folder, f"{lot}_Image_1.jpg")
+            dest_img = os.path.join(dest_folder, f"{lot}_Image_1.jpg")
+
+            # Skip if image already exists in destination
+            if os.path.exists(dest_img):
+                continue
+
+            if os.path.exists(src_img):
+                shutil.copy2(src_img, dest_img)
+                copied += 1
+
+        if copied == 0:
+            print("⚠️ No new *_Image_1.jpg files to copy or push.")
+            return
+
+        os.chdir(repo_dir)
+        subprocess.run(["git", "add", "--ignore-errors", "."], check=True)
+        subprocess.run([
+            "git", "commit",
+            "-m", f"Upload {copied} new _Image_1.jpg files - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        ], check=False)
+        subprocess.run(["git", "push", "origin", "main"], check=True)
+
+        print(f"✅ Uploaded {copied} new _Image_1.jpg files to car-images repo.")
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️ Git push failed: {e}")
+    except Exception as ex:
+        print(f"❌ Unexpected error pushing images: {ex}")
 
 # --------------------------------------------------
 # MAIN
@@ -164,12 +296,13 @@ def main(user_id: int, csv_path: str):
     load_csv_to_user(engine, user_id, csv_path)
 
     csv_df = pd.read_csv(csv_path)
-    if "Lot/Inv #" in csv_df.columns:
-        lot_nums = csv_df["Lot/Inv #"].astype(str).tolist()
-    elif "lot_inv_num" in csv_df.columns:
-        lot_nums = csv_df["lot_inv_num"].astype(str).tolist()
-    else:
-        lot_nums = []
+    lot_nums = (
+        csv_df["Lot/Inv #"].astype(str).tolist()
+        if "Lot/Inv #" in csv_df.columns
+        else csv_df["lot_inv_num"].astype(str).tolist()
+        if "lot_inv_num" in csv_df.columns
+        else []
+    )
 
     for lot in lot_nums:
         os.makedirs(os.path.join(DOWNLOAD_DIR, lot), exist_ok=True)
@@ -183,30 +316,39 @@ def main(user_id: int, csv_path: str):
     done = failed = 0
     start = time.time()
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(download_images, f"https://www.copart.com/lot/{lot}") for lot in folders]
-        for future in as_completed(futures):
-            try:
-                lot_id = future.result()
-                if lot_id:
-                    done += 1
-                    image_url = get_image_url(lot_id)
-                    if image_url:
-                        with engine.begin() as conn:
-                            conn.execute(
-                                text("UPDATE user_vehicles SET image_url = :image_url WHERE lot_inv_num = :lot"),
-                                {"image_url": image_url, "lot": str(lot_id)},
-                            )
-                        print(f"🖼️ Updated image_url for lot {lot_id}: {image_url}")
-                else:
+    batch_size = 10
+    for i in range(0, len(folders), batch_size):
+        batch = folders[i:i + batch_size]
+        print(f"⚙️ Processing batch {i // batch_size + 1}/{(len(folders) + batch_size - 1) // batch_size}")
+
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [executor.submit(download_images, f"https://www.copart.com/lot/{lot}") for lot in batch]
+            for future in as_completed(futures):
+                try:
+                    lot_id = future.result()
+                    if lot_id:
+                        done += 1
+                        image_url = get_image_url(lot_id)
+                        if image_url:
+                            with engine.begin() as conn:
+                                conn.execute(
+                                    text("UPDATE user_vehicles SET image_url = :image_url WHERE lot_inv_num = :lot"),
+                                    {"image_url": image_url, "lot": str(lot_id)},
+                                )
+                            print(f"🖼️ Updated image_url for lot {lot_id}: {image_url}")
+                    else:
+                        failed += 1
+                except Exception as e:
+                    print(f"⚠️ Thread exception: {e}")
                     failed += 1
-            except Exception as e:
-                print(f"⚠️ Thread exception: {e}")
-                failed += 1
+
+        print(f"⏳ Waiting {SLEEP_BETWEEN_LOTS} seconds before next batch...")
+        time.sleep(SLEEP_BETWEEN_LOTS)
 
     elapsed = time.time() - start
     print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
 
+    push_images_to_git()
 
 # --------------------------------------------------
 # ENTRY POINT

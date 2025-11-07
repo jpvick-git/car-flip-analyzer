@@ -350,6 +350,23 @@ def main(user_id: int, csv_path: str):
 
     push_images_to_git()
 
+    # --------------------------------------------------
+    # TRIGGER AI ESTIMATOR AFTER DOWNLOADS COMPLETE
+    # --------------------------------------------------
+    try:
+        print(f"\n🤖 Launching ai_repair_estimator.py for user {user_id}...")
+        subprocess.run(
+            [sys.executable, "ai_repair_estimator.py", str(user_id)],
+            cwd=BASE_DIR,
+            check=True,
+        )
+        print("🚀 AI repair/resale estimation completed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ AI estimator failed: {e}")
+    except Exception as e:
+        print(f"⚠️ Unexpected error launching ai_repair_estimator.py: {e}")
+
+
 # --------------------------------------------------
 # ENTRY POINT
 # --------------------------------------------------

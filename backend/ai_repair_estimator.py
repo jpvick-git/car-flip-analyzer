@@ -1,6 +1,8 @@
 import os
 import time
-import re, json
+import re
+import json
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import create_engine, text
 from openai import OpenAI
@@ -9,9 +11,15 @@ from openai import OpenAI
 # CONFIGURATION
 # --------------------------------------------------
 
-DOWNLOAD_DIR = os.path.join(os.getcwd(), "downloads")
-MAX_WORKERS = 5
-SLEEP_BETWEEN_LOTS = 1.5
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DOWNLOAD_DIR = (
+    os.path.join(BASE_DIR, "downloads")
+    if "backend" in BASE_DIR.lower()
+    else os.path.join(BASE_DIR, "backend", "downloads")
+)
+MAX_WORKERS = 3
+SLEEP_BETWEEN_LOTS = 2.0
+MAX_IMAGES = 8  # 🧠 Use all 8 Copart photos per vehicle
 
 # Database connection (RDS only)
 RDS_CONN = (
@@ -31,65 +39,98 @@ print("📁 Project ID: proj_yG0FqcGEaLjCW7kutLC5nG4S")
 
 def analyze_vehicle(vehicle):
     """
-    Analyze a single vehicle (dict or folder) and return AI repair & resale estimates.
+    Analyze a single vehicle with AI using images + textual data.
+    Returns repair/resale estimates and descriptive details.
     """
     year = vehicle.get("year")
     make = vehicle.get("make")
     model = vehicle.get("model")
     damage = vehicle.get("damage_description", "")
     lot_number = vehicle.get("lot_number")
+    image_paths = vehicle.get("images", [])
 
-    prompt = f"""
-You are an automotive expert. Based on the following vehicle info, estimate:
-1. The repair cost in USD.
-2. The expected resale value in USD after repairs.
-3. Provide a short descriptive analysis for each.
+    system_prompt = (
+        "You are an experienced automotive appraiser, body shop estimator, "
+        "and used-car market analyst. You evaluate salvage auction vehicles "
+        "using photos and damage notes to produce realistic repair and resale estimates."
+    )
 
-Vehicle:
-Year: {year}
-Make: {make}
-Model: {model}
-Damage: {damage}
+    user_prompt = f"""
+Evaluate this vehicle in depth using both the provided information and the attached photos.
+Treat this as a professional repair and resale analysis for a car flipper or dealer.
 
-Respond ONLY in JSON format:
+Vehicle Info:
+- Year: {year}
+- Make: {make}
+- Model: {model}
+- Reported Damage: {damage}
+
+From the photos, assess the following:
+1. Visible exterior and structural damage (front, rear, sides, roof, undercarriage).
+2. Which components likely require replacement (e.g., bumper, fender, hood, headlight).
+3. Which components could be repaired (e.g., paint, dents, trim).
+4. Estimate paint and body labor hours required.
+5. Check for signs of mechanical, flood, or frame damage.
+6. Identify missing parts, deployed airbags, and tire/wheel condition.
+7. Evaluate the interior condition (visible seats, dash, steering wheel).
+8. Estimate total repair cost (parts + labor + paint + misc).
+9. Estimate post-repair resale value considering mileage, trim, and current market.
+10. Give a short expert reasoning summary mentioning damage severity and market factors.
+
+Return ONLY valid JSON like this:
 {{
-  "repair_estimate": number,
-  "repair_details": "string",
-  "resale_estimate": number,
-  "resale_details": "string"
+  "repair_estimate": number,  # repair cost in USD
+  "repair_details": "string", # detailed list of visible damage and work
+  "resale_estimate": number,  # resale value in USD after repair
+  "resale_details": "string"  # reasoning behind valuation and condition grade
 }}
 """
 
+    # Combine text + all images
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
+    ]
+
+    for path in image_paths[:MAX_IMAGES]:
+        if os.path.exists(path):
+            messages[1]["content"].append(
+                {
+                    "type": "image_url",
+                    "image_url": f"file://{os.path.abspath(path)}"
+                }
+            )
+
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
+        model="gpt-4o",
+        messages=messages,
         temperature=0.4,
     )
 
     raw = response.choices[0].message.content.strip()
 
-    # 🧹 Remove code fences and language hints
+    # 🧹 Sanitize JSON
     if raw.startswith("```"):
         raw = raw.strip("`")
         raw = raw.replace("json", "", 1).strip()
     if raw.endswith("```"):
         raw = raw[:-3].strip()
-    # 🧹 Clean invalid commas and currency symbols before parsing
-    clean = re.sub(r'(?<=\d),(?=\d)', '', raw)   # remove commas inside numbers (e.g. 45,000 → 45000)
-    clean = clean.replace('$', '')               # remove dollar signs
-    clean = clean.strip()
+    clean = re.sub(r'(?<=\d),(?=\d)', '', raw)
+    clean = clean.replace('$', '').strip()
 
     try:
         parsed = json.loads(clean)
     except json.JSONDecodeError as e:
-        print(f"⚠️ Invalid JSON for {lot_number}: {e}\nRaw:\n{raw}")
+        print(f"⚠️ Invalid JSON for lot {lot_number}: {e}\nRaw:\n{raw}")
         parsed = {
             "repair_estimate": None,
-            "repair_details": raw,
+            "repair_details": raw[:800],
             "resale_estimate": None,
             "resale_details": "",
         }
+
     return parsed
+
 
 # --------------------------------------------------
 # LOT PROCESSING FUNCTION
@@ -115,12 +156,24 @@ def process_lot(lot, rds_engine):
         year, make, model, damage = row
         print(f"🚗 Lot {lot}: {year} {make} {model} ({damage})")
 
+        lot_dir = os.path.join(DOWNLOAD_DIR, str(lot))
+        images = [
+            os.path.join(lot_dir, img)
+            for img in sorted(os.listdir(lot_dir))
+            if img.lower().endswith((".jpg", ".jpeg", ".png"))
+        ][:MAX_IMAGES]
+
+        if not images:
+            print(f"⚠️ No images found for lot {lot}")
+            return False
+
         vehicle = {
             "lot_number": lot,
             "year": year,
             "make": make,
             "model": model,
             "damage_description": damage,
+            "images": images,
         }
 
         ai_result = analyze_vehicle(vehicle)
@@ -177,7 +230,7 @@ def main(user_id: int):
         print("No lot folders found.")
         return
 
-    print(f"📦 Found {total} lots to process.")
+    print(f"📦 Found {total} lots to process for user {user_id}.")
     done = failed = 0
     start_time = time.time()
 
@@ -186,13 +239,13 @@ def main(user_id: int):
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = []
         for lot in all_folders:
-            print(f"▶️ Queuing lot {lot} for processing...")
+            print(f"▶️ Queuing lot {lot} for AI analysis...")
             futures.append(executor.submit(process_lot, lot, rds_engine))
             time.sleep(SLEEP_BETWEEN_LOTS)
 
         for future in as_completed(futures):
             try:
-                if future.result(timeout=300):
+                if future.result(timeout=600):
                     done += 1
                 else:
                     failed += 1
@@ -202,13 +255,14 @@ def main(user_id: int):
 
     elapsed = time.time() - start_time
     print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
+    print(f"🎯 Completed AI analysis for user {user_id}.")
 
 
 # --------------------------------------------------
 # ENTRY POINT
 # --------------------------------------------------
+
 if __name__ == "__main__":
-    import sys
     if len(sys.argv) > 1:
         USER_ID = int(sys.argv[1])
     else:

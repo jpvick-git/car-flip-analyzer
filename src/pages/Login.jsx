@@ -95,9 +95,14 @@ export default function Login() {
             <input type="checkbox" className="mr-2 rounded border-gray-300" />
             Remember me
           </label>
-          <a href="#" className="text-blue-600 hover:text-blue-700">
-            Forgot password?
-          </a>
+          <button
+			  type="button"
+			  className="text-blue-600 hover:text-blue-700"
+			  onClick={() => alert("Password reset coming soon!")}
+			>
+			  Forgot password?
+			</button>
+
         </div>
 
         {/* Switch Mode */}

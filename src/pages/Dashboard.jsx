@@ -8,6 +8,8 @@ export default function Dashboard() {
   const [selectedCar, setSelectedCar] = useState(null);
   const [polling, setPolling] = useState(false);
   const [repairs, setRepairs] = useState({});
+  const [maxBidDetails, setMaxBidDetails] = useState(null);
+
 
   const token = localStorage.getItem("token");
   const apiBase =

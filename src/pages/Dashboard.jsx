@@ -122,25 +122,19 @@ export default function Dashboard() {
                 }}
               >
                 <img
-                  loading="lazy"
-                  src={
-                    car?.image_url
-                      ? car.image_url.startsWith("http")
-                        ? car.image_url
-                        : `https://api.carflipanalyzer.com/backend/${car.image_url.replace(
-                            /^\/+/,
-                            ""
-                          )}`
-                      : "https://placehold.co/600x400?text=No+Image"
-                  }
-                  alt={`${car.make ?? ""} ${car.model ?? ""}`}
-                  className="w-full h-48 object-cover rounded-lg mb-3 bg-gray-100"
-                  onError={(e) =>
-                    (e.target.src =
-                      "https://placehold.co/600x400?text=No+Image")
-                  }
-                />
-
+				  loading="lazy"
+				  src={
+					car?.image_url
+					  ? car.image_url
+					  : "https://placehold.co/600x400?text=No+Image"
+				  }
+				  alt={`${car.make ?? ""} ${car.model ?? ""}`}
+				  className="w-full h-48 object-cover rounded-lg mb-3 bg-gray-100"
+				  onError={(e) => {
+					e.target.onerror = null;
+					e.target.src = "https://placehold.co/600x400?text=No+Image";
+				  }}
+				/>
                 <div className="pb-3 border-b border-gray-200 mb-3">
                   <h2 className="text-lg font-semibold mb-1 text-gray-900">
                     {car?.year ? Math.round(car.year) : "Unknown Year"}{" "}

@@ -3,6 +3,7 @@ import time
 import re
 import json
 import sys
+import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import create_engine, text
 from openai import OpenAI
@@ -17,9 +18,10 @@ DOWNLOAD_DIR = (
     if "backend" in BASE_DIR.lower()
     else os.path.join(BASE_DIR, "backend", "downloads")
 )
+
 MAX_WORKERS = 3
 SLEEP_BETWEEN_LOTS = 2.0
-MAX_IMAGES = 8  # 🧠 Use all 8 Copart photos per vehicle
+MAX_IMAGES = 8  # up to 8 Copart photos per vehicle
 
 # Database connection (RDS only)
 RDS_CONN = (
@@ -39,7 +41,7 @@ print("📁 Project ID: proj_yG0FqcGEaLjCW7kutLC5nG4S")
 
 def analyze_vehicle(vehicle):
     """
-    Analyze a single vehicle with AI using images + textual data.
+    Analyze a single vehicle with AI using LOCAL image bytes (not hosted URLs).
     Returns repair/resale estimates and descriptive details.
     """
     year = vehicle.get("year")
@@ -79,28 +81,34 @@ From the photos, assess the following:
 
 Return ONLY valid JSON like this:
 {{
-  "repair_estimate": number,  # repair cost in USD
-  "repair_details": "string", # detailed list of visible damage and work
-  "resale_estimate": number,  # resale value in USD after repair
-  "resale_details": "string"  # reasoning behind valuation and condition grade
+  "repair_estimate": number,
+  "repair_details": "string",
+  "resale_estimate": number,
+  "resale_details": "string"
 }}
 """
 
-    # Combine text + all images
+    # Build messages for OpenAI
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
     ]
 
     print(f"🖼️ Attaching up to {len(image_paths[:MAX_IMAGES])} images for lot {lot_number}...")
-    for path in image_paths[:MAX_IMAGES]:
-        if os.path.exists(path):
+    for img_path in image_paths[:MAX_IMAGES]:
+        try:
+            with open(img_path, "rb") as f:
+                img_bytes = f.read()
+                img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+
             messages[1]["content"].append({
                 "type": "image_url",
-                "image_url": {"url": f"file://{os.path.abspath(path)}"}
+                "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}
             })
+        except Exception as e:
+            print(f"⚠️ Failed to attach {img_path}: {e}")
 
-    # Send request to OpenAI
+    # Send to OpenAI
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=messages,
@@ -109,12 +117,13 @@ Return ONLY valid JSON like this:
 
     raw = response.choices[0].message.content.strip()
 
-    # 🧹 Sanitize JSON
+    # Clean up JSON (in case it’s wrapped in markdown)
     if raw.startswith("```"):
         raw = raw.strip("`")
         raw = raw.replace("json", "", 1).strip()
     if raw.endswith("```"):
         raw = raw[:-3].strip()
+
     clean = re.sub(r'(?<=\d),(?=\d)', '', raw)
     clean = clean.replace('$', '').strip()
 
@@ -130,6 +139,7 @@ Return ONLY valid JSON like this:
         }
 
     return parsed
+
 
 # --------------------------------------------------
 # LOT PROCESSING FUNCTION
@@ -212,6 +222,7 @@ def process_lot(lot, rds_engine):
         print(f"⚠️ Error processing lot {lot}: {e}")
         return False
 
+
 # --------------------------------------------------
 # MAIN BATCH EXECUTION
 # --------------------------------------------------
@@ -258,6 +269,7 @@ def main(user_id: int):
     elapsed = time.time() - start_time
     print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
     print(f"🎯 Completed AI analysis for user {user_id}.")
+
 
 # --------------------------------------------------
 # ENTRY POINT

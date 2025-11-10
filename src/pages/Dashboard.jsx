@@ -165,9 +165,9 @@ export default function Dashboard() {
 
                   <div className="pb-3 border-b border-gray-200 mb-3">
                     <h2 className="text-lg font-semibold mb-1 text-gray-900">
-                      {car?.year ? Math.round(car.year) : "Unknown Year"}{" "}
-                      {car?.make ?? ""} {car?.model ?? ""}
-                    </h2>
+					  {car?.year ? Math.round(car.year) : "Unknown Year"}{" "}
+					  {car?.make || ""} {car?.model || ""}
+					</h2>
                     <p className="text-sm text-gray-500 mb-1">
                       Odometer: {car?.odometer || "N/A"}
                     </p>

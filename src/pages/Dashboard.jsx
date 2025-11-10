@@ -91,7 +91,7 @@ export default function Dashboard() {
   // --------------------------------------------------
   const calculateMaxBid = (car, localRepair) => {
     const resale = Number(car.resale_estimate) || 0;
-    const repairsValue = localRepair || Number(car.repair_estimate) || 0;
+    const repairsValue = Number(localRepair || car.repair_estimate || 0);
     const titleFee = Number(car.title_fee) || 0;
     const taxRate = (Number(car.avg_tax_rate) || 0) / 100;
     const feeRate = 0.075; // Copart + buyer fees
@@ -135,7 +135,9 @@ export default function Dashboard() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {vehicles.map((car, idx) => {
               const localRepair =
-                repairs[car.id] || Number(car.repair_estimate) || 0;
+                repairs[car.id] !== undefined
+                  ? repairs[car.id]
+                  : car.repair_estimate || "";
               const maxBid = calculateMaxBid(car, localRepair);
 
               return (
@@ -183,6 +185,7 @@ export default function Dashboard() {
                         ${Number(car?.resale_estimate || 0).toLocaleString()}
                       </p>
                     </div>
+
                     <div>
                       <p className="text-gray-500">Est. Repairs</p>
                       <input
@@ -193,9 +196,10 @@ export default function Dashboard() {
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => {
                           e.stopPropagation();
+                          const val = e.target.value;
                           setRepairs((prev) => ({
                             ...prev,
-                            [car.id]: Number(e.target.value),
+                            [car.id]: val === "" ? "" : val,
                           }));
                         }}
                       />
@@ -206,9 +210,10 @@ export default function Dashboard() {
                     <p className="text-gray-500">Recommended Max Bid</p>
                     <p className="font-semibold text-blue-600">
                       $
-                      {maxBid.toLocaleString(undefined, {
-                        maximumFractionDigits: 0,
-                      })}
+                      {calculateMaxBid(car, localRepair).toLocaleString(
+                        undefined,
+                        { maximumFractionDigits: 0 }
+                      )}
                     </p>
                   </div>
 

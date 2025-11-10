@@ -15,7 +15,7 @@ export default function Dashboard() {
       : "https://api.carflipanalyzer.com";
 
   // --------------------------------------------------
-  // FETCH VEHICLES (user-specific)
+  // FETCH VEHICLES
   // --------------------------------------------------
   const fetchVehicles = async () => {
     if (!token) return;
@@ -39,7 +39,7 @@ export default function Dashboard() {
   }, []);
 
   // --------------------------------------------------
-  // FILE UPLOAD (triggers Copart + AI)
+  // FILE UPLOAD
   // --------------------------------------------------
   const uploadUserFile = async () => {
     if (!uploadFile || !token) return alert("Login and select a file first.");
@@ -57,7 +57,7 @@ export default function Dashboard() {
   };
 
   // --------------------------------------------------
-  // POLLING UNTIL NEW VEHICLES + AI COMPLETE
+  // POLLING
   // --------------------------------------------------
   const startPolling = () => {
     if (polling) return;
@@ -86,7 +86,30 @@ export default function Dashboard() {
   };
 
   // --------------------------------------------------
-  // LOGOUT HANDLER
+  // CALCULATION HELPERS
+  // --------------------------------------------------
+  const calculateMaxBid = (car) => {
+    const resale = Number(car.resale_estimate) || 0;
+    const repairs = Number(car.repair_estimate) || 0;
+    const titleFee = Number(car.title_fee) || 0;
+    const taxRate = (Number(car.avg_tax_rate) || 0) / 100;
+    const feeRate = 0.075; // Copart + buyer fees
+    const margin = 0.3; // Desired 30% profit
+
+    if (resale <= 0) return 0;
+
+    // Total sale price after repair, title, fees, and taxes
+    const totalCosts = repairs + titleFee;
+    const grossTarget = resale * (1 - margin);
+
+    // Max bid before fees/tax
+    const maxBid = (grossTarget - totalCosts) / (1 + feeRate + taxRate);
+
+    return Math.max(0, maxBid);
+  };
+
+  // --------------------------------------------------
+  // LOGOUT
   // --------------------------------------------------
   const logout = () => {
     localStorage.removeItem("token");
@@ -94,7 +117,7 @@ export default function Dashboard() {
   };
 
   // --------------------------------------------------
-  // MAIN RENDER
+  // RENDER
   // --------------------------------------------------
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col">
@@ -112,70 +135,81 @@ export default function Dashboard() {
 
         {Array.isArray(vehicles) && vehicles.length > 0 ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {vehicles.map((car, idx) => (
-              <div
-                key={car.id || idx}
-                className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm hover:shadow-lg transition cursor-pointer"
-                onClick={() => {
-                  if (car?.lot_url)
-                    window.open(car.lot_url, "_blank", "noopener,noreferrer");
-                }}
-              >
-                <img
-				  loading="lazy"
-				  src={
-					car?.image_url
-					  ? car.image_url
-					  : "https://placehold.co/600x400?text=No+Image"
-				  }
-				  alt={`${car.make ?? ""} ${car.model ?? ""}`}
-				  className="w-full h-48 object-cover rounded-lg mb-3 bg-gray-100"
-				  onError={(e) => {
-					e.target.onerror = null;
-					e.target.src = "https://placehold.co/600x400?text=No+Image";
-				  }}
-				/>
-                <div className="pb-3 border-b border-gray-200 mb-3">
-                  <h2 className="text-lg font-semibold mb-1 text-gray-900">
-                    {car?.year ? Math.round(car.year) : "Unknown Year"}{" "}
-                    {car?.make ?? ""} {car?.model ?? ""}
-                  </h2>
-                  <p className="text-sm text-gray-500 mb-1">
-                    Odometer: {car?.odometer || "N/A"}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Damage: {car?.damage_description || "Unknown"}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 text-sm">
-                  <div>
-                    <p className="text-gray-500">AI Resale Value</p>
-                    <p className="font-semibold text-green-600">
-                      ${Number(car?.resale_estimate || 0).toLocaleString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Est. Repairs</p>
-                    <p className="font-semibold text-red-500">
-                      ${Number(car?.repair_estimate || 0).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedCar(car);
+            {vehicles.map((car, idx) => {
+              const maxBid = calculateMaxBid(car);
+              return (
+                <div
+                  key={car.id || idx}
+                  className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm hover:shadow-lg transition cursor-pointer"
+                  onClick={() => {
+                    if (car?.lot_url)
+                      window.open(car.lot_url, "_blank", "noopener,noreferrer");
+                  }}
+                >
+                  <img
+                    loading="lazy"
+                    src={
+                      car?.image_url
+                        ? car.image_url
+                        : "https://placehold.co/600x400?text=No+Image"
+                    }
+                    alt={`${car.make ?? ""} ${car.model ?? ""}`}
+                    className="w-full h-48 object-cover rounded-lg mb-3 bg-gray-100"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = "https://placehold.co/600x400?text=No+Image";
                     }}
-                    className="text-blue-600 text-sm hover:underline"
-                  >
-                    View Details
-                  </button>
+                  />
+
+                  <div className="pb-3 border-b border-gray-200 mb-3">
+                    <h2 className="text-lg font-semibold mb-1 text-gray-900">
+                      {car?.year ? Math.round(car.year) : "Unknown Year"}{" "}
+                      {car?.make ?? ""} {car?.model ?? ""}
+                    </h2>
+                    <p className="text-sm text-gray-500 mb-1">
+                      Odometer: {car?.odometer || "N/A"}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Damage: {car?.damage_description || "Unknown"}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 text-sm">
+                    <div>
+                      <p className="text-gray-500">AI Resale Value</p>
+                      <p className="font-semibold text-green-600">
+                        ${Number(car?.resale_estimate || 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Est. Repairs</p>
+                      <p className="font-semibold text-red-500">
+                        ${Number(car?.repair_estimate || 0).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 text-sm">
+                    <p className="text-gray-500">Recommended Max Bid</p>
+                    <p className="font-semibold text-blue-600">
+                      ${maxBid.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
+
+                  <div className="mt-4">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedCar(car);
+                      }}
+                      className="text-blue-600 text-sm hover:underline"
+                    >
+                      View Details
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="text-center text-gray-500 mt-20">
@@ -184,6 +218,7 @@ export default function Dashboard() {
         )}
       </main>
 
+      {/* MODAL */}
       {selectedCar && (
         <div
           className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"

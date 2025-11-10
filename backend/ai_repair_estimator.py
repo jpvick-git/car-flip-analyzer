@@ -92,15 +92,15 @@ Return ONLY valid JSON like this:
         {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
     ]
 
+    print(f"🖼️ Attaching up to {len(image_paths[:MAX_IMAGES])} images for lot {lot_number}...")
     for path in image_paths[:MAX_IMAGES]:
         if os.path.exists(path):
-            messages[1]["content"].append(
-                {
-                    "type": "image_url",
-                    "image_url": f"file://{os.path.abspath(path)}"
-                }
-            )
+            messages[1]["content"].append({
+                "type": "image_url",
+                "image_url": {"url": f"file://{os.path.abspath(path)}"}
+            })
 
+    # Send request to OpenAI
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=messages,
@@ -131,7 +131,6 @@ Return ONLY valid JSON like this:
 
     return parsed
 
-
 # --------------------------------------------------
 # LOT PROCESSING FUNCTION
 # --------------------------------------------------
@@ -142,7 +141,7 @@ def process_lot(lot, rds_engine):
         with rds_engine.connect() as conn:
             row = conn.execute(
                 text("""
-                    SELECT TOP 1 year, make, model, damage_description
+                    SELECT TOP 1 year, make, model, damage_description, repair_estimate
                     FROM user_vehicles
                     WHERE lot_inv_num = :lot
                 """),
@@ -153,7 +152,11 @@ def process_lot(lot, rds_engine):
             print(f"⚠️ No user_vehicles record found for lot {lot}")
             return False
 
-        year, make, model, damage = row
+        year, make, model, damage, existing_repair = row
+        if existing_repair:
+            print(f"⏩ Skipping lot {lot} (already analyzed)")
+            return True
+
         print(f"🚗 Lot {lot}: {year} {make} {model} ({damage})")
 
         lot_dir = os.path.join(DOWNLOAD_DIR, str(lot))
@@ -209,7 +212,6 @@ def process_lot(lot, rds_engine):
         print(f"⚠️ Error processing lot {lot}: {e}")
         return False
 
-
 # --------------------------------------------------
 # MAIN BATCH EXECUTION
 # --------------------------------------------------
@@ -256,7 +258,6 @@ def main(user_id: int):
     elapsed = time.time() - start_time
     print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
     print(f"🎯 Completed AI analysis for user {user_id}.")
-
 
 # --------------------------------------------------
 # ENTRY POINT

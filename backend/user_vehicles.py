@@ -75,48 +75,50 @@ def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
 def get_user_vehicles(user=Depends(get_current_user)):
     """
     Return all vehicles belonging to the authenticated user,
-    including tax/title fee info and first available image.
+    including their first available image.
     """
-    from .backend_api import get_first_image  # 🔗 dynamically resolve image
+    from .backend_api import get_first_image
+    engine = get_engine()
     user_id = user["id"]
 
     with engine.connect() as conn:
-        rows = conn.execute(
-            text("""
-                SELECT 
-                    v.id,
-                    v.lot_inv_num AS lot_number,
-                    v.lot_url,
-                    v.year,
-                    v.make,
-                    v.model,
-                    v.damage_description,
-                    v.repair_estimate,
-                    v.resale_estimate,
-                    v.repair_details,
-                    v.resale_details,
-                    v.created_at,
-                    v.image_url,
-                    ISNULL(t.avg_tax_rate, 0) AS avg_tax_rate,
-                    ISNULL(t.title_fee, 0) AS title_fee
-                FROM user_vehicles v
-                JOIN users u ON v.user_id = u.id
-                LEFT JOIN tax_title_fees t ON u.state = t.state
-                WHERE v.user_id = :uid
-                ORDER BY v.created_at DESC
-            """),
-            {"uid": user_id},
-        ).fetchall()
+        rows = conn.execute(text("""
+            SELECT id,
+                   lot_inv_num AS lot_number,
+                   lot_url,
+                   year,
+                   make,
+                   model,
+                   damage_description,
+                   repair_estimate,
+                   resale_estimate,
+                   repair_details,
+                   resale_details,
+                   created_at,
+                   image_url
+            FROM user_vehicles
+            WHERE user_id = :uid
+            ORDER BY created_at DESC
+        """), {"uid": user_id}).fetchall()
 
     vehicles = []
     for r in rows:
         v = dict(r._mapping)
-        # Ensure image path is resolved dynamically
-        v["image_url"] = v["image_url"] or get_first_image(v["lot_number"])
+        lot_id = v.get("lot_inv_num")
+
+        # 🔍 Try to resolve image dynamically
+        if not v.get("image_url") or v["image_url"] in ("", None):
+            img = get_first_image(lot_id)
+            if img and "downloads" in img:
+                # ✅ Found a local file served via FastAPI
+                v["image_url"] = img
+            else:
+                # 🧩 Always fall back to GitHub hosted images
+                v["image_url"] = f"https://raw.githubusercontent.com/jpvick-git/car-images/main/downloads/{lot_id}/{lot_id}_Image_1.jpg"
+
         vehicles.append(v)
 
     return {"vehicles": vehicles}
-
 
 # --------------------------------------------------
 # 3️⃣ Analyze a specific vehicle (trigger AI estimator)

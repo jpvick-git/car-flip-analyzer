@@ -7,6 +7,7 @@ export default function Dashboard() {
   const [status, setStatus] = useState("");
   const [selectedCar, setSelectedCar] = useState(null);
   const [polling, setPolling] = useState(false);
+  const [repairs, setRepairs] = useState({});
 
   const token = localStorage.getItem("token");
   const apiBase =
@@ -90,7 +91,7 @@ export default function Dashboard() {
   // --------------------------------------------------
   const calculateMaxBid = (car, localRepair) => {
     const resale = Number(car.resale_estimate) || 0;
-    const repairs = localRepair ?? Number(car.repair_estimate) || 0;
+    const repairsValue = localRepair || Number(car.repair_estimate) || 0;
     const titleFee = Number(car.title_fee) || 0;
     const taxRate = (Number(car.avg_tax_rate) || 0) / 100;
     const feeRate = 0.075; // Copart + buyer fees
@@ -98,7 +99,7 @@ export default function Dashboard() {
 
     if (resale <= 0) return 0;
 
-    const totalCosts = repairs + titleFee;
+    const totalCosts = repairsValue + titleFee;
     const grossTarget = resale * (1 - margin);
     const maxBid = (grossTarget - totalCosts) / (1 + feeRate + taxRate);
 
@@ -133,9 +134,8 @@ export default function Dashboard() {
         {Array.isArray(vehicles) && vehicles.length > 0 ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {vehicles.map((car, idx) => {
-              const [localRepair, setLocalRepair] = useState(
-                Number(car.repair_estimate) || 0
-              );
+              const localRepair =
+                repairs[car.id] || Number(car.repair_estimate) || 0;
               const maxBid = calculateMaxBid(car, localRepair);
 
               return (
@@ -165,9 +165,9 @@ export default function Dashboard() {
 
                   <div className="pb-3 border-b border-gray-200 mb-3">
                     <h2 className="text-lg font-semibold mb-1 text-gray-900">
-					  {car?.year ? Math.round(car.year) : "Unknown Year"}{" "}
-					  {car?.make || ""} {car?.model || ""}
-					</h2>
+                      {car?.year ? Math.round(car.year) : "Unknown Year"}{" "}
+                      {car?.make || ""} {car?.model || ""}
+                    </h2>
                     <p className="text-sm text-gray-500 mb-1">
                       Odometer: {car?.odometer || "N/A"}
                     </p>
@@ -191,9 +191,13 @@ export default function Dashboard() {
                         className="font-semibold text-red-500 w-full border border-gray-200 rounded-md px-1 py-0.5 text-right focus:ring-1 focus:ring-blue-500"
                         value={localRepair}
                         onClick={(e) => e.stopPropagation()}
-                        onChange={(e) =>
-                          setLocalRepair(Number(e.target.value))
-                        }
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setRepairs((prev) => ({
+                            ...prev,
+                            [car.id]: Number(e.target.value),
+                          }));
+                        }}
                       />
                     </div>
                   </div>
@@ -201,7 +205,10 @@ export default function Dashboard() {
                   <div className="mt-3 text-sm">
                     <p className="text-gray-500">Recommended Max Bid</p>
                     <p className="font-semibold text-blue-600">
-                      ${maxBid.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      $
+                      {maxBid.toLocaleString(undefined, {
+                        maximumFractionDigits: 0,
+                      })}
                     </p>
                   </div>
 

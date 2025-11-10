@@ -85,7 +85,7 @@ def get_user_vehicles(user=Depends(get_current_user)):
         rows = conn.execute(text("""
             SELECT
                 id,
-                lot_inv_num AS lot_number,
+                lot_number,
                 lot_url,
                 year,
                 make,

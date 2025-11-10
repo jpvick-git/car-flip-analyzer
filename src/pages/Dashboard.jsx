@@ -304,6 +304,70 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+	  {/* Max Bid Breakdown Modal */}
+		{maxBidDetails && (
+		  <div
+			className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+			onClick={() => setMaxBidDetails(null)}
+		  >
+			<div
+			  className="bg-white rounded-2xl p-6 w-96 shadow-xl border border-gray-200"
+			  onClick={(e) => e.stopPropagation()}
+			>
+			  <h3 className="text-lg font-semibold mb-3 text-gray-900">
+				Max Bid Breakdown — {maxBidDetails.car.year}{" "}
+				{maxBidDetails.car.make} {maxBidDetails.car.model}
+			  </h3>
+
+			  <ul className="text-sm text-gray-700 space-y-2">
+				<li>
+				  <strong>AI Resale Value:</strong> $
+				  {maxBidDetails.resale.toLocaleString()}
+				</li>
+				<li>
+				  <strong>Est. Repairs:</strong> $
+				  {maxBidDetails.repairsValue.toLocaleString()}
+				</li>
+				<li>
+				  <strong>Title Fee:</strong> $
+				  {maxBidDetails.titleFee.toLocaleString()}
+				</li>
+				<li>
+				  <strong>Tax:</strong> $
+				  {maxBidDetails.totalTax.toLocaleString(undefined, {
+					minimumFractionDigits: 2,
+					maximumFractionDigits: 2,
+				  })}
+				</li>
+				<li>
+				  <strong>Buyer Fee (7.25%):</strong> $
+				  {maxBidDetails.totalBuyerFee.toLocaleString(undefined, {
+					minimumFractionDigits: 2,
+					maximumFractionDigits: 2,
+				  })}
+				</li>
+				<li>
+				  <strong>Target Profit Margin:</strong> {(maxBidDetails.margin * 100).toFixed(0)}%
+				</li>
+				<hr />
+				<li>
+				  <strong className="text-blue-600">Recommended Max Bid:</strong> $
+				  {maxBidDetails.maxBid.toLocaleString(undefined, {
+					maximumFractionDigits: 0,
+				  })}
+				</li>
+			  </ul>
+
+			  <button
+				onClick={() => setMaxBidDetails(null)}
+				className="mt-4 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-md text-white w-full"
+			  >
+				Close
+			  </button>
+			</div>
+		  </div>
+		)}
+
     </div>
   );
 }

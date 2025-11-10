@@ -84,23 +84,28 @@ def get_user_vehicles(user=Depends(get_current_user)):
     with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT
-                id,
-                lot_number,
-                lot_url,
-                year,
-                make,
-                model,
-                odometer,
-                damage_description,
-                repair_estimate,
-                resale_estimate,
-                repair_details,
-                resale_details,
-                created_at,
-                image_url
-            FROM user_vehicles
-            WHERE user_id = :uid
-            ORDER BY created_at DESC
+                uv.id,
+                uv.lot_number,
+                uv.lot_url,
+                uv.year,
+                uv.make,
+                uv.model,
+                uv.odometer,
+                uv.damage_description,
+                uv.repair_estimate,
+                uv.resale_estimate,
+                uv.repair_details,
+                uv.resale_details,
+                uv.created_at,
+                uv.image_url,
+                u.state_code,
+                ttf.title_fee,
+                ttf.avg_tax_rate
+            FROM user_vehicles uv
+            INNER JOIN users u ON uv.user_id = u.id
+            LEFT JOIN tax_title_fees ttf ON ttf.state_code = u.state_code
+            WHERE uv.user_id = :uid
+            ORDER BY uv.created_at DESC
         """), {"uid": user_id}).fetchall()
 
     vehicles = []

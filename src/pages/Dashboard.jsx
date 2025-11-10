@@ -206,16 +206,51 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="mt-3 text-sm">
-                    <p className="text-gray-500">Recommended Max Bid</p>
-                    <p className="font-semibold text-blue-600">
-                      $
-                      {calculateMaxBid(car, localRepair).toLocaleString(
-                        undefined,
-                        { maximumFractionDigits: 0 }
-                      )}
-                    </p>
-                  </div>
+				<div className="mt-3 text-sm">
+				  <div className="flex items-center justify-between">
+					<p className="text-gray-500">Recommended Max Bid</p>
+					<button
+					  onClick={(e) => {
+						e.stopPropagation();
+						const resale = Number(car.resale_estimate) || 0;
+						const repairsValue = Number(localRepair || car.repair_estimate || 0);
+						const titleFee = Number(car.title_fee) || 0;
+						const taxRate = (Number(car.avg_tax_rate) || 0) / 100;
+						const buyerFeeRate = 0.0725;
+						const margin = 0.3;
+
+						const totalTax = resale * taxRate;
+						const totalBuyerFee = resale * buyerFeeRate;
+						const grossTarget = resale * (1 - margin);
+						const totalCosts = repairsValue + titleFee + totalTax + totalBuyerFee;
+						const maxBid = Math.max(0, grossTarget - totalCosts);
+
+						setMaxBidDetails({
+						  car,
+						  resale,
+						  repairsValue,
+						  titleFee,
+						  totalTax,
+						  totalBuyerFee,
+						  grossTarget,
+						  margin,
+						  maxBid,
+						});
+					  }}
+					  className="text-blue-600 text-xs hover:underline"
+					>
+					  View Breakdown
+					</button>
+				  </div>
+
+				  <p className="font-semibold text-blue-600">
+					$
+					{calculateMaxBid(car, localRepair).toLocaleString(undefined, {
+					  maximumFractionDigits: 0,
+					})}
+				  </p>
+				</div>
+
 
                   <div className="mt-4">
                     <button

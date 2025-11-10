@@ -74,8 +74,8 @@ def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
 @router.get("/get_vehicles")
 def get_user_vehicles(user=Depends(get_current_user)):
     """
-    Return all vehicles belonging to the authenticated user,
-    including their first available image.
+    Returns all vehicles for the authenticated user.
+    Ensures each vehicle includes a valid image_url.
     """
     from .backend_api import get_first_image
     engine = get_engine()
@@ -83,19 +83,20 @@ def get_user_vehicles(user=Depends(get_current_user)):
 
     with engine.connect() as conn:
         rows = conn.execute(text("""
-            SELECT id,
-                   lot_inv_num AS lot_number,
-                   lot_url,
-                   year,
-                   make,
-                   model,
-                   damage_description,
-                   repair_estimate,
-                   resale_estimate,
-                   repair_details,
-                   resale_details,
-                   created_at,
-                   image_url
+            SELECT
+                id,
+                lot_inv_num AS lot_number,
+                lot_url,
+                year,
+                make,
+                model,
+                damage_description,
+                repair_estimate,
+                resale_estimate,
+                repair_details,
+                resale_details,
+                created_at,
+                image_url
             FROM user_vehicles
             WHERE user_id = :uid
             ORDER BY created_at DESC
@@ -104,21 +105,29 @@ def get_user_vehicles(user=Depends(get_current_user)):
     vehicles = []
     for r in rows:
         v = dict(r._mapping)
-        lot_id = v.get("lot_inv_num")
 
-        # 🔍 Try to resolve image dynamically
-        if not v.get("image_url") or v["image_url"] in ("", None):
-            img = get_first_image(lot_id)
-            if img and "downloads" in img:
-                # ✅ Found a local file served via FastAPI
-                v["image_url"] = img
+        # ✅ Correct key to use (matches SQL alias)
+        lot_id = str(v.get("lot_number") or "").strip()
+
+        # ✅ If DB has image_url already, use it
+        img = v.get("image_url")
+
+        # ✅ If image_url is missing, build fallback path
+        if not img or img.lower() in ("", "none", "null"):
+            local_img = get_first_image(lot_id)
+            if local_img:
+                v["image_url"] = local_img
             else:
-                # 🧩 Always fall back to GitHub hosted images
-                v["image_url"] = f"https://raw.githubusercontent.com/jpvick-git/car-images/main/downloads/{lot_id}/{lot_id}_Image_1.jpg"
+                v["image_url"] = (
+                    f"https://api.carflipanalyzer.com/backend/downloads/"
+                    f"{lot_id}/{lot_id}_Image_1.jpg"
+                )
+
 
         vehicles.append(v)
 
     return {"vehicles": vehicles}
+
 
 # --------------------------------------------------
 # 3️⃣ Analyze a specific vehicle (trigger AI estimator)

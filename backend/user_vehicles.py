@@ -84,7 +84,8 @@ def get_user_vehicles(user=Depends(get_current_user)):
                    resale_estimate,
                    repair_details,
                    resale_details,
-                   created_at
+                   created_at,
+                   image_url  
             FROM user_vehicles
             WHERE user_id = :uid
             ORDER BY created_at DESC

@@ -154,7 +154,7 @@ export default function Dashboard() {
                         ? car.image_url
                         : "https://placehold.co/600x400?text=No+Image"
                     }
-                    alt={`${car.make ?? ""} ${car.model ?? ""}`}
+                    alt={`${car.make || ""} ${car.model || ""}`}
                     className="w-full h-48 object-cover rounded-lg mb-3 bg-gray-100"
                     onError={(e) => {
                       e.target.onerror = null;

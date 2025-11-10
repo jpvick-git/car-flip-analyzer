@@ -15,7 +15,7 @@ export default function Dashboard() {
       : "https://api.carflipanalyzer.com";
 
   // --------------------------------------------------
-  // FETCH VEHICLES
+  // FETCH VEHICLES (user-specific)
   // --------------------------------------------------
   const fetchVehicles = async () => {
     if (!token) return;
@@ -39,7 +39,7 @@ export default function Dashboard() {
   }, []);
 
   // --------------------------------------------------
-  // FILE UPLOAD
+  // FILE UPLOAD HANDLER
   // --------------------------------------------------
   const uploadUserFile = async () => {
     if (!uploadFile || !token) return alert("Login and select a file first.");
@@ -57,7 +57,7 @@ export default function Dashboard() {
   };
 
   // --------------------------------------------------
-  // POLLING
+  // POLLING UNTIL NEW VEHICLES + AI COMPLETE
   // --------------------------------------------------
   const startPolling = () => {
     if (polling) return;
@@ -86,30 +86,27 @@ export default function Dashboard() {
   };
 
   // --------------------------------------------------
-  // CALCULATION HELPERS
+  // CALCULATION: Recommended Max Bid
   // --------------------------------------------------
-  const calculateMaxBid = (car) => {
+  const calculateMaxBid = (car, localRepair) => {
     const resale = Number(car.resale_estimate) || 0;
-    const repairs = Number(car.repair_estimate) || 0;
+    const repairs = localRepair ?? Number(car.repair_estimate) || 0;
     const titleFee = Number(car.title_fee) || 0;
     const taxRate = (Number(car.avg_tax_rate) || 0) / 100;
     const feeRate = 0.075; // Copart + buyer fees
-    const margin = 0.3; // Desired 30% profit
+    const margin = 0.3; // 30% profit goal
 
     if (resale <= 0) return 0;
 
-    // Total sale price after repair, title, fees, and taxes
     const totalCosts = repairs + titleFee;
     const grossTarget = resale * (1 - margin);
-
-    // Max bid before fees/tax
     const maxBid = (grossTarget - totalCosts) / (1 + feeRate + taxRate);
 
     return Math.max(0, maxBid);
   };
 
   // --------------------------------------------------
-  // LOGOUT
+  // LOGOUT HANDLER
   // --------------------------------------------------
   const logout = () => {
     localStorage.removeItem("token");
@@ -117,7 +114,7 @@ export default function Dashboard() {
   };
 
   // --------------------------------------------------
-  // RENDER
+  // MAIN RENDER
   // --------------------------------------------------
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col">
@@ -136,7 +133,11 @@ export default function Dashboard() {
         {Array.isArray(vehicles) && vehicles.length > 0 ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {vehicles.map((car, idx) => {
-              const maxBid = calculateMaxBid(car);
+              const [localRepair, setLocalRepair] = useState(
+                Number(car.repair_estimate) || 0
+              );
+              const maxBid = calculateMaxBid(car, localRepair);
+
               return (
                 <div
                   key={car.id || idx}
@@ -157,7 +158,8 @@ export default function Dashboard() {
                     className="w-full h-48 object-cover rounded-lg mb-3 bg-gray-100"
                     onError={(e) => {
                       e.target.onerror = null;
-                      e.target.src = "https://placehold.co/600x400?text=No+Image";
+                      e.target.src =
+                        "https://placehold.co/600x400?text=No+Image";
                     }}
                   />
 
@@ -183,9 +185,16 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <p className="text-gray-500">Est. Repairs</p>
-                      <p className="font-semibold text-red-500">
-                        ${Number(car?.repair_estimate || 0).toLocaleString()}
-                      </p>
+                      <input
+                        type="number"
+                        min="0"
+                        className="font-semibold text-red-500 w-full border border-gray-200 rounded-md px-1 py-0.5 text-right focus:ring-1 focus:ring-blue-500"
+                        value={localRepair}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) =>
+                          setLocalRepair(Number(e.target.value))
+                        }
+                      />
                     </div>
                   </div>
 
@@ -218,7 +227,7 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* MODAL */}
+      {/* Vehicle Details Modal */}
       {selectedCar && (
         <div
           className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"

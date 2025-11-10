@@ -1,282 +1,224 @@
-import os
-import time
-import re
-import json
-import sys
-import base64
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from sqlalchemy import create_engine, text
-from openai import OpenAI
+import React, { useState, useEffect } from "react";
+import Header from "../components/Header";
 
-# --------------------------------------------------
-# CONFIGURATION
-# --------------------------------------------------
+export default function Dashboard() {
+  const [vehicles, setVehicles] = useState([]);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [status, setStatus] = useState("");
+  const [selectedCar, setSelectedCar] = useState(null);
+  const [polling, setPolling] = useState(false);
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DOWNLOAD_DIR = (
-    os.path.join(BASE_DIR, "downloads")
-    if "backend" in BASE_DIR.lower()
-    else os.path.join(BASE_DIR, "backend", "downloads")
-)
-MAX_WORKERS = 3
-SLEEP_BETWEEN_LOTS = 2.0
-MAX_IMAGES = 8  # 🧠 Use all 8 Copart photos per vehicle
+  const token = localStorage.getItem("token");
+  const apiBase =
+    process.env.NODE_ENV === "development"
+      ? "http://localhost:8000"
+      : "https://api.carflipanalyzer.com";
 
-# Database connection (RDS only)
-RDS_CONN = (
-    "mssql+pyodbc://jpvick-git:Nk^+Cq4MfUNt%8q@carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com,1433/cars"
-    "?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
-)
-rds_engine = create_engine(RDS_CONN, pool_pre_ping=True)
+  // --------------------------------------------------
+  // FETCH VEHICLES (user-specific)
+  // --------------------------------------------------
+  const fetchVehicles = async () => {
+    if (!token) return;
+    setStatus("Loading your vehicles...");
+    const res = await fetch(`${apiBase}/get_vehicles`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setVehicles(data.vehicles || []);
+      setStatus(`Loaded ${data.vehicles?.length || 0} vehicles`);
+    } else {
+      setVehicles([]);
+      setStatus("Failed to load vehicles");
+    }
+  };
 
-# OpenAI client
-client = OpenAI()
-print(f"🔑 Using OpenAI key prefix: {client.api_key[:10]}...")
-print("📁 Project ID: proj_yG0FqcGEaLjCW7kutLC5nG4S")
+  useEffect(() => {
+    fetchVehicles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-# --------------------------------------------------
-# CORE ANALYSIS FUNCTION
-# --------------------------------------------------
+  // --------------------------------------------------
+  // FILE UPLOAD (triggers Copart + AI)
+  // --------------------------------------------------
+  const uploadUserFile = async () => {
+    if (!uploadFile || !token) return alert("Login and select a file first.");
+    const formData = new FormData();
+    formData.append("file", uploadFile);
+    setStatus("Uploading and processing file...");
+    const res = await fetch(`${apiBase}/upload_file`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    const data = await res.json();
+    setStatus(data.message || "File uploaded.");
+    startPolling();
+  };
 
-def analyze_vehicle(vehicle):
-    """
-    Analyze a single vehicle with AI using local images + textual data.
-    Returns repair/resale estimates and descriptive details.
-    """
-    year = vehicle.get("year")
-    make = vehicle.get("make")
-    model = vehicle.get("model")
-    damage = vehicle.get("damage_description", "")
-    lot_number = vehicle.get("lot_number")
-    image_paths = vehicle.get("images", [])
-
-    system_prompt = (
-        "You are an experienced automotive appraiser, body shop estimator, "
-        "and used-car market analyst. You evaluate salvage auction vehicles "
-        "using photos and damage notes to produce realistic repair and resale estimates."
-    )
-
-    user_prompt = f"""
-Evaluate this vehicle in depth using both the provided information and the attached photos.
-Treat this as a professional repair and resale analysis for a car flipper or dealer.
-
-Vehicle Info:
-- Year: {year}
-- Make: {make}
-- Model: {model}
-- Reported Damage: {damage}
-
-From the photos, assess the following:
-1. Visible exterior and structural damage (front, rear, sides, roof, undercarriage).
-2. Which components likely require replacement (e.g., bumper, fender, hood, headlight).
-3. Which components could be repaired (e.g., paint, dents, trim).
-4. Estimate paint and body labor hours required.
-5. Check for signs of mechanical, flood, or frame damage.
-6. Identify missing parts, deployed airbags, and tire/wheel condition.
-7. Evaluate the interior condition (visible seats, dash, steering wheel).
-8. Estimate total repair cost (parts + labor + paint + misc).
-9. Estimate post-repair resale value considering mileage, trim, and current market.
-10. Give a short expert reasoning summary mentioning damage severity and market factors.
-
-Return ONLY valid JSON like this:
-{{
-  "repair_estimate": number,
-  "repair_details": "string",
-  "resale_estimate": number,
-  "resale_details": "string"
-}}
-"""
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
-    ]
-
-    print(f"🖼️ Attaching up to {len(image_paths[:MAX_IMAGES])} local images for lot {lot_number}...")
-    for path in image_paths[:MAX_IMAGES]:
-        if os.path.exists(path):
-            try:
-                with open(path, "rb") as f:
-                    img_bytes = f.read()
-                img_b64 = base64.b64encode(img_bytes).decode("utf-8")
-                messages[1]["content"].append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}
-                })
-            except Exception as e:
-                print(f"⚠️ Failed to load image {path}: {e}")
-
-    # Send request to OpenAI
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=messages,
-        temperature=0.4,
-    )
-
-    raw = response.choices[0].message.content.strip()
-
-    # 🧹 Sanitize JSON
-    if raw.startswith("```"):
-        raw = raw.strip("`")
-        raw = raw.replace("json", "", 1).strip()
-    if raw.endswith("```"):
-        raw = raw[:-3].strip()
-    clean = re.sub(r'(?<=\d),(?=\d)', '', raw)
-    clean = clean.replace('$', '').strip()
-
-    try:
-        parsed = json.loads(clean)
-    except json.JSONDecodeError as e:
-        print(f"⚠️ Invalid JSON for lot {lot_number}: {e}\nRaw:\n{raw}")
-        parsed = {
-            "repair_estimate": None,
-            "repair_details": raw[:800],
-            "resale_estimate": None,
-            "resale_details": "",
+  // --------------------------------------------------
+  // POLLING UNTIL NEW VEHICLES + AI COMPLETE
+  // --------------------------------------------------
+  const startPolling = () => {
+    if (polling) return;
+    setPolling(true);
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      const res = await fetch(`${apiBase}/get_vehicles`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setVehicles(data.vehicles || []);
+        const ready = data.vehicles?.every(
+          (v) => v.repair_estimate && v.resale_estimate
+        );
+        if (ready || attempts > 20) {
+          clearInterval(interval);
+          setPolling(false);
+          setStatus("✅ All vehicles processed.");
+        } else {
+          setStatus(`Processing... (${attempts})`);
         }
+      }
+    }, 8000);
+  };
 
-    return parsed
+  // --------------------------------------------------
+  // LOGOUT HANDLER
+  // --------------------------------------------------
+  const logout = () => {
+    localStorage.removeItem("token");
+    window.location.href = "/login";
+  };
 
+  // --------------------------------------------------
+  // MAIN RENDER
+  // --------------------------------------------------
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col">
+      <Header
+        uploadFile={uploadFile}
+        setUploadFile={setUploadFile}
+        uploadUserFile={uploadUserFile}
+        logout={logout}
+      />
 
-# --------------------------------------------------
-# LOT PROCESSING FUNCTION
-# --------------------------------------------------
+      <main className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
+        {status && (
+          <p className="text-center text-gray-600 mb-4 text-sm">{status}</p>
+        )}
 
-def process_lot(lot, rds_engine):
-    """Handles one vehicle lot end-to-end (read → analyze → update DB)."""
-    try:
-        with rds_engine.connect() as conn:
-            row = conn.execute(
-                text("""
-                    SELECT TOP 1 year, make, model, damage_description, repair_estimate
-                    FROM user_vehicles
-                    WHERE lot_inv_num = :lot
-                """),
-                {"lot": lot},
-            ).fetchone()
+        {Array.isArray(vehicles) && vehicles.length > 0 ? (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {vehicles.map((car, idx) => (
+              <div
+                key={car.id || idx}
+                className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm hover:shadow-lg transition cursor-pointer"
+                onClick={() => {
+                  if (car?.lot_url)
+                    window.open(car.lot_url, "_blank", "noopener,noreferrer");
+                }}
+              >
+                <img
+                  loading="lazy"
+                  src={
+                    car?.image_url
+                      ? car.image_url.startsWith("http")
+                        ? car.image_url
+                        : `https://api.carflipanalyzer.com/backend/${car.image_url.replace(
+                            /^\/+/,
+                            ""
+                          )}`
+                      : "https://placehold.co/600x400?text=No+Image"
+                  }
+                  alt={`${car.make ?? ""} ${car.model ?? ""}`}
+                  className="w-full h-48 object-cover rounded-lg mb-3 bg-gray-100"
+                  onError={(e) =>
+                    (e.target.src =
+                      "https://placehold.co/600x400?text=No+Image")
+                  }
+                />
 
-        if not row:
-            print(f"⚠️ No user_vehicles record found for lot {lot}")
-            return False
+                <div className="pb-3 border-b border-gray-200 mb-3">
+                  <h2 className="text-lg font-semibold mb-1 text-gray-900">
+                    {car?.year ? Math.round(car.year) : "Unknown Year"}{" "}
+                    {car?.make ?? ""} {car?.model ?? ""}
+                  </h2>
+                  <p className="text-sm text-gray-500 mb-1">
+                    Odometer: {car?.odometer || "N/A"}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Damage: {car?.damage_description || "Unknown"}
+                  </p>
+                </div>
 
-        year, make, model, damage, existing_repair = row
-        if existing_repair:
-            print(f"⏩ Skipping lot {lot} (already analyzed)")
-            return True
+                <div className="grid grid-cols-2 text-sm">
+                  <div>
+                    <p className="text-gray-500">AI Resale Value</p>
+                    <p className="font-semibold text-green-600">
+                      ${Number(car?.resale_estimate || 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Est. Repairs</p>
+                    <p className="font-semibold text-red-500">
+                      ${Number(car?.repair_estimate || 0).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
 
-        print(f"🚗 Lot {lot}: {year} {make} {model} ({damage})")
+                <div className="mt-4">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedCar(car);
+                    }}
+                    className="text-blue-600 text-sm hover:underline"
+                  >
+                    View Details
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-center text-gray-500 mt-20">
+            No vehicles yet. Upload a CSV to begin.
+          </p>
+        )}
+      </main>
 
-        lot_dir = os.path.join(DOWNLOAD_DIR, str(lot))
-        images = [
-            os.path.join(lot_dir, img)
-            for img in sorted(os.listdir(lot_dir))
-            if img.lower().endswith((".jpg", ".jpeg", ".png"))
-        ][:MAX_IMAGES]
-
-        if not images:
-            print(f"⚠️ No images found for lot {lot}")
-            return False
-
-        vehicle = {
-            "lot_number": lot,
-            "year": year,
-            "make": make,
-            "model": model,
-            "damage_description": damage,
-            "images": images,
-        }
-
-        ai_result = analyze_vehicle(vehicle)
-
-        with rds_engine.begin() as conn:
-            result = conn.execute(
-                text("""
-                    UPDATE user_vehicles
-                    SET repair_estimate = :repair_estimate,
-                        repair_details = :repair_details,
-                        resale_estimate = :resale_estimate,
-                        resale_details = :resale_details,
-                        updated_at = GETDATE()
-                    WHERE lot_inv_num = :lot;
-                """),
-                {
-                    "lot": lot,
-                    "repair_estimate": ai_result.get("repair_estimate"),
-                    "repair_details": ai_result.get("repair_details"),
-                    "resale_estimate": ai_result.get("resale_estimate"),
-                    "resale_details": ai_result.get("resale_details"),
-                },
-            )
-
-        if result.rowcount == 0:
-            print(f"⚠️ No rows updated for lot {lot}")
-            return False
-
-        print(f"✅ Updated lot {lot}")
-        return True
-
-    except Exception as e:
-        print(f"⚠️ Error processing lot {lot}: {e}")
-        return False
-
-
-# --------------------------------------------------
-# MAIN BATCH EXECUTION
-# --------------------------------------------------
-
-def main(user_id: int):
-    if not os.path.exists(DOWNLOAD_DIR):
-        print("❌ No downloads folder found.")
-        return
-
-    all_folders = [
-        folder
-        for folder in os.listdir(DOWNLOAD_DIR)
-        if os.path.isdir(os.path.join(DOWNLOAD_DIR, folder))
-    ]
-
-    total = len(all_folders)
-    if total == 0:
-        print("No lot folders found.")
-        return
-
-    print(f"📦 Found {total} lots to process for user {user_id}.")
-    done = failed = 0
-    start_time = time.time()
-
-    print(f"🚀 Starting thread pool for {total} lots...")
-
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = []
-        for lot in all_folders:
-            print(f"▶️ Queuing lot {lot} for AI analysis...")
-            futures.append(executor.submit(process_lot, lot, rds_engine))
-            time.sleep(SLEEP_BETWEEN_LOTS)
-
-        for future in as_completed(futures):
-            try:
-                if future.result(timeout=600):
-                    done += 1
-                else:
-                    failed += 1
-            except Exception as e:
-                print(f"⚠️ Thread exception: {e}")
-                failed += 1
-
-    elapsed = time.time() - start_time
-    print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
-    print(f"🎯 Completed AI analysis for user {user_id}.")
-
-
-# --------------------------------------------------
-# ENTRY POINT
-# --------------------------------------------------
-
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        USER_ID = int(sys.argv[1])
-    else:
-        print("❌ No user ID provided. Example: python ai_repair_estimator.py 2")
-        sys.exit(1)
-
-    main(USER_ID)
+      {selectedCar && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          onClick={() => setSelectedCar(null)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 w-96 shadow-xl border border-gray-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-semibold mb-2 text-gray-900">
+              {selectedCar.year} {selectedCar.make} {selectedCar.model}
+            </h3>
+            <p className="text-sm text-gray-700 whitespace-pre-wrap mb-3">
+              <strong>Repair Details:</strong>{" "}
+              {selectedCar.repair_details || "No details available."}
+            </p>
+            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+              <strong>Resale Details:</strong>{" "}
+              {selectedCar.resale_details || "No resale details available."}
+            </p>
+            <button
+              onClick={() => setSelectedCar(null)}
+              className="mt-4 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-md text-white w-full"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

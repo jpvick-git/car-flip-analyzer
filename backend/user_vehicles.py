@@ -90,6 +90,7 @@ def get_user_vehicles(user=Depends(get_current_user)):
                 year,
                 make,
                 model,
+                odometer,
                 damage_description,
                 repair_estimate,
                 resale_estimate,

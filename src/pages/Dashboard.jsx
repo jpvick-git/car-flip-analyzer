@@ -190,13 +190,18 @@ const calculateMaxBid = (car, localRepair) => {
                       </p>
                     </div>
 					
-                    <div className="relative">
+					<div className="relative">
 					  <p className="text-gray-500">Est. Repairs</p>
-					  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-red-500 font-semibold">$</span>
+
+					  {/* $ symbol stays fixed to the left inside the input */}
+					  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-red-500 font-semibold">
+						$
+					  </span>
+
 					  <input
 						type="number"
 						min="0"
-						className="font-semibold text-red-500 w-full border border-gray-200 rounded-md pl-5 pr-1 py-0.5 text-right focus:ring-1 focus:ring-blue-500"
+						className="font-semibold text-red-500 w-full border border-gray-200 rounded-md pl-6 pr-2 py-0.5 text-right focus:ring-1 focus:ring-blue-500"
 						value={localRepair}
 						onClick={(e) => e.stopPropagation()}
 						onChange={(e) => {

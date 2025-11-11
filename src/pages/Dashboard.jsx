@@ -190,24 +190,25 @@ const calculateMaxBid = (car, localRepair) => {
                       </p>
                     </div>
 
-                    <div>
-                      <p className="text-gray-500">Est. Repairs</p>
-                      <input
-                        type="number"
-                        min="0"
-                        className="font-semibold text-red-500 w-full border border-gray-200 rounded-md px-1 py-0.5 text-right focus:ring-1 focus:ring-blue-500"
-                        value={localRepair}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          const val = e.target.value;
-                          setRepairs((prev) => ({
-                            ...prev,
-                            [car.id]: val === "" ? "" : val,
-                          }));
-                        }}
-                      />
-                    </div>
+                    <div className="relative">
+					  <p className="text-gray-500">Est. Repairs</p>
+					  <span className="absolute left-2 top-[2.1rem] text-gray-400">$</span>
+					  <input
+						type="number"
+						min="0"
+						className="font-semibold text-red-500 w-full border border-gray-200 rounded-md pl-5 pr-1 py-0.5 text-right focus:ring-1 focus:ring-blue-500"
+						value={localRepair}
+						onClick={(e) => e.stopPropagation()}
+						onChange={(e) => {
+						  e.stopPropagation();
+						  const val = e.target.value;
+						  setRepairs((prev) => ({
+							...prev,
+							[car.id]: val === "" ? "" : val,
+						  }));
+						}}
+					  />
+					</div>
                   </div>
 
 				<div className="mt-3 text-sm">

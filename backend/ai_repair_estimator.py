@@ -19,6 +19,8 @@ DOWNLOAD_DIR = (
     if "backend" in BASE_DIR.lower()
     else os.path.join(BASE_DIR, "backend", "downloads")
 )
+# Corrected path to user_uploads
+uploads_dir = os.path.join(os.path.dirname(BASE_DIR), "user_uploads")
 
 MAX_WORKERS = 3
 SLEEP_BETWEEN_LOTS = 2.0
@@ -230,7 +232,7 @@ def process_lot(lot, rds_engine):
 # --------------------------------------------------
 
 def main(user_id: int):
-    uploads_dir = os.path.join(BASE_DIR, "user_uploads")
+    uploads_dir = os.path.join(os.path.dirname(BASE_DIR), "user_uploads")
 
     if not os.path.exists(uploads_dir):
         print("❌ No user_uploads directory found.")
@@ -274,38 +276,40 @@ def main(user_id: int):
     df = pd.read_csv(csv_path)
 
     # Detect the lot number column
-    lot_col_candidates = [c for c in df.columns if "lot" in c.lower()]
-    if not lot_col_candidates:
-        print("❌ CSV must include a column containing 'lot' in its name.")
-        return
+    preferred_cols = ["Lot/Inv #", "lot_number", "Lot # Number"]
+    lot_col = next((c for c in df.columns if c.strip() in preferred_cols), None)
 
-    lot_col = lot_col_candidates[0]
-    lot_numbers = [str(x).strip() for x in df[lot_col].dropna().astype(str).unique()]
-    print(f"📦 Found {len(lot_numbers)} lots in spreadsheet.")
+    # Fallback: find any column containing "lot"
+    if not lot_col:
+        lot_col = next((c for c in df.columns if "lot" in c.lower()), None)
 
-    done = failed = 0
-    start_time = time.time()
+    lot_numbers = [extract_lot_number(x) for x in df[lot_col].dropna().astype(str).unique()]
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = []
-        for lot in lot_numbers:
-            print(f"▶️ Queuing lot {lot} for AI analysis...")
-            futures.append(executor.submit(process_lot, lot, rds_engine))
-            time.sleep(SLEEP_BETWEEN_LOTS)
+        print(f"📦 Found {len(lot_numbers)} lots in spreadsheet.")
 
-        for future in as_completed(futures):
-            try:
-                if future.result(timeout=600):
-                    done += 1
-                else:
+        done = failed = 0
+        start_time = time.time()
+
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = []
+            for lot in lot_numbers:
+                print(f"▶️ Queuing lot {lot} for AI analysis...")
+                futures.append(executor.submit(process_lot, lot, rds_engine))
+                time.sleep(SLEEP_BETWEEN_LOTS)
+
+            for future in as_completed(futures):
+                try:
+                    if future.result(timeout=600):
+                        done += 1
+                    else:
+                        failed += 1
+                except Exception as e:
+                    print(f"⚠️ Thread exception: {e}")
                     failed += 1
-            except Exception as e:
-                print(f"⚠️ Thread exception: {e}")
-                failed += 1
 
-    elapsed = time.time() - start_time
-    print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
-    print(f"🎯 Completed AI analysis for user {user_id}.")
+        elapsed = time.time() - start_time
+        print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
+        print(f"🎯 Completed AI analysis for user {user_id}.")
 # --------------------------------------------------
 # ENTRY POINT
 # --------------------------------------------------

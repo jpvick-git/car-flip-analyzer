@@ -88,25 +88,27 @@ export default function Dashboard() {
     }, 8000);
   };
 
-  // --------------------------------------------------
-  // CALCULATION: Recommended Max Bid
-  // --------------------------------------------------
-  const calculateMaxBid = (car, localRepair) => {
-    const resale = Number(car.resale_estimate) || 0;
-    const repairsValue = Number(localRepair || car.repair_estimate || 0);
-    const titleFee = Number(car.title_fee) || 0;
-    const taxRate = (Number(car.avg_tax_rate) || 0) / 100;
-    const feeRate = 0.075; // Copart + buyer fees
-    const margin = 0.3; // 30% profit goal
+// --------------------------------------------------
+// CALCULATION: Recommended Max Bid (unified logic)
+// --------------------------------------------------
+const calculateMaxBid = (car, localRepair) => {
+  const resale = Number(car.resale_estimate) || 0;
+  const repairsValue = Number(localRepair || car.repair_estimate || 0);
+  const titleFee = Number(car.title_fee) || 0;
+  const taxRate = (Number(car.avg_tax_rate) || 0) / 100;
+  const buyerFeeRate = 0.0725; // Copart + buyer fees
+  const margin = 0.3; // 30% profit goal
 
-    if (resale <= 0) return 0;
+  if (resale <= 0) return 0;
 
-    const totalCosts = repairsValue + titleFee;
-    const grossTarget = resale * (1 - margin);
-    const maxBid = (grossTarget - totalCosts) / (1 + feeRate + taxRate);
+  const totalTax = resale * taxRate;
+  const totalBuyerFee = resale * buyerFeeRate;
+  const grossTarget = resale * (1 - margin);
+  const totalCosts = repairsValue + titleFee + totalTax + totalBuyerFee;
+  const maxBid = Math.max(0, grossTarget - totalCosts);
 
-    return Math.max(0, maxBid);
-  };
+  return maxBid;
+};
 
   // --------------------------------------------------
   // LOGOUT HANDLER
@@ -321,44 +323,45 @@ export default function Dashboard() {
 				{maxBidDetails.car.make} {maxBidDetails.car.model}
 			  </h3>
 
-			  <ul className="text-sm text-gray-700 space-y-2">
-				<li>
-				  <strong>AI Resale Value:</strong> $
-				  {maxBidDetails.resale.toLocaleString()}
-				</li>
-				<li>
-				  <strong>Est. Repairs:</strong> $
-				  {maxBidDetails.repairsValue.toLocaleString()}
-				</li>
-				<li>
-				  <strong>Title Fee:</strong> $
-				  {maxBidDetails.titleFee.toLocaleString()}
-				</li>
-				<li>
-				  <strong>Tax:</strong> $
-				  {maxBidDetails.totalTax.toLocaleString(undefined, {
-					minimumFractionDigits: 2,
-					maximumFractionDigits: 2,
-				  })}
-				</li>
-				<li>
-				  <strong>Buyer Fee (7.25%):</strong> $
-				  {maxBidDetails.totalBuyerFee.toLocaleString(undefined, {
-					minimumFractionDigits: 2,
-					maximumFractionDigits: 2,
-				  })}
-				</li>
-				<li>
-				  <strong>Target Profit Margin:</strong> {(maxBidDetails.margin * 100).toFixed(0)}%
-				</li>
-				<hr />
-				<li>
-				  <strong className="text-blue-600">Recommended Max Bid:</strong> $
-				  {maxBidDetails.maxBid.toLocaleString(undefined, {
-					maximumFractionDigits: 0,
-				  })}
-				</li>
-			  </ul>
+				<ul className="text-sm text-gray-700 space-y-2">
+				  <li>
+					<strong>AI Resale Value:</strong> $
+					{maxBidDetails.resale.toLocaleString()}
+				  </li>
+				  <li>
+					<strong>Est. Repairs:</strong> $
+					{maxBidDetails.repairsValue.toLocaleString()}
+				  </li>
+				  <li>
+					<strong>Title Fee:</strong> $
+					{maxBidDetails.titleFee.toLocaleString()}
+				  </li>
+				  <li>
+					<strong>Tax:</strong> $
+					{maxBidDetails.totalTax.toLocaleString(undefined, {
+					  minimumFractionDigits: 2,
+					  maximumFractionDigits: 2,
+					})}
+				  </li>
+				  <li>
+					<strong>Buyer Fee (7.25%):</strong> $
+					{maxBidDetails.totalBuyerFee.toLocaleString(undefined, {
+					  minimumFractionDigits: 2,
+					  maximumFractionDigits: 2,
+					})}
+				  </li>
+				  <li>
+					<strong>Target Profit Margin:</strong> {(maxBidDetails.margin * 100).toFixed(0)}%
+				  </li>
+				  <hr />
+				  <li>
+					<strong className="text-blue-600">Recommended Max Bid:</strong> $
+					{maxBidDetails.maxBid.toLocaleString(undefined, {
+					  maximumFractionDigits: 0,
+					})}
+				  </li>
+				</ul>
+
 
 			  <button
 				onClick={() => setMaxBidDetails(null)}

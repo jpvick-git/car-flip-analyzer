@@ -31,3 +31,4 @@ backend/downloads/**
 # Ignore text and zip files anywhere
 *.txt
 *.zip
+.vercel

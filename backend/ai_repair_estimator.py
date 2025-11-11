@@ -39,6 +39,15 @@ print(f"🔑 Using OpenAI key prefix: {client.api_key[:10]}...")
 print("📁 Project ID: proj_yG0FqcGEaLjCW7kutLC5nG4S")
 
 # --------------------------------------------------
+# HELPERS
+# --------------------------------------------------
+
+def extract_lot_number(value: str) -> str:
+    """Extract numeric lot number from messy spreadsheet text."""
+    match = re.search(r"\d{5,}", value)
+    return match.group(0) if match else value.strip()
+
+# --------------------------------------------------
 # CORE ANALYSIS FUNCTION
 # --------------------------------------------------
 
@@ -111,7 +120,6 @@ Return ONLY valid JSON like this:
         except Exception as e:
             print(f"⚠️ Failed to attach {img_path}: {e}")
 
-
     # Send to OpenAI
     response = client.chat.completions.create(
         model="gpt-4o",
@@ -143,7 +151,6 @@ Return ONLY valid JSON like this:
         }
 
     return parsed
-
 
 # --------------------------------------------------
 # LOT PROCESSING FUNCTION
@@ -226,7 +233,6 @@ def process_lot(lot, rds_engine):
         print(f"⚠️ Error processing lot {lot}: {e}")
         return False
 
-
 # --------------------------------------------------
 # MAIN BATCH EXECUTION
 # --------------------------------------------------
@@ -238,7 +244,6 @@ def main(user_id: int):
         print("❌ No user_uploads directory found.")
         return
 
-    # ✅ Find all CSVs that belong to this user (match on email-style slug)
     csv_files = [
         os.path.join(uploads_dir, f)
         for f in os.listdir(uploads_dir)
@@ -249,8 +254,6 @@ def main(user_id: int):
         print("❌ No CSV files found in user_uploads.")
         return
 
-    # ✅ Try to detect which CSV belongs to this user by matching their email slug
-    # If user_id maps to an email like demo@123.com → demo_123_com
     email_slug = None
     with rds_engine.connect() as conn:
         row = conn.execute(
@@ -269,47 +272,44 @@ def main(user_id: int):
         print(f"❌ No CSV found matching user {user_id} ({email_slug}).")
         return
 
-    # ✅ Pick the most recent CSV for this user
     csv_path = max(matching_csvs, key=os.path.getmtime)
     print(f"📄 Using spreadsheet: {os.path.basename(csv_path)}")
 
     df = pd.read_csv(csv_path)
 
-    # Detect the lot number column
     preferred_cols = ["Lot/Inv #", "lot_number", "Lot # Number"]
     lot_col = next((c for c in df.columns if c.strip() in preferred_cols), None)
 
-    # Fallback: find any column containing "lot"
     if not lot_col:
         lot_col = next((c for c in df.columns if "lot" in c.lower()), None)
 
     lot_numbers = [extract_lot_number(x) for x in df[lot_col].dropna().astype(str).unique()]
+    print(f"📦 Found {len(lot_numbers)} lots in spreadsheet.")
 
-        print(f"📦 Found {len(lot_numbers)} lots in spreadsheet.")
+    done = failed = 0
+    start_time = time.time()
 
-        done = failed = 0
-        start_time = time.time()
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = []
+        for lot in lot_numbers:
+            print(f"▶️ Queuing lot {lot} for AI analysis...")
+            futures.append(executor.submit(process_lot, lot, rds_engine))
+            time.sleep(SLEEP_BETWEEN_LOTS)
 
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = []
-            for lot in lot_numbers:
-                print(f"▶️ Queuing lot {lot} for AI analysis...")
-                futures.append(executor.submit(process_lot, lot, rds_engine))
-                time.sleep(SLEEP_BETWEEN_LOTS)
-
-            for future in as_completed(futures):
-                try:
-                    if future.result(timeout=600):
-                        done += 1
-                    else:
-                        failed += 1
-                except Exception as e:
-                    print(f"⚠️ Thread exception: {e}")
+        for future in as_completed(futures):
+            try:
+                if future.result(timeout=600):
+                    done += 1
+                else:
                     failed += 1
+            except Exception as e:
+                print(f"⚠️ Thread exception: {e}")
+                failed += 1
 
-        elapsed = time.time() - start_time
-        print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
-        print(f"🎯 Completed AI analysis for user {user_id}.")
+    elapsed = time.time() - start_time
+    print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
+    print(f"🎯 Completed AI analysis for user {user_id}.")
+
 # --------------------------------------------------
 # ENTRY POINT
 # --------------------------------------------------

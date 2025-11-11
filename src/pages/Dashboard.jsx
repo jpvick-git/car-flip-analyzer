@@ -189,7 +189,7 @@ const calculateMaxBid = (car, localRepair) => {
                         ${Number(car?.resale_estimate || 0).toLocaleString()}
                       </p>
                     </div>
-
+                    //comment
                     <div className="relative">
 					  <p className="text-gray-500">Est. Repairs</p>
 					  <span className="absolute left-2 top-[2.1rem] text-gray-400">$</span>

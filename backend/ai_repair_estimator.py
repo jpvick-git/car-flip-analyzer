@@ -70,8 +70,9 @@ def analyze_vehicle(vehicle):
     )
 
     user_prompt = f"""
-Evaluate this vehicle in depth using both the provided information and the attached photos.
-Treat this as a professional repair and resale analysis for a car flipper or dealer.
+You are a salvage auction analyst evaluating vehicles for wholesale resale or flipping.
+This vehicle was acquired from a salvage/wholesale auction and may have a branded or unknown title.
+Assume it is not dealer retail ready, and avoid any retail-based pricing logic.
 
 Vehicle Info:
 - Year: {year}
@@ -80,18 +81,23 @@ Vehicle Info:
 - Reported Damage: {damage}
 
 From the photos, assess the following:
-1. Visible exterior and structural damage (front, rear, sides, roof, undercarriage).
-2. Which components likely require replacement (e.g., bumper, fender, hood, headlight).
-3. Which components could be repaired (e.g., paint, dents, trim).
-4. Estimate paint and body labor hours required.
-5. Check for signs of mechanical, flood, or frame damage.
-6. Identify missing parts, deployed airbags, and tire/wheel condition.
-7. Evaluate the interior condition (visible seats, dash, steering wheel).
-8. Estimate total repair cost (parts + labor + paint + misc).
-9. Estimate post-repair resale value considering mileage, trim, and current market.
-10. Give a short expert reasoning summary mentioning damage severity and market factors.
 
-Return ONLY valid JSON like this:
+1. Describe all visible exterior and structural damage (front, rear, sides, roof, undercarriage).
+2. Identify components that likely require replacement (e.g., bumper, hood, lights).
+3. List items that could be repaired (e.g., trim, scratches, PDR).
+4. Estimate realistic labor hours for body and paint work.
+5. Flag any signs of frame, flood, or mechanical damage (if visible).
+6. Check for missing parts, airbag deployment, or tire/wheel issues.
+7. Review interior condition (seats, dash, controls, panels).
+8. Estimate conservative repair cost (parts, labor, paint, misc).
+9. Provide a realistic resale value **for a flip or wholesale resale**, factoring:
+   - 129,000+ miles
+   - Possible branded/rebuilt title
+   - Minor damage history
+   - Current private party + auction values (not retail book value)
+10. Give a brief expert-level summary with flip viability.
+
+Return ONLY valid JSON in this structure:
 {{
   "repair_estimate": number,
   "repair_details": "string",
@@ -99,7 +105,6 @@ Return ONLY valid JSON like this:
   "resale_details": "string"
 }}
 """
-
     # Build messages for OpenAI
     messages = [
         {"role": "system", "content": system_prompt},

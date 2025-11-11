@@ -32,11 +32,8 @@ router = APIRouter()
 # ROUTE: Upload and process CSV
 # --------------------------------------------------
 @router.post("/upload_file")
-async def upload_and_process_file(
-    file: UploadFile,
-    user=Depends(get_current_user),
-    request: Request
-):
+async def upload_and_process_file(request: Request, file: UploadFile, user=Depends(get_current_user)):
+
     """
     1. Save uploaded file to /user_uploads
     2. Trigger Copart download on Windows via ngrok

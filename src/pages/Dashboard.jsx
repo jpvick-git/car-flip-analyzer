@@ -192,7 +192,6 @@ const calculateMaxBid = (car, localRepair) => {
 
                     <div>
                       <p className="text-gray-500">Est. Repairs</p>
-					  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400">$</span>
                       <input
                         type="number"
                         min="0"

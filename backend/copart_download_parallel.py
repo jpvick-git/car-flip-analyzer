@@ -82,7 +82,7 @@ def load_csv_to_user(engine, user_id, csv_path=None):
 
     df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
     rename_map = {
-        "lot/inv_#": "lot_inv_num",
+        "lot/inv_#": "lot_number",
         "est._retail_value": "est_retail_value",
         "est._retail_value_usd": "est_retail_value",
         "sale_date": "sale_date",
@@ -96,34 +96,34 @@ def load_csv_to_user(engine, user_id, csv_path=None):
     }
     df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns}, inplace=True)
 
-    if "lot_inv_num" not in df.columns:
-        raise ValueError(f"❌ 'lot_inv_num' column missing from CSV. Found: {list(df.columns)}")
+    if "lot_number" not in df.columns:
+        raise ValueError(f"❌ 'lot_number' column missing from CSV. Found: {list(df.columns)}")
 
-    df["lot_inv_num"] = df["lot_inv_num"].astype(str)
+    df["lot_number"] = df["lot_number"].astype(str)
 
     with engine.begin() as conn:
-        lot_nums = df["lot_inv_num"].tolist()
+        lot_nums = df["lot_number"].tolist()
         if not lot_nums:
             print("⚠️ No lots found in CSV.")
             return
 
         placeholders = ", ".join([f"'{lot}'" for lot in lot_nums])
-        query = f"SELECT * FROM user_vehicles WHERE lot_inv_num IN ({placeholders})"
+        query = f"SELECT * FROM user_vehicles WHERE lot_number IN ({placeholders})"
         all_existing = pd.read_sql(query, conn)
-        existing_lots = set(all_existing["lot_inv_num"].astype(str).tolist())
+        existing_lots = set(all_existing["lot_number"].astype(str).tolist())
 
         user_existing = pd.read_sql(
-            text("SELECT lot_inv_num FROM user_vehicles WHERE user_id = :uid"),
+            text("SELECT lot_number FROM user_vehicles WHERE user_id = :uid"),
             conn,
             params={"uid": user_id},
         )
-        user_existing_lots = set(user_existing["lot_inv_num"].astype(str).tolist())
+        user_existing_lots = set(user_existing["lot_number"].astype(str).tolist())
 
         to_copy = [lot for lot in existing_lots if lot not in user_existing_lots]
         to_download = [lot for lot in lot_nums if lot not in existing_lots and lot not in user_existing_lots]
 
         if to_copy:
-            existing_to_copy = all_existing[all_existing["lot_inv_num"].isin(to_copy)].copy()
+            existing_to_copy = all_existing[all_existing["lot_number"].isin(to_copy)].copy()
             existing_to_copy["user_id"] = user_id
             existing_to_copy["created_at"] = pd.Timestamp.now()
             existing_to_copy.drop(columns=["id"], inplace=True, errors="ignore")
@@ -132,17 +132,17 @@ def load_csv_to_user(engine, user_id, csv_path=None):
                 current = str(row.get("image_url") or "").strip()
                 if current:
                     return current
-                return get_image_url(row["lot_inv_num"])
+                return get_image_url(row["lot_number"])
 
             existing_to_copy["image_url"] = existing_to_copy.apply(ensure_image_url, axis=1)
             existing_to_copy.to_sql("user_vehicles", con=conn, if_exists="append", index=False)
             print(f"📋 Duplicated {len(existing_to_copy)} existing lots for user {user_id}.")
 
         if to_download:
-            new_rows = df[df["lot_inv_num"].isin(to_download)].copy()
+            new_rows = df[df["lot_number"].isin(to_download)].copy()
             new_rows["user_id"] = user_id
             new_rows["created_at"] = pd.Timestamp.now()
-            new_rows["image_url"] = new_rows["lot_inv_num"].apply(get_image_url)
+            new_rows["image_url"] = new_rows["lot_number"].apply(get_image_url)
 
             allowed_cols = conn.execute(text("SELECT TOP 0 * FROM user_vehicles")).keys()
             new_rows = new_rows[[c for c in new_rows.columns if c in allowed_cols]]
@@ -163,7 +163,7 @@ def download_images(lot_url):
         image_url = get_image_url(lot_id)
         with get_engine().begin() as conn:
             conn.execute(
-                text("UPDATE user_vehicles SET image_url = :url WHERE lot_inv_num = :lot"),
+                text("UPDATE user_vehicles SET image_url = :url WHERE lot_number = :lot"),
                 {"url": image_url, "lot": lot_id},
             )
         return lot_id
@@ -228,7 +228,7 @@ def download_images(lot_url):
                     image_url = get_image_url(lot_id)
                     with get_engine().begin() as conn:
                         conn.execute(
-                            text("UPDATE user_vehicles SET image_url = :url WHERE lot_inv_num = :lot"),
+                            text("UPDATE user_vehicles SET image_url = :url WHERE lot_number = :lot"),
                             {"url": image_url, "lot": lot_id},
                         )
                     return lot_id
@@ -299,8 +299,8 @@ def main(user_id: int, csv_path: str):
     lot_nums = (
         csv_df["Lot/Inv #"].astype(str).tolist()
         if "Lot/Inv #" in csv_df.columns
-        else csv_df["lot_inv_num"].astype(str).tolist()
-        if "lot_inv_num" in csv_df.columns
+        else csv_df["lot_number"].astype(str).tolist()
+        if "lot_number" in csv_df.columns
         else []
     )
 
@@ -332,7 +332,7 @@ def main(user_id: int, csv_path: str):
                         if image_url:
                             with engine.begin() as conn:
                                 conn.execute(
-                                    text("UPDATE user_vehicles SET image_url = :image_url WHERE lot_inv_num = :lot"),
+                                    text("UPDATE user_vehicles SET image_url = :image_url WHERE lot_number = :lot"),
                                     {"image_url": image_url, "lot": str(lot_id)},
                                 )
                             print(f"🖼️ Updated image_url for lot {lot_id}: {image_url}")

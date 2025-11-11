@@ -4,6 +4,7 @@ import re
 import json
 import sys
 import base64
+import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import create_engine, text
 from openai import OpenAI
@@ -108,6 +109,7 @@ Return ONLY valid JSON like this:
         except Exception as e:
             print(f"⚠️ Failed to attach {img_path}: {e}")
 
+
     # Send to OpenAI
     response = client.chat.completions.create(
         model="gpt-4o",
@@ -153,7 +155,7 @@ def process_lot(lot, rds_engine):
                 text("""
                     SELECT TOP 1 year, make, model, damage_description, repair_estimate
                     FROM user_vehicles
-                    WHERE lot_inv_num = :lot
+                    WHERE lot_number = :lot
                 """),
                 {"lot": lot},
             ).fetchone()
@@ -200,7 +202,7 @@ def process_lot(lot, rds_engine):
                         resale_estimate = :resale_estimate,
                         resale_details = :resale_details,
                         updated_at = GETDATE()
-                    WHERE lot_inv_num = :lot;
+                    WHERE lot_number = :lot;
                 """),
                 {
                     "lot": lot,
@@ -228,30 +230,65 @@ def process_lot(lot, rds_engine):
 # --------------------------------------------------
 
 def main(user_id: int):
-    if not os.path.exists(DOWNLOAD_DIR):
-        print("❌ No downloads folder found.")
+    uploads_dir = os.path.join(BASE_DIR, "user_uploads")
+
+    if not os.path.exists(uploads_dir):
+        print("❌ No user_uploads directory found.")
         return
 
-    all_folders = [
-        folder
-        for folder in os.listdir(DOWNLOAD_DIR)
-        if os.path.isdir(os.path.join(DOWNLOAD_DIR, folder))
+    # ✅ Find all CSVs that belong to this user (match on email-style slug)
+    csv_files = [
+        os.path.join(uploads_dir, f)
+        for f in os.listdir(uploads_dir)
+        if f.endswith(".csv")
     ]
 
-    total = len(all_folders)
-    if total == 0:
-        print("No lot folders found.")
+    if not csv_files:
+        print("❌ No CSV files found in user_uploads.")
         return
 
-    print(f"📦 Found {total} lots to process for user {user_id}.")
+    # ✅ Try to detect which CSV belongs to this user by matching their email slug
+    # If user_id maps to an email like demo@123.com → demo_123_com
+    email_slug = None
+    with rds_engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT email FROM users WHERE id = :id"), {"id": user_id}
+        ).fetchone()
+        if row:
+            email_slug = row[0].replace("@", "_").replace(".", "_")
+
+    matching_csvs = (
+        [f for f in csv_files if email_slug and email_slug in f]
+        if email_slug
+        else csv_files
+    )
+
+    if not matching_csvs:
+        print(f"❌ No CSV found matching user {user_id} ({email_slug}).")
+        return
+
+    # ✅ Pick the most recent CSV for this user
+    csv_path = max(matching_csvs, key=os.path.getmtime)
+    print(f"📄 Using spreadsheet: {os.path.basename(csv_path)}")
+
+    df = pd.read_csv(csv_path)
+
+    # Detect the lot number column
+    lot_col_candidates = [c for c in df.columns if "lot" in c.lower()]
+    if not lot_col_candidates:
+        print("❌ CSV must include a column containing 'lot' in its name.")
+        return
+
+    lot_col = lot_col_candidates[0]
+    lot_numbers = [str(x).strip() for x in df[lot_col].dropna().astype(str).unique()]
+    print(f"📦 Found {len(lot_numbers)} lots in spreadsheet.")
+
     done = failed = 0
     start_time = time.time()
 
-    print(f"🚀 Starting thread pool for {total} lots...")
-
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = []
-        for lot in all_folders:
+        for lot in lot_numbers:
             print(f"▶️ Queuing lot {lot} for AI analysis...")
             futures.append(executor.submit(process_lot, lot, rds_engine))
             time.sleep(SLEEP_BETWEEN_LOTS)
@@ -269,8 +306,6 @@ def main(user_id: int):
     elapsed = time.time() - start_time
     print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
     print(f"🎯 Completed AI analysis for user {user_id}.")
-
-
 # --------------------------------------------------
 # ENTRY POINT
 # --------------------------------------------------

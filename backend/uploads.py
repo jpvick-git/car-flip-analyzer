@@ -3,6 +3,7 @@ import shutil
 import datetime
 import subprocess
 import requests
+import pandas as pd
 from fastapi import APIRouter, UploadFile, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine, text

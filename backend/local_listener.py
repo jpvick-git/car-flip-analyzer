@@ -26,9 +26,9 @@ def trigger_download():
         print(f"🚀 Starting Copart download for user {user_id}")
         subprocess.run([
             "python", "copart_download_parallel.py",
-            str(user_id), file_path  # ✅ swapped order
+            str(user_id), file_path, "--download"
         ], cwd=r"C:\car-flip-analyzer\backend")
-
+        
     threading.Thread(target=run_scraper).start()
 
     return {"status": "success", "saved": file_path}

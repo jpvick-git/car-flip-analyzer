@@ -63,21 +63,38 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
         cloned_lots = []
         with rds_engine.begin() as conn:
             for _, row in df.iterrows():
-                lot_num = str(row.get("lot_inv_num") or row.get("Lot") or "").strip()
+                # Pull lot number from CSV (supports both "lot_inv_num" and "Lot")
+                lot_num = str(row.get("lot_inv_num") or row.get("Lot") or row.get("lot_number") or "").strip()
                 if not lot_num:
                     continue
 
                 # Skip if this user already has it
                 exists_user = conn.execute(
-                    text("SELECT 1 FROM user_vehicles WHERE lot_inv_num = :lot AND user_id = :uid"),
+                    text("SELECT 1 FROM user_vehicles WHERE lot_number = :lot AND user_id = :uid"),
                     {"lot": lot_num, "uid": user["id"]},
                 ).fetchone()
                 if exists_user:
                     continue
 
-                # Check if any record exists for another user
+                # Try to find any existing record for this lot from any other user
                 existing = conn.execute(
-                    text("SELECT TOP 1 * FROM user_vehicles WHERE lot_inv_num = :lot"),
+                    text("""
+                        SELECT TOP 1
+                            lot_number,
+                            lot_url,
+                            year,
+                            make,
+                            model,
+                            odometer,
+                            damage_description,
+                            COALESCE(repair_estimate, 0) AS repair_estimate,
+                            COALESCE(resale_estimate, est_retail_value, 0) AS resale_estimate,
+                            COALESCE(repair_details, '') AS repair_details,
+                            COALESCE(resale_details, '') AS resale_details,
+                            image_url
+                        FROM user_vehicles
+                        WHERE lot_number = :lot
+                    """),
                     {"lot": lot_num},
                 ).fetchone()
 
@@ -86,7 +103,7 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                     conn.execute(
                         text("""
                             INSERT INTO user_vehicles (
-                                user_id, lot_inv_num, lot_url, year, make, model,
+                                user_id, lot_number, lot_url, year, make, model,
                                 odometer, damage_description, repair_estimate,
                                 resale_estimate, repair_details, resale_details, image_url
                             )
@@ -97,7 +114,7 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                         """),
                         {
                             "uid": user["id"],
-                            "lot": v.get("lot_inv_num"),
+                            "lot": v.get("lot_number"),
                             "url": v.get("lot_url"),
                             "year": v.get("year"),
                             "make": v.get("make"),
@@ -116,15 +133,6 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                     new_lots.append(lot_num)
 
         print(f"✅ Cloned {len(cloned_lots)} existing lots for user {user['id']}")
-        if not new_lots:
-            print("🚫 All lots already exist — skipping ngrok trigger.")
-            return JSONResponse(
-                content={
-                    "message": f"✅ All {len(cloned_lots)} vehicles already existed and were cloned for this user.",
-                    "new_lots": [],
-                    "cloned_lots": cloned_lots,
-                }
-            )
 
         # --- Step 3: Only trigger ngrok for new lots ---
         try:

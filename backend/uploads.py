@@ -187,35 +187,42 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
         print(f"✅ {len(cloned_lots)} cloned, {len(new_lots)} new for user {user['id']}")
 
         # --------------------------------------------------
-        # Step 3: Recheck DB after cloning
+        # Step 3: Recheck DB after cloning (SQL Server compatible)
         # --------------------------------------------------
-        with rds_engine.begin() as conn:
-            existing_count = conn.execute(
-                text("""
+        try:
+            lot_list = [normalize_lot(l) for l in df["Lot/Inv #"] if not pd.isna(l)]
+            if not lot_list:
+                print("⚠️ No valid lot numbers found in CSV for recheck.")
+                existing_count = 0
+            else:
+                # Dynamically build placeholders for SQL Server
+                placeholders = ", ".join([f":lot{i}" for i in range(len(lot_list))])
+                query = text(f"""
                     SELECT COUNT(*) AS cnt
                     FROM user_vehicles
                     WHERE user_id = :uid
-                      AND lot_number IN :lots
-                """),
-                {
-                    "uid": user["id"],
-                    "lots": tuple(
-                        [normalize_lot(l) for l in df["Lot/Inv #"] if not pd.isna(l)]
-                    ),
-                },
-            ).scalar()
+                      AND lot_number IN ({placeholders})
+                """)
 
-        if existing_count == len(df):
-            print(f"🚫 All {existing_count} lots now exist for user {user['id']} — skipping Copart/AI.")
-            return JSONResponse(
-                content={
-                    "message": f"✅ All {existing_count} lots cloned for user {user['id']} — no new lots to process.",
-                    "cloned_lots": cloned_lots,
-                }
-            )
+                params = {"uid": user["id"]}
+                for i, lot in enumerate(lot_list):
+                    params[f"lot{i}"] = lot
 
-        print(f"🚀 Proceeding with Copart for remaining {len(new_lots)} lots.")
+                with rds_engine.begin() as conn:
+                    existing_count = conn.execute(query, params).scalar()
 
-    except Exception as e:
-        print(f"❌ Error in upload_and_process_file: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+            if existing_count == len(lot_list):
+                print(f"🚫 All {existing_count} lots now exist for user {user['id']} — skipping Copart/AI.")
+                return JSONResponse(
+                    content={
+                        "message": f"✅ All {existing_count} lots cloned for user {user['id']} — no new lots to process.",
+                        "cloned_lots": cloned_lots,
+                    }
+                )
+
+            print(f"🚀 Proceeding with Copart for remaining {len(new_lots)} lots.")
+
+        except Exception as e:
+            print(f"❌ Error during final lot existence check: {e}")
+            return JSONResponse(status_code=500, content={"error": str(e)})
+

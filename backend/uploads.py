@@ -73,12 +73,22 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
             return val.replace(",", "").strip()
 
         with rds_engine.begin() as conn:
-            for _, row in df.iterrows():
-                lot_num = normalize_lot(
-                    row.get("lot_number") or row.get("lot_inv_num") or row.get("Lot")
-                )
-                if not lot_num:
-                    continue
+        # Show detected CSV columns for debugging
+        print(f"🧾 CSV Columns Detected: {list(df.columns)}")
+
+        for _, row in df.iterrows():
+            lot_num = None
+
+            # Try multiple known Copart column names
+            for col in ["lot_number", "lot_inv_num", "Lot", "Lot #", "Lot/Inv #"]:
+                if col in df.columns:
+                    lot_num = normalize_lot(row[col])
+                    break
+
+            if not lot_num:
+                print(f"⚠️ Skipping row (no valid lot number found): {row.to_dict()}")
+                continue
+
 
                 # Check if already exists for current user
                 exists_user = conn.execute(

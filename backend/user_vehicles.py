@@ -42,9 +42,73 @@ def decode_token(token: str):
 @router.post("/upload_vehicle")
 def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
     """
-    Insert a new vehicle tied to the logged-in user.
+    Insert a new vehicle for the logged-in user.
+    If the lot_inv_num already exists for another user,
+    copy that record (including AI fields) for this user.
     """
+    user_id = user["id"]
+    lot_num = vehicle.get("lot_inv_num")
+
+    if not lot_num:
+        raise HTTPException(status_code=400, detail="Missing lot_inv_num")
+
     with engine.begin() as conn:
+        # 1️⃣ Check if a vehicle with this lot number already exists for any user
+        existing = conn.execute(
+            text("""
+                SELECT TOP 1
+                    lot_inv_num,
+                    lot_url,
+                    year,
+                    make,
+                    model,
+                    odometer,
+                    damage_description,
+                    repair_estimate,
+                    resale_estimate,
+                    repair_details,
+                    resale_details,
+                    image_url
+                FROM user_vehicles
+                WHERE lot_inv_num = :lot
+            """),
+            {"lot": lot_num},
+        ).fetchone()
+
+        if existing:
+            # 2️⃣ Copy all fields from the existing record
+            v = dict(existing._mapping)
+            conn.execute(
+                text("""
+                    INSERT INTO user_vehicles (
+                        user_id, lot_inv_num, lot_url, year, make, model,
+                        odometer, damage_description, repair_estimate,
+                        resale_estimate, repair_details, resale_details, image_url
+                    )
+                    VALUES (
+                        :uid, :lot, :url, :year, :make, :model,
+                        :odo, :damage, :rep_est, :res_est, :rep_det, :res_det, :img
+                    )
+                """),
+                {
+                    "uid": user_id,
+                    "lot": v["lot_inv_num"],
+                    "url": v.get("lot_url"),
+                    "year": v.get("year"),
+                    "make": v.get("make"),
+                    "model": v.get("model"),
+                    "odo": v.get("odometer"),
+                    "damage": v.get("damage_description"),
+                    "rep_est": v.get("repair_estimate"),
+                    "res_est": v.get("resale_estimate"),
+                    "rep_det": v.get("repair_details"),
+                    "res_det": v.get("resale_details"),
+                    "img": v.get("image_url"),
+                },
+            )
+            return {"message": f"✅ Vehicle {lot_num} copied for user {user_id}"}
+
+        # 3️⃣ Otherwise, insert a fresh record
         result = conn.execute(
             text("""
                 INSERT INTO user_vehicles (
@@ -54,19 +118,18 @@ def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
                 VALUES (:uid, :lot, :url, :year, :make, :model, :damage)
             """),
             {
-                "uid": user["id"],
-                "lot": vehicle["lot_inv_num"],
+                "uid": user_id,
+                "lot": lot_num,
                 "url": vehicle.get("lot_url"),
                 "year": vehicle.get("year"),
                 "make": vehicle.get("make"),
                 "model": vehicle.get("model"),
-                "damage": vehicle.get("damage_description", "")
-            }
+                "damage": vehicle.get("damage_description", ""),
+            },
         )
         vehicle_id = result.scalar()
 
-    return {"message": "✅ Vehicle uploaded successfully", "vehicle_id": vehicle_id}
-
+    return {"message": f"✅ Vehicle {lot_num} uploaded successfully", "vehicle_id": vehicle_id}
 
 # --------------------------------------------------
 # 2️⃣ Get all vehicles for the logged-in user

@@ -9,13 +9,32 @@ export default function Dashboard() {
   const [polling, setPolling] = useState(false);
   const [repairs, setRepairs] = useState({});
   const [maxBidDetails, setMaxBidDetails] = useState(null);
-
+  const [userIP, setUserIP] = useState("");
+  const [isAllowed, setIsAllowed] = useState(false);
 
   const token = localStorage.getItem("token");
   const apiBase =
     process.env.NODE_ENV === "development"
       ? "http://localhost:8000"
       : "https://api.carflipanalyzer.com";
+
+  // ✅ Your authorized IP
+  const allowedIP = "68.186.200.184";
+
+  // --------------------------------------------------
+  // GET USER IP
+  // --------------------------------------------------
+  useEffect(() => {
+    fetch("https://api.ipify.org?format=json")
+      .then((res) => res.json())
+      .then((data) => {
+        setUserIP(data.ip);
+        if (data.ip === allowedIP) {
+          setIsAllowed(true);
+        }
+      })
+      .catch((err) => console.error("Failed to get IP:", err));
+  }, []);
 
   // --------------------------------------------------
   // FETCH VEHICLES (user-specific)
@@ -42,7 +61,7 @@ export default function Dashboard() {
   }, []);
 
   // --------------------------------------------------
-  // FILE UPLOAD HANDLER
+  // FILE UPLOAD HANDLER (hidden unless isAllowed)
   // --------------------------------------------------
   const uploadUserFile = async () => {
     if (!uploadFile || !token) return alert("Login and select a file first.");
@@ -88,27 +107,27 @@ export default function Dashboard() {
     }, 8000);
   };
 
-// --------------------------------------------------
-// CALCULATION: Recommended Max Bid (unified logic)
-// --------------------------------------------------
-const calculateMaxBid = (car, localRepair) => {
-  const resale = Number(car.resale_estimate) || 0;
-  const repairsValue = Number(localRepair || car.repair_estimate || 0);
-  const titleFee = Number(car.title_fee) || 0;
-  const taxRate = (Number(car.avg_tax_rate) || 0) / 100;
-  const buyerFeeRate = 0.0725; // Copart + buyer fees
-  const margin = 0.3; // 30% profit goal
+  // --------------------------------------------------
+  // CALCULATION: Recommended Max Bid
+  // --------------------------------------------------
+  const calculateMaxBid = (car, localRepair) => {
+    const resale = Number(car.resale_estimate) || 0;
+    const repairsValue = Number(localRepair || car.repair_estimate || 0);
+    const titleFee = Number(car.title_fee) || 0;
+    const taxRate = (Number(car.avg_tax_rate) || 0) / 100;
+    const buyerFeeRate = 0.0725;
+    const margin = 0.3;
 
-  if (resale <= 0) return 0;
+    if (resale <= 0) return 0;
 
-  const totalTax = resale * taxRate;
-  const totalBuyerFee = resale * buyerFeeRate;
-  const grossTarget = resale * (1 - margin);
-  const totalCosts = repairsValue + titleFee + totalTax + totalBuyerFee;
-  const maxBid = Math.max(0, grossTarget - totalCosts);
+    const totalTax = resale * taxRate;
+    const totalBuyerFee = resale * buyerFeeRate;
+    const grossTarget = resale * (1 - margin);
+    const totalCosts = repairsValue + titleFee + totalTax + totalBuyerFee;
+    const maxBid = Math.max(0, grossTarget - totalCosts);
 
-  return maxBid;
-};
+    return maxBid;
+  };
 
   // --------------------------------------------------
   // LOGOUT HANDLER
@@ -133,6 +152,21 @@ const calculateMaxBid = (car, localRepair) => {
       <main className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
         {status && (
           <p className="text-center text-gray-600 mb-4 text-sm">{status}</p>
+        )}
+
+        {/* IP-based restriction message */}
+        {!isAllowed && (
+          <p className="text-center text-gray-400 mb-6 text-sm">
+            Uploads restricted to authorized IP.  
+            <br />
+            Detected IP: <span className="font-mono">{userIP || "..."}</span>
+          </p>
+        )}
+
+        {isAllowed && vehicles.length === 0 && (
+          <p className="text-center text-gray-500 mb-6 text-sm">
+            Upload a CSV to begin.
+          </p>
         )}
 
         {Array.isArray(vehicles) && vehicles.length > 0 ? (
@@ -189,78 +223,77 @@ const calculateMaxBid = (car, localRepair) => {
                         ${Number(car?.resale_estimate || 0).toLocaleString()}
                       </p>
                     </div>
-					
-					<div className="relative">
-					  <p className="text-gray-500">Est. Repairs</p>
 
-					  {/* $ symbol stays fixed to the left inside the input */}
-					  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-red-500 font-semibold">
-						$
-					  </span>
-
-					  <input
-						type="number"
-						min="0"
-						className="font-semibold text-red-500 w-full border border-gray-200 rounded-md pl-6 pr-2 py-0.5 text-right focus:ring-1 focus:ring-blue-500"
-						value={localRepair}
-						onClick={(e) => e.stopPropagation()}
-						onChange={(e) => {
-						  e.stopPropagation();
-						  const val = e.target.value;
-						  setRepairs((prev) => ({
-							...prev,
-							[car.id]: val === "" ? "" : val,
-						  }));
-						}}
-					  />
-					</div>
+                    <div className="relative">
+                      <p className="text-gray-500">Est. Repairs</p>
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-red-500 font-semibold">
+                        $
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        className="font-semibold text-red-500 w-full border border-gray-200 rounded-md pl-6 pr-2 py-0.5 text-right focus:ring-1 focus:ring-blue-500"
+                        value={localRepair}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          const val = e.target.value;
+                          setRepairs((prev) => ({
+                            ...prev,
+                            [car.id]: val === "" ? "" : val,
+                          }));
+                        }}
+                      />
+                    </div>
                   </div>
 
-				<div className="mt-3 text-sm">
-				  <div className="flex items-center justify-between">
-					<p className="text-gray-500">Recommended Max Bid</p>
-					<button
-					  onClick={(e) => {
-						e.stopPropagation();
-						const resale = Number(car.resale_estimate) || 0;
-						const repairsValue = Number(localRepair || car.repair_estimate || 0);
-						const titleFee = Number(car.title_fee) || 0;
-						const taxRate = (Number(car.avg_tax_rate) || 0) / 100;
-						const buyerFeeRate = 0.0725;
-						const margin = 0.3;
+                  <div className="mt-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <p className="text-gray-500">Recommended Max Bid</p>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const resale = Number(car.resale_estimate) || 0;
+                          const repairsValue =
+                            Number(localRepair || car.repair_estimate || 0);
+                          const titleFee = Number(car.title_fee) || 0;
+                          const taxRate = (Number(car.avg_tax_rate) || 0) / 100;
+                          const buyerFeeRate = 0.0725;
+                          const margin = 0.3;
 
-						const totalTax = resale * taxRate;
-						const totalBuyerFee = resale * buyerFeeRate;
-						const grossTarget = resale * (1 - margin);
-						const totalCosts = repairsValue + titleFee + totalTax + totalBuyerFee;
-						const maxBid = Math.max(0, grossTarget - totalCosts);
+                          const totalTax = resale * taxRate;
+                          const totalBuyerFee = resale * buyerFeeRate;
+                          const grossTarget = resale * (1 - margin);
+                          const totalCosts =
+                            repairsValue + titleFee + totalTax + totalBuyerFee;
+                          const maxBid = Math.max(0, grossTarget - totalCosts);
 
-						setMaxBidDetails({
-						  car,
-						  resale,
-						  repairsValue,
-						  titleFee,
-						  totalTax,
-						  totalBuyerFee,
-						  grossTarget,
-						  margin,
-						  maxBid,
-						});
-					  }}
-					  className="text-blue-600 text-xs hover:underline"
-					>
-					  View Breakdown
-					</button>
-				  </div>
+                          setMaxBidDetails({
+                            car,
+                            resale,
+                            repairsValue,
+                            titleFee,
+                            totalTax,
+                            totalBuyerFee,
+                            grossTarget,
+                            margin,
+                            maxBid,
+                          });
+                        }}
+                        className="text-blue-600 text-xs hover:underline"
+                      >
+                        View Breakdown
+                      </button>
+                    </div>
 
-				  <p className="font-semibold text-blue-600">
-					$
-					{calculateMaxBid(car, localRepair).toLocaleString(undefined, {
-					  maximumFractionDigits: 0,
-					})}
-				  </p>
-				</div>
-
+                    <p className="font-semibold text-blue-600">
+                      $
+                      {calculateMaxBid(car, localRepair).toLocaleString(
+                        undefined,
+                        { maximumFractionDigits: 0 }
+                      )}
+                    </p>
+                  </div>
 
                   <div className="mt-4">
                     <button
@@ -283,102 +316,6 @@ const calculateMaxBid = (car, localRepair) => {
           </p>
         )}
       </main>
-
-      {/* Vehicle Details Modal */}
-      {selectedCar && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-          onClick={() => setSelectedCar(null)}
-        >
-          <div
-            className="bg-white rounded-2xl p-6 w-96 shadow-xl border border-gray-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-xl font-semibold mb-2 text-gray-900">
-              {selectedCar.year} {selectedCar.make} {selectedCar.model}
-            </h3>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap mb-3">
-              <strong>Repair Details:</strong>{" "}
-              {selectedCar.repair_details || "No details available."}
-            </p>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">
-              <strong>Resale Details:</strong>{" "}
-              {selectedCar.resale_details || "No resale details available."}
-            </p>
-            <button
-              onClick={() => setSelectedCar(null)}
-              className="mt-4 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-md text-white w-full"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-	  {/* Max Bid Breakdown Modal */}
-		{maxBidDetails && (
-		  <div
-			className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-			onClick={() => setMaxBidDetails(null)}
-		  >
-			<div
-			  className="bg-white rounded-2xl p-6 w-96 shadow-xl border border-gray-200"
-			  onClick={(e) => e.stopPropagation()}
-			>
-			  <h3 className="text-lg font-semibold mb-3 text-gray-900">
-				Max Bid Breakdown — {maxBidDetails.car.year}{" "}
-				{maxBidDetails.car.make} {maxBidDetails.car.model}
-			  </h3>
-
-				<ul className="text-sm text-gray-700 space-y-2">
-				  <li>
-					<strong>AI Resale Value:</strong> $
-					{maxBidDetails.resale.toLocaleString()}
-				  </li>
-				  <li>
-					<strong>Est. Repairs:</strong> $
-					{maxBidDetails.repairsValue.toLocaleString()}
-				  </li>
-				  <li>
-					<strong>Title Fee:</strong> $
-					{maxBidDetails.titleFee.toLocaleString()}
-				  </li>
-				  <li>
-					<strong>Tax:</strong> $
-					{maxBidDetails.totalTax.toLocaleString(undefined, {
-					  minimumFractionDigits: 2,
-					  maximumFractionDigits: 2,
-					})}
-				  </li>
-				  <li>
-					<strong>Buyer Fee (7.25%):</strong> $
-					{maxBidDetails.totalBuyerFee.toLocaleString(undefined, {
-					  minimumFractionDigits: 2,
-					  maximumFractionDigits: 2,
-					})}
-				  </li>
-				  <li>
-					<strong>Target Profit Margin:</strong> {(maxBidDetails.margin * 100).toFixed(0)}%
-				  </li>
-				  <hr />
-				  <li>
-					<strong className="text-blue-600">Recommended Max Bid:</strong> $
-					{maxBidDetails.maxBid.toLocaleString(undefined, {
-					  maximumFractionDigits: 0,
-					})}
-				  </li>
-				</ul>
-
-
-			  <button
-				onClick={() => setMaxBidDetails(null)}
-				className="mt-4 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-md text-white w-full"
-			  >
-				Close
-			  </button>
-			</div>
-		  </div>
-		)}
-
     </div>
   );
 }

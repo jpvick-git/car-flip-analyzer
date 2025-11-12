@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
 
 export default function Header({
@@ -8,6 +8,26 @@ export default function Header({
   logout,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [userIP, setUserIP] = useState("");
+  const [isAllowed, setIsAllowed] = useState(false);
+
+  // ✅ Your authorized IP
+  const allowedIP = "68.186.200.184";
+
+  // --------------------------------------------------
+  // GET USER IP
+  // --------------------------------------------------
+  useEffect(() => {
+    fetch("https://api.ipify.org?format=json")
+      .then((res) => res.json())
+      .then((data) => {
+        setUserIP(data.ip);
+        if (data.ip === allowedIP) {
+          setIsAllowed(true);
+        }
+      })
+      .catch((err) => console.error("Failed to get IP:", err));
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
@@ -24,23 +44,25 @@ export default function Header({
           </h1>
         </div>
 
-        {/* Right: File Upload + Menu */}
+        {/* Right: Upload + Menu */}
         <div className="flex items-center gap-4">
-          {/* Upload Section */}
-          <div className="flex items-center gap-2">
-            <input
-              type="file"
-              accept=".csv"
-              onChange={(e) => setUploadFile(e.target.files[0])}
-              className="text-sm text-gray-700 border border-gray-300 rounded-md px-2 py-1 bg-gray-50 hover:bg-gray-100 cursor-pointer focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-            <button
-              onClick={uploadUserFile}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition"
-            >
-              Upload CSV
-            </button>
-          </div>
+          {/* Upload Section (only visible to allowed IP) */}
+          {isAllowed && (
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) => setUploadFile(e.target.files[0])}
+                className="text-sm text-gray-700 border border-gray-300 rounded-md px-2 py-1 bg-gray-50 hover:bg-gray-100 cursor-pointer focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+              <button
+                onClick={uploadUserFile}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition"
+              >
+                Upload CSV
+              </button>
+            </div>
+          )}
 
           {/* Hamburger Menu */}
           <div className="relative">
@@ -85,6 +107,13 @@ export default function Header({
           </div>
         </div>
       </div>
+
+      {/* Optional: show detected IP in small footer line for you */}
+      {!isAllowed && (
+        <p className="text-center text-xs text-gray-400 pb-1">
+          Uploads restricted — your IP: <span className="font-mono">{userIP || "..."}</span>
+        </p>
+      )}
     </header>
   );
 }

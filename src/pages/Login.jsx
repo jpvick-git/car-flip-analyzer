@@ -41,14 +41,30 @@ export default function Login() {
 		  return;
 		}
 
-		if (endpoint === "login" && data.access_token) {
-		  localStorage.setItem("token", data.access_token);
-		  setStatus("✅ Login successful!");
-		  navigate("/"); // redirect to dashboard
+		if (endpoint === "login") {
+		  // Handle multiple possible token key names safely
+		  const token =
+			data.access_token ||
+			data.token ||
+			data.accessToken ||
+			data?.data?.access_token ||
+			null;
+
+		  console.log("🔍 Login response:", data);
+
+		  if (token) {
+			localStorage.setItem("token", token);
+			setStatus("✅ Login successful!");
+			navigate("/"); // redirect to dashboard
+		  } else {
+			console.warn("⚠️ No token found in response:", data);
+			setStatus(data.message || "❌ Login failed: Invalid response");
+		  }
 		} else {
 		  setStatus(data.message || "✅ Registered! You can now log in.");
 		  setIsRegistering(false);
 		}
+
 	  } catch (err) {
 		console.error("Fetch error:", err);
 		setStatus("❌ Connection error");

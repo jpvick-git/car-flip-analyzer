@@ -57,30 +57,38 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
             shutil.copyfileobj(file.file, buffer)
         print(f"📄 Saved upload to {file_path}")
 
-        # --- Step 2: Clone any existing cars from DB ---
+        # --- Step 2 : Clone existing lots or mark new ones ---
         df = pd.read_csv(file_path)
         new_lots = []
         cloned_lots = []
+
         with rds_engine.begin() as conn:
             for _, row in df.iterrows():
                 lot_num = str(row.get("lot_number") or row.get("lot_inv_num") or row.get("Lot") or "").strip()
                 if not lot_num:
                     continue
+                lot_num = lot_num.replace(",", "").strip()
 
-                # Skip if this user already has it
+                # Already exists for this user?
                 exists_user = conn.execute(
-                    text("SELECT 1 FROM user_vehicles WHERE lot_number = :lot AND user_id = :uid"),
+                    text("""
+                        SELECT 1
+                        FROM user_vehicles
+                        WHERE LTRIM(RTRIM(lot_number)) = :lot
+                          AND user_id = :uid
+                    """),
                     {"lot": lot_num, "uid": user["id"]},
                 ).fetchone()
                 if exists_user:
+                    print(f"⏩ User {user['id']} already has lot {lot_num}, skipping.")
                     continue
 
-                # Find full record from another user
+                # Look for any existing record for this lot
                 existing = conn.execute(
                     text("""
                         SELECT TOP 1 *
                         FROM user_vehicles
-                        WHERE lot_number = :lot
+                        WHERE LTRIM(RTRIM(lot_number)) = :lot
                         ORDER BY updated_at DESC
                     """),
                     {"lot": lot_num},
@@ -89,32 +97,34 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                 if existing:
                     v = dict(existing._mapping)
 
-                    # Ensure numeric/text values are copied intact, not replaced with 0
+                    # Clone existing record for new user
                     conn.execute(
                         text("""
                             INSERT INTO user_vehicles (
-                                user_id, lot_number, lot_url, year, make, model,
-                                engine_type, cylinders, vin, title_code, odometer,
-                                odometer_description, damage_description, current_bid,
-                                my_bid, item_number, sale_name, auto_grade, sale_light,
-                                announcements, est_retail_value, sale_date,
+                                user_id, lot_url, lot_number, est_retail_value, sale_date,
+                                year, make, model, engine_type, cylinders, vin, title_code,
+                                odometer, odometer_description, damage_description,
+                                current_bid, my_bid, item_number, sale_name,
+                                auto_grade, sale_light, announcements,
                                 repair_estimate, repair_details, resale_details, resale_estimate,
                                 created_at, updated_at, image_url
                             )
                             VALUES (
-                                :uid, :lot, :url, :year, :make, :model,
-                                :engine, :cyl, :vin, :title, :odo,
-                                :odo_desc, :damage, :curr_bid,
-                                :my_bid, :item_num, :sale_name, :auto_grade, :sale_light,
-                                :announcements, :retail_val, :sale_date,
+                                :uid, :url, :lot, :retail, :sale_date,
+                                :year, :make, :model, :engine, :cyl, :vin, :title,
+                                :odo, :odo_desc, :damage,
+                                :curr_bid, :my_bid, :item_num, :sale_name,
+                                :auto_grade, :sale_light, :announcements,
                                 :rep_est, :rep_det, :res_det, :res_est,
                                 GETDATE(), NULL, :img
                             )
                         """),
                         {
                             "uid": user["id"],
-                            "lot": v.get("lot_number"),
                             "url": v.get("lot_url"),
+                            "lot": v.get("lot_number"),
+                            "retail": v.get("est_retail_value"),
+                            "sale_date": v.get("sale_date"),
                             "year": v.get("year"),
                             "make": v.get("make"),
                             "model": v.get("model"),
@@ -132,8 +142,6 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                             "auto_grade": v.get("auto_grade"),
                             "sale_light": v.get("sale_light"),
                             "announcements": v.get("announcements"),
-                            "retail_val": v.get("est_retail_value"),
-                            "sale_date": v.get("sale_date"),
                             "rep_est": v.get("repair_estimate"),
                             "rep_det": v.get("repair_details"),
                             "res_det": v.get("resale_details"),
@@ -142,10 +150,49 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                         },
                     )
                     cloned_lots.append(lot_num)
+                    print(f"✅ Cloned lot {lot_num} → user {user['id']}")
                 else:
+                    # Still not found anywhere — mark for Copart
                     new_lots.append(lot_num)
+                    print(f"🆕 Lot {lot_num} not found in DB — needs Copart download.")
 
-        print(f"✅ Cloned {len(cloned_lots)} existing lots for user {user['id']}")
+        # --- Step 3 : Recheck DB after cloning ---
+        still_missing = []
+        with rds_engine.begin() as conn:
+            for _, row in df.iterrows():
+                lot_num = str(row.get("lot_number") or row.get("lot_inv_num") or row.get("Lot") or "").strip()
+                if not lot_num:
+                    continue
+                lot_num = lot_num.replace(",", "").strip()
+
+                exists_now = conn.execute(
+                    text("""
+                        SELECT 1
+                        FROM user_vehicles
+                        WHERE LTRIM(RTRIM(lot_number)) = :lot
+                          AND user_id = :uid
+                    """),
+                    {"lot": lot_num, "uid": user["id"]},
+                ).fetchone()
+
+                if not exists_now:
+                    still_missing.append(lot_num)
+
+        print(f"✅ Cloned {len(cloned_lots)} lots for user {user['id']}.")
+        print(f"🔍 After recheck, {len(still_missing)} lots missing for user {user['id']}.")
+
+        # --- Step 4 : Skip Copart/AI if nothing missing ---
+        if not still_missing:
+            print("🚫 All lots exist after cloning — skipping Copart download and AI estimator.")
+            return JSONResponse(
+                content={
+                    "message": f"✅ All {len(cloned_lots)} lots cloned for user {user['id']} — no new lots to process.",
+                    "cloned_lots": cloned_lots,
+                }
+            )
+
+        # Otherwise, continue with Copart/AI for missing lots
+        print(f"🚀 Proceeding with Copart download for {len(still_missing)} new lots.")
 
         # --- Step 2.5: Skip ngrok trigger if everything already existed ---
         if not new_lots:

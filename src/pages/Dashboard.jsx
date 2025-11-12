@@ -22,14 +22,13 @@ const Dashboard = () => {
             },
           }
         );
-
         const data = response.data;
         if (Array.isArray(data)) {
           setCars(data);
         } else if (data && Array.isArray(data.vehicles)) {
           setCars(data.vehicles);
         } else {
-          console.error("Unexpected data shape:", data);
+          console.error("Unexpected data format:", data);
           setCars([]);
         }
       } catch (err) {
@@ -44,7 +43,7 @@ const Dashboard = () => {
   }, []);
 
   // -----------------------------------------------
-  // RENDER STATES
+  // RENDER
   // -----------------------------------------------
   if (loading)
     return (
@@ -60,9 +59,6 @@ const Dashboard = () => {
       </div>
     );
 
-  // -----------------------------------------------
-  // MAIN RENDER
-  // -----------------------------------------------
   return (
     <main className="p-6 bg-gray-50 min-h-screen">
       <h1 className="text-2xl font-bold mb-6 text-gray-800">
@@ -135,9 +131,7 @@ const Dashboard = () => {
         </div>
       ) : (
         <div className="text-gray-600 text-center p-6">
-          {cars && !Array.isArray(cars)
-            ? "Invalid data received from server."
-            : "No vehicles found or server unreachable."}
+          No vehicles found or server unreachable.
         </div>
       )}
 

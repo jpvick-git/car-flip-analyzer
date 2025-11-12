@@ -217,7 +217,27 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                     }
                 )
 
-            print(f"🚀 Proceeding with Copart for remaining {len(new_lots)} lots.")
+            # --------------------------------------------------
+            # Step 4: Trigger Copart + AI pipeline for new lots
+            # --------------------------------------------------
+            if new_lots:
+                try:
+                    trigger_url = LOCAL_TRIGGER_URL
+                    payload = {"user_id": user["id"], "new_lots": new_lots}
+                    print(f"🔗 Triggering automation: {trigger_url} with {payload}")
+
+                    response = requests.post(trigger_url, json=payload, timeout=15)
+
+                    if response.ok:
+                        print("✅ Copart + AI pipeline triggered successfully.")
+                    else:
+                        print(f"⚠️ Trigger returned {response.status_code}: {response.text}")
+
+                except Exception as e:
+                    print(f"❌ Failed to trigger Copart automation: {e}")
+            else:
+                print("🚫 No new lots to trigger automation for.")
+
 
         except Exception as e:
             print(f"❌ Error during final lot existence check: {e}")

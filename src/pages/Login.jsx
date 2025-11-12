@@ -8,6 +8,7 @@ export default function Login() {
   const [isRegistering, setIsRegistering] = useState(false);
   const navigate = useNavigate();
 
+  // 🔧 Force production API (works for both local + deployed)
   const apiBase =
     process.env.NODE_ENV === "development"
       ? "http://localhost:8000"
@@ -16,61 +17,49 @@ export default function Login() {
   // -----------------------------------------
   // AUTH HANDLERS
   // -----------------------------------------
-	const handleAuth = async (endpoint) => {
-	  setStatus(endpoint === "login" ? "Logging in..." : "Registering...");
-	  try {
-		const res = await fetch(`${apiBase}/${endpoint}`, {
-		  method: "POST",
-		  headers: { "Content-Type": "application/x-www-form-urlencoded" },
-		  body: new URLSearchParams({ username: email, password }),
-		});
+  const handleAuth = async (endpoint) => {
+    setStatus(endpoint === "login" ? "Logging in..." : "Registering...");
+    try {
+      const res = await fetch(`${apiBase}/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ username: email, password }),
+      });
 
-		let data;
-		try {
-		  const data = await res.json();
-		  console.log("🔍 Login response:", data);
+      // ✅ Corrected data parsing
+      const data = await res.json().catch(() => null);
+      console.log("🔍 Response:", data);
 
-		} catch {
-		  console.error("⚠️ Backend returned non-JSON or empty response");
-		  setStatus("❌ Invalid response from server");
-		  return;
-		}
+      if (!res.ok) {
+        setStatus(
+          `❌ ${data?.detail || data?.message || "Login request failed"}`
+        );
+        return;
+      }
 
-		if (!res.ok) {
-		  setStatus(`❌ ${data.detail || data.message || "Login failed"}`);
-		  return;
-		}
+      if (endpoint === "login") {
+        const token =
+          data?.access_token ||
+          data?.token ||
+          data?.accessToken ||
+          data?.data?.access_token;
 
-		if (endpoint === "login") {
-		  // Handle multiple possible token key names safely
-		  const token =
-			data.access_token ||
-			data.token ||
-			data.accessToken ||
-			data?.data?.access_token ||
-			null;
-
-		  console.log("🔍 Login response:", data);
-
-		  if (token) {
-			localStorage.setItem("token", token);
-			setStatus("✅ Login successful!");
-			navigate("/"); // redirect to dashboard
-		  } else {
-			console.warn("⚠️ No token found in response:", data);
-			setStatus(data.message || "❌ Login failed: Invalid response");
-		  }
-		} else {
-		  setStatus(data.message || "✅ Registered! You can now log in.");
-		  setIsRegistering(false);
-		}
-
-	  } catch (err) {
-		console.error("Fetch error:", err);
-		setStatus("❌ Connection error");
-	  }
-	};
-
+        if (token) {
+          localStorage.setItem("token", token);
+          setStatus("✅ Login successful!");
+          navigate("/"); // redirect to dashboard
+        } else {
+          setStatus("❌ No token found in response");
+        }
+      } else {
+        setStatus(data?.message || "✅ Registered! You can now log in.");
+        setIsRegistering(false);
+      }
+    } catch (err) {
+      console.error("Fetch error:", err);
+      setStatus("❌ Connection error");
+    }
+  };
 
   // -----------------------------------------
   // UI
@@ -128,13 +117,12 @@ export default function Login() {
             Remember me
           </label>
           <button
-			  type="button"
-			  className="text-blue-600 hover:text-blue-700"
-			  onClick={() => alert("Password reset coming soon!")}
-			>
-			  Forgot password?
-			</button>
-
+            type="button"
+            className="text-blue-600 hover:text-blue-700"
+            onClick={() => alert("Password reset coming soon!")}
+          >
+            Forgot password?
+          </button>
         </div>
 
         {/* Switch Mode */}

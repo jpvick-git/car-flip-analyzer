@@ -14,13 +14,10 @@ from .auth import get_current_user
 UPLOAD_DIR = "/root/car-flip-analyzer/user_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Update this to your active ngrok endpoint if needed
 LOCAL_TRIGGER_URL = "https://quinquevalent-hayley-unhackneyed.ngrok-free.dev/trigger"
+ALLOWED_IPS = {"68.186.200.184"}  # your allowed IP
 
-# Restrict demo uploads
-ALLOWED_IPS = {"68.186.200.184"}  # your home IP
-
-# RDS Connection
+# AWS RDS SQL Server connection
 RDS_CONN = (
     "mssql+pyodbc://jpvick-git:Nk^+Cq4MfUNt%8q@carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com,1433/cars"
     "?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
@@ -85,12 +82,12 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
         cloned_lots = []
 
         with rds_engine.begin() as conn:
-            # Debug — show headers
             print(f"🧾 CSV Columns Detected: {list(df.columns)}")
 
             for _, row in df.iterrows():
                 lot_num = None
-                # Handle multiple possible column names
+
+                # Handle multiple possible Copart column names
                 for col in ["lot_number", "lot_inv_num", "Lot", "Lot #", "Lot/Inv #"]:
                     if col in df.columns:
                         lot_num = normalize_lot(row[col])
@@ -226,3 +223,6 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
             print(f"❌ Error during final lot existence check: {e}")
             return JSONResponse(status_code=500, content={"error": str(e)})
 
+    except Exception as e:
+        print(f"❌ Error in upload_and_process_file: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})

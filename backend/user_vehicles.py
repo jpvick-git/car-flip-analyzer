@@ -20,6 +20,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
 ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
+
 def decode_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -35,6 +36,7 @@ def decode_token(token: str):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token"
         )
+
 
 # --------------------------------------------------
 # 1️⃣ Upload a new vehicle for the logged-in user
@@ -53,7 +55,6 @@ def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Missing lot_inv_num")
 
     with engine.begin() as conn:
-        # 1️⃣ Check if a vehicle with this lot number already exists for any user
         existing = conn.execute(
             text("""
                 SELECT TOP 1
@@ -76,7 +77,6 @@ def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
         ).fetchone()
 
         if existing:
-            # 2️⃣ Copy all fields from the existing record
             v = dict(existing._mapping)
             conn.execute(
                 text("""
@@ -108,7 +108,6 @@ def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
             )
             return {"message": f"✅ Vehicle {lot_num} copied for user {user_id}"}
 
-        # 3️⃣ Otherwise, insert a fresh record
         result = conn.execute(
             text("""
                 INSERT INTO user_vehicles (
@@ -131,14 +130,15 @@ def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
 
     return {"message": f"✅ Vehicle {lot_num} uploaded successfully", "vehicle_id": vehicle_id}
 
+
 # --------------------------------------------------
 # 2️⃣ Get all vehicles for the logged-in user
 # --------------------------------------------------
 @router.get("/get_vehicles")
 def get_user_vehicles(user=Depends(get_current_user)):
     """
-    Returns all vehicles for the authenticated user.
-    Ensures each vehicle includes a valid image_url.
+    Returns all vehicles for the authenticated user,
+    now including sale_date and sale_name (Location).
     """
     from .backend_api import get_first_image
     engine = get_engine()
@@ -161,6 +161,8 @@ def get_user_vehicles(user=Depends(get_current_user)):
                 uv.resale_details,
                 uv.created_at,
                 uv.image_url,
+                uv.sale_date,   
+                uv.sale_name,  
                 u.state_code,
                 ttf.title_fee,
                 ttf.avg_tax_rate
@@ -174,24 +176,18 @@ def get_user_vehicles(user=Depends(get_current_user)):
     vehicles = []
     for r in rows:
         v = dict(r._mapping)
-
-        # ✅ Correct key to use (matches SQL alias)
         lot_id = str(v.get("lot_number") or "").strip()
 
-        # ✅ If DB has image_url already, use it
         img = v.get("image_url")
-
-        # ✅ If image_url is missing, build fallback path
         if not img or img.lower() in ("", "none", "null"):
             local_img = get_first_image(lot_id)
-            if local_img:
-                v["image_url"] = local_img
-            else:
-                v["image_url"] = (
-                    f"https://api.carflipanalyzer.com/backend/downloads/"
-                    f"{lot_id}/{lot_id}_Image_1.jpg"
-                )
+            v["image_url"] = (
+                local_img
+                or f"https://api.carflipanalyzer.com/backend/downloads/{lot_id}/{lot_id}_Image_1.jpg"
+            )
 
+        # ✅ Add frontend-friendly label for clarity (optional)
+        v["location"] = v.get("sale_name")
 
         vehicles.append(v)
 
@@ -220,7 +216,7 @@ def analyze_vehicle_route(vehicle_id: int, user=Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="Vehicle not found")
 
         vehicle = dict(row._mapping)
-        ai_data = analyze_vehicle(vehicle)  # Calls your AI estimator
+        ai_data = analyze_vehicle(vehicle)
 
         conn.execute(
             text("""

@@ -23,7 +23,15 @@ export default function CarCard({ car, setSelectedCar }) {
           {car.year} {car.make} {car.model}
         </h2>
         <p className="text-sm text-gray-500">Lot #: {car.lot_number}</p>
-
+		<p className="text-sm text-gray-500">
+		  Location: {car.sale_name || car.location || "N/A"}
+		</p>
+		<p className="text-sm text-gray-500">
+		  Sale Date:{" "}
+		  {car.sale_date
+			? new Date(car.sale_date).toLocaleDateString()
+			: "N/A"}
+		</p>
         {/* Repair & Resale Row */}
         <div className="flex items-center justify-between pt-2 border-t border-gray-100">
           <div className="flex items-center space-x-1 text-gray-700">

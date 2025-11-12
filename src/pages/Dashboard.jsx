@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { Wrench, DollarSign } from "lucide-react";
 
 const Dashboard = () => {
   const [cars, setCars] = useState([]);
@@ -62,7 +63,6 @@ const Dashboard = () => {
 
   return (
     <main className="p-6 bg-gray-50 min-h-screen">
-
       {!Array.isArray(cars) || cars.length === 0 ? (
         <p className="text-gray-600">No vehicles found.</p>
       ) : (
@@ -70,58 +70,66 @@ const Dashboard = () => {
           {cars.map((car) => (
             <div
               key={car.id}
-              className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow relative overflow-hidden"
+              className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden"
             >
-              <img
-			    src={car.image_url || "https://placehold.co/400x250?text=No+Image"}
-			    alt={`${car.make} ${car.model}`}
-			    className="w-full h-56 object-cover rounded-t-xl"
-			  />
+              {/* IMAGE SECTION */}
+              <div className="relative">
+                <img
+                  src={car.image_url || "https://placehold.co/400x250?text=No+Image"}
+                  alt={`${car.make} ${car.model}`}
+                  className="w-full h-56 object-cover"
+                />
+                {/* DAMAGE BADGE */}
+                <div className="absolute top-3 left-3 bg-blue-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
+                  {car.damage_description || "Unknown Damage"}
+                </div>
+              </div>
 
-              <h2 className="text-lg font-semibold text-gray-800 truncate">
-                {car.year} {car.make} {car.model}
-              </h2>
+              {/* DETAILS SECTION */}
+              <div className="p-4 space-y-2">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {car.year} {car.make} {car.model}
+                </h2>
+                <p className="text-sm text-gray-500">Lot #: {car.lot_number}</p>
 
-              <p className="text-gray-600 text-sm">
-                <span className="font-medium">Lot #:</span> {car.lot_number}
-              </p>
+                {/* REPAIR & RESALE ROW */}
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                  <div className="flex items-center space-x-1 text-gray-700">
+                    <Wrench size={16} />
+                    <span className="text-sm font-medium">
+                      Repair: ${car.repair_estimate || "0"}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-1 text-gray-700">
+                    <DollarSign size={16} />
+                    <span className="text-sm font-medium">
+                      Resale: ${car.resale_estimate || "0"}
+                    </span>
+                  </div>
+                </div>
 
-              <p className="text-gray-600 text-sm">
-                <span className="font-medium">Damage:</span>{" "}
-                {car.damage_description || "Unknown"}
-              </p>
-
-              <p className="text-gray-600 text-sm">
-                <span className="font-medium">Repair:</span> $
-                {car.repair_estimate || "0"}
-              </p>
-
-              <p className="text-gray-600 text-sm mb-2">
-                <span className="font-medium">Resale:</span> $
-                {car.resale_estimate || "0"}
-              </p>
-
-              <div className="flex justify-between items-center mt-3">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedCar(car);
-                  }}
-                  className="text-blue-600 text-sm hover:underline"
-                >
-                  View Details
-                </button>
-
-                {car.lot_url && (
-                  <a
-                    href={car.lot_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 text-sm hover:underline"
+                {/* FOOTER BUTTONS */}
+                <div className="flex justify-between items-center pt-3">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedCar(car);
+                    }}
+                    className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 hover:bg-gray-50 transition"
                   >
-                    Copart →
-                  </a>
-                )}
+                    View Details
+                  </button>
+                  {car.lot_url && (
+                    <a
+                      href={car.lot_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-blue-600 hover:bg-blue-50 transition"
+                    >
+                      Copart →
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           ))}

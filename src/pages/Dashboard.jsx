@@ -62,9 +62,6 @@ const Dashboard = () => {
 
   return (
     <main className="p-6 bg-gray-50 min-h-screen">
-      <h1 className="text-2xl font-bold mb-6 text-gray-800">
-        🚗 Vehicle Dashboard
-      </h1>
 
       {!Array.isArray(cars) || cars.length === 0 ? (
         <p className="text-gray-600">No vehicles found.</p>

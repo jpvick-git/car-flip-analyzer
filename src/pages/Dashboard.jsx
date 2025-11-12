@@ -22,7 +22,16 @@ const Dashboard = () => {
             },
           }
         );
-        setCars(response.data || []);
+
+        const data = response.data;
+        if (Array.isArray(data)) {
+          setCars(data);
+        } else if (data && Array.isArray(data.vehicles)) {
+          setCars(data.vehicles);
+        } else {
+          console.error("Unexpected data shape:", data);
+          setCars([]);
+        }
       } catch (err) {
         console.error("Error fetching cars:", err);
         setError("Failed to load vehicles");
@@ -35,7 +44,7 @@ const Dashboard = () => {
   }, []);
 
   // -----------------------------------------------
-  // RENDER
+  // RENDER STATES
   // -----------------------------------------------
   if (loading)
     return (
@@ -51,33 +60,22 @@ const Dashboard = () => {
       </div>
     );
 
+  // -----------------------------------------------
+  // MAIN RENDER
+  // -----------------------------------------------
   return (
     <main className="p-6 bg-gray-50 min-h-screen">
       <h1 className="text-2xl font-bold mb-6 text-gray-800">
         🚗 Vehicle Dashboard
       </h1>
 
-      {cars.length === 0 ? (
-        <p className="text-gray-600">No vehicles found.</p>
-      ) : (
+      {Array.isArray(cars) && cars.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {Array.isArray(cars) && cars.length > 0 ? (
-			  cars.map((car) => (
-				<div
-				  key={car.id}
-				  className="bg-white rounded-xl shadow-md p-4 hover:shadow-lg transition-shadow relative"
-				>
-				  {/* --- your existing car card content goes here --- */}
-				</div>
-			  ))
-			) : (
-			  <div className="text-gray-600 text-center p-6">
-				{cars && !Array.isArray(cars)
-				  ? "Invalid data received from server."
-				  : "No vehicles found or server unreachable."}
-			  </div>
-			)}
-
+          {cars.map((car) => (
+            <div
+              key={car.id}
+              className="bg-white rounded-xl shadow-md p-4 hover:shadow-lg transition-shadow relative"
+            >
               <img
                 src={
                   car.image_url ||
@@ -134,6 +132,12 @@ const Dashboard = () => {
               </div>
             </div>
           ))}
+        </div>
+      ) : (
+        <div className="text-gray-600 text-center p-6">
+          {cars && !Array.isArray(cars)
+            ? "Invalid data received from server."
+            : "No vehicles found or server unreachable."}
         </div>
       )}
 

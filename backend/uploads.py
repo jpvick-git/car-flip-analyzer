@@ -63,8 +63,7 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
         cloned_lots = []
         with rds_engine.begin() as conn:
             for _, row in df.iterrows():
-                # Pull lot number from CSV (supports both "lot_inv_num" and "Lot")
-                lot_num = str(row.get("lot_inv_num") or row.get("Lot") or row.get("lot_number") or "").strip()
+                lot_num = str(row.get("lot_number") or row.get("lot_inv_num") or row.get("Lot") or "").strip()
                 if not lot_num:
                     continue
 
@@ -76,40 +75,40 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                 if exists_user:
                     continue
 
-                # Try to find any existing record for this lot from any other user
+                # Find full record from another user
                 existing = conn.execute(
                     text("""
-                        SELECT TOP 1
-                            lot_number,
-                            lot_url,
-                            year,
-                            make,
-                            model,
-                            odometer,
-                            damage_description,
-                            COALESCE(repair_estimate, 0) AS repair_estimate,
-                            COALESCE(resale_estimate, est_retail_value, 0) AS resale_estimate,
-                            COALESCE(repair_details, '') AS repair_details,
-                            COALESCE(resale_details, '') AS resale_details,
-                            image_url
+                        SELECT TOP 1 *
                         FROM user_vehicles
                         WHERE lot_number = :lot
+                        ORDER BY updated_at DESC
                     """),
                     {"lot": lot_num},
                 ).fetchone()
 
                 if existing:
                     v = dict(existing._mapping)
+
+                    # Ensure numeric/text values are copied intact, not replaced with 0
                     conn.execute(
                         text("""
                             INSERT INTO user_vehicles (
                                 user_id, lot_number, lot_url, year, make, model,
-                                odometer, damage_description, repair_estimate,
-                                resale_estimate, repair_details, resale_details, image_url
+                                engine_type, cylinders, vin, title_code, odometer,
+                                odometer_description, damage_description, current_bid,
+                                my_bid, item_number, sale_name, auto_grade, sale_light,
+                                announcements, est_retail_value, sale_date,
+                                repair_estimate, repair_details, resale_details, resale_estimate,
+                                created_at, updated_at, image_url
                             )
                             VALUES (
-                                :uid, :lot, :url, :year, :make, :model, :odo,
-                                :damage, :rep_est, :res_est, :rep_det, :res_det, :img
+                                :uid, :lot, :url, :year, :make, :model,
+                                :engine, :cyl, :vin, :title, :odo,
+                                :odo_desc, :damage, :curr_bid,
+                                :my_bid, :item_num, :sale_name, :auto_grade, :sale_light,
+                                :announcements, :retail_val, :sale_date,
+                                :rep_est, :rep_det, :res_det, :res_est,
+                                GETDATE(), NULL, :img
                             )
                         """),
                         {
@@ -119,12 +118,26 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                             "year": v.get("year"),
                             "make": v.get("make"),
                             "model": v.get("model"),
+                            "engine": v.get("engine_type"),
+                            "cyl": v.get("cylinders"),
+                            "vin": v.get("vin"),
+                            "title": v.get("title_code"),
                             "odo": v.get("odometer"),
+                            "odo_desc": v.get("odometer_description"),
                             "damage": v.get("damage_description"),
+                            "curr_bid": v.get("current_bid"),
+                            "my_bid": v.get("my_bid"),
+                            "item_num": v.get("item_number"),
+                            "sale_name": v.get("sale_name"),
+                            "auto_grade": v.get("auto_grade"),
+                            "sale_light": v.get("sale_light"),
+                            "announcements": v.get("announcements"),
+                            "retail_val": v.get("est_retail_value"),
+                            "sale_date": v.get("sale_date"),
                             "rep_est": v.get("repair_estimate"),
-                            "res_est": v.get("resale_estimate"),
                             "rep_det": v.get("repair_details"),
                             "res_det": v.get("resale_details"),
+                            "res_est": v.get("resale_estimate"),
                             "img": v.get("image_url"),
                         },
                     )
@@ -133,6 +146,17 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                     new_lots.append(lot_num)
 
         print(f"✅ Cloned {len(cloned_lots)} existing lots for user {user['id']}")
+
+        # --- Step 2.5: Skip ngrok trigger if everything already existed ---
+        if not new_lots:
+            print("🚫 All lots already existed — skipping Copart download/AI trigger.")
+            return JSONResponse(
+                content={
+                    "message": f"✅ All {len(cloned_lots)} vehicles cloned successfully — no new lots to process.",
+                    "new_lots": [],
+                    "cloned_lots": cloned_lots,
+                }
+            )
 
         # --- Step 3: Only trigger ngrok for new lots ---
         try:

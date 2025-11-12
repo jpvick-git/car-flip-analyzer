@@ -70,15 +70,13 @@ const Dashboard = () => {
           {cars.map((car) => (
             <div
               key={car.id}
-              className="bg-white rounded-xl shadow-md p-4 hover:shadow-lg transition-shadow relative"
+              className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow relative overflow-hidden"
             >
               <img
-                src={
-                  car.image_url || "https://placehold.co/400x250?text=No+Image"
-                }
-                alt={`${car.make} ${car.model}`}
-                className="w-full h-40 object-cover rounded-lg mb-3"
-              />
+			    src={car.image_url || "https://placehold.co/400x250?text=No+Image"}
+			    alt={`${car.make} ${car.model}`}
+			    className="w-full h-56 object-cover rounded-t-xl"
+			  />
 
               <h2 className="text-lg font-semibold text-gray-800 truncate">
                 {car.year} {car.make} {car.model}

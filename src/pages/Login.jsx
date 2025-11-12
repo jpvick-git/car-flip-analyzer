@@ -16,29 +16,43 @@ export default function Login() {
   // -----------------------------------------
   // AUTH HANDLERS
   // -----------------------------------------
-  const handleAuth = async (endpoint) => {
-    setStatus(endpoint === "login" ? "Logging in..." : "Registering...");
-    try {
-      const res = await fetch(`${apiBase}/${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ username: email, password }),
-      });
-      const data = await res.json();
+	const handleAuth = async (endpoint) => {
+	  setStatus(endpoint === "login" ? "Logging in..." : "Registering...");
+	  try {
+		const res = await fetch(`${apiBase}/${endpoint}`, {
+		  method: "POST",
+		  headers: { "Content-Type": "application/x-www-form-urlencoded" },
+		  body: new URLSearchParams({ username: email, password }),
+		});
 
-      if (endpoint === "login" && data.access_token) {
-        localStorage.setItem("token", data.access_token);
-        setStatus("✅ Login successful!");
-        navigate("/"); // redirect to dashboard
-      } else {
-        setStatus(data.message || "✅ Registered! You can now log in.");
-        setIsRegistering(false);
-      }
-    } catch (err) {
-      console.error(err);
-      setStatus("❌ Connection error");
-    }
-  };
+		let data;
+		try {
+		  data = await res.json();
+		} catch {
+		  console.error("⚠️ Backend returned non-JSON or empty response");
+		  setStatus("❌ Invalid response from server");
+		  return;
+		}
+
+		if (!res.ok) {
+		  setStatus(`❌ ${data.detail || data.message || "Login failed"}`);
+		  return;
+		}
+
+		if (endpoint === "login" && data.access_token) {
+		  localStorage.setItem("token", data.access_token);
+		  setStatus("✅ Login successful!");
+		  navigate("/"); // redirect to dashboard
+		} else {
+		  setStatus(data.message || "✅ Registered! You can now log in.");
+		  setIsRegistering(false);
+		}
+	  } catch (err) {
+		console.error("Fetch error:", err);
+		setStatus("❌ Connection error");
+	  }
+	};
+
 
   // -----------------------------------------
   // UI

@@ -57,38 +57,52 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
             shutil.copyfileobj(file.file, buffer)
         print(f"📄 Saved upload to {file_path}")
 
-        # --- Step 2 : Clone existing lots or mark new ones ---
+import pandas as pd
+from sqlalchemy import text
+
+        # --- Step 2: Clone existing lots or mark for Copart ---
         df = pd.read_csv(file_path)
         new_lots = []
         cloned_lots = []
 
+        def normalize_lot(val):
+            """Normalize lot_number to pure string digits"""
+            if pd.isna(val):
+                return ""
+            val = str(val).strip()
+            # remove commas, decimals, spaces, etc.
+            if val.endswith(".0"):
+                val = val[:-2]
+            return val.replace(",", "").strip()
+
         with rds_engine.begin() as conn:
             for _, row in df.iterrows():
-                lot_num = str(row.get("lot_number") or row.get("lot_inv_num") or row.get("Lot") or "").strip()
+                lot_num = normalize_lot(
+                    row.get("lot_number") or row.get("lot_inv_num") or row.get("Lot")
+                )
                 if not lot_num:
                     continue
-                lot_num = lot_num.replace(",", "").strip()
 
-                # Already exists for this user?
+                # Check if already exists for current user
                 exists_user = conn.execute(
                     text("""
-                        SELECT 1
-                        FROM user_vehicles
+                        SELECT 1 FROM user_vehicles
                         WHERE LTRIM(RTRIM(lot_number)) = :lot
                           AND user_id = :uid
                     """),
                     {"lot": lot_num, "uid": user["id"]},
                 ).fetchone()
+
                 if exists_user:
                     print(f"⏩ User {user['id']} already has lot {lot_num}, skipping.")
                     continue
 
-                # Look for any existing record for this lot
+                # Find existing lot in DB for ANY user
                 existing = conn.execute(
                     text("""
                         SELECT TOP 1 *
                         FROM user_vehicles
-                        WHERE LTRIM(RTRIM(lot_number)) = :lot
+                        WHERE REPLACE(LTRIM(RTRIM(lot_number)), ',', '') = :lot
                         ORDER BY updated_at DESC
                     """),
                     {"lot": lot_num},
@@ -96,8 +110,6 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
 
                 if existing:
                     v = dict(existing._mapping)
-
-                    # Clone existing record for new user
                     conn.execute(
                         text("""
                             INSERT INTO user_vehicles (
@@ -149,12 +161,36 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                             "img": v.get("image_url"),
                         },
                     )
-                    cloned_lots.append(lot_num)
                     print(f"✅ Cloned lot {lot_num} → user {user['id']}")
+                    cloned_lots.append(lot_num)
                 else:
-                    # Still not found anywhere — mark for Copart
+                    print(f"❌ Lot {lot_num} not found in DB for any user — will require Copart.")
                     new_lots.append(lot_num)
-                    print(f"🆕 Lot {lot_num} not found in DB — needs Copart download.")
+
+        print(f"✅ {len(cloned_lots)} cloned, {len(new_lots)} new for user {user['id']}")
+
+        # --- Step 3: Recheck and skip Copart if everything cloned ---
+        with rds_engine.begin() as conn:
+            existing_count = conn.execute(
+                text("""
+                    SELECT COUNT(*) AS cnt
+                    FROM user_vehicles
+                    WHERE user_id = :uid
+                      AND lot_number IN :lots
+                """),
+                {"uid": user["id"], "lots": tuple([normalize_lot(l) for l in df["lot_number"] if not pd.isna(l)])},
+            ).scalar()
+
+        if existing_count == len(df):
+            print(f"🚫 All {existing_count} lots now exist for user {user['id']} — skipping Copart/AI.")
+            return JSONResponse(
+                content={
+                    "message": f"✅ All {existing_count} lots cloned for user {user['id']} — no new lots to process.",
+                    "cloned_lots": cloned_lots,
+                }
+            )
+
+        print(f"🚀 Proceeding with Copart for remaining {len(new_lots)} lots.")
 
         # --- Step 3 : Recheck DB after cloning ---
         still_missing = []

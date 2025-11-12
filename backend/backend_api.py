@@ -17,10 +17,19 @@ app = FastAPI(title="Car Flip Analyzer API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://www.carflipanalyzer.com",
+    allow_origins=[
+        # Production
+        "https://www.carflipanalyzer.com",
         "https://carflipanalyzer.com",
-        "http://localhost:3000",  # for local dev
-        "http://127.0.0.1:3000"],
+
+        # Vercel deployments
+        "https://car-flip-analyzer-git-main-jpvick-gits-projects.vercel.app",
+        "https://carflipanalyzer-git-main-jpvick-gits-projects.vercel.app",
+
+        # Local dev
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

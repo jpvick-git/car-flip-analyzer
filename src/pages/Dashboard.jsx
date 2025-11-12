@@ -22,6 +22,7 @@ const Dashboard = () => {
             },
           }
         );
+
         const data = response.data;
         if (Array.isArray(data)) {
           setCars(data);
@@ -65,7 +66,10 @@ const Dashboard = () => {
         🚗 Vehicle Dashboard
       </h1>
 
-      {Array.isArray(cars) && cars.length > 0 ? (
+      {/* ✅ Safe check for array */}
+      {!Array.isArray(cars) || cars.length === 0 ? (
+        <p className="text-gray-600">No vehicles found.</p>
+      ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {cars.map((car) => (
             <div
@@ -74,8 +78,7 @@ const Dashboard = () => {
             >
               <img
                 src={
-                  car.image_url ||
-                  "https://placehold.co/400x250?text=No+Image"
+                  car.image_url || "https://placehold.co/400x250?text=No+Image"
                 }
                 alt={`${car.make} ${car.model}`}
                 className="w-full h-40 object-cover rounded-lg mb-3"
@@ -128,10 +131,6 @@ const Dashboard = () => {
               </div>
             </div>
           ))}
-        </div>
-      ) : (
-        <div className="text-gray-600 text-center p-6">
-          No vehicles found or server unreachable.
         </div>
       )}
 

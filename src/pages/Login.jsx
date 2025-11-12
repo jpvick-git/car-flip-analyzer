@@ -27,7 +27,9 @@ export default function Login() {
 
 		let data;
 		try {
-		  data = await res.json();
+		  const data = await res.json();
+		  console.log("🔍 Login response:", data);
+
 		} catch {
 		  console.error("⚠️ Backend returned non-JSON or empty response");
 		  setStatus("❌ Invalid response from server");

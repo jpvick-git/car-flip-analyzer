@@ -61,6 +61,71 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
             shutil.copyfileobj(file.file, buffer)
 
         print(f"📄 Saved upload to {file_path}")
+        
+        # --- Step 1.5: Clone existing cars if already in DB ---
+        try:
+            df = pd.read_csv(file_path)
+            with rds_engine.begin() as conn:
+                for _, row in df.iterrows():
+                    lot_num = str(row.get("lot_inv_num") or row.get("Lot") or "").strip()
+                    if not lot_num:
+                        continue
+
+                    # Check if any user already has this lot
+                    existing = conn.execute(
+                        text("""
+                            SELECT TOP 1 *
+                            FROM user_vehicles
+                            WHERE lot_inv_num = :lot
+                        """),
+                        {"lot": lot_num},
+                    ).fetchone()
+
+                    # Skip if current user already has it
+                    existing_self = conn.execute(
+                        text("""
+                            SELECT 1 FROM user_vehicles
+                            WHERE lot_inv_num = :lot AND user_id = :uid
+                        """),
+                        {"lot": lot_num, "uid": user["id"]},
+                    ).fetchone()
+
+                    if existing_self:
+                        continue
+
+                    if existing:
+                        v = dict(existing._mapping)
+                        conn.execute(
+                            text("""
+                                INSERT INTO user_vehicles (
+                                    user_id, lot_inv_num, lot_url, year, make, model,
+                                    odometer, damage_description, repair_estimate,
+                                    resale_estimate, repair_details, resale_details, image_url
+                                )
+                                VALUES (
+                                    :uid, :lot, :url, :year, :make, :model, :odo,
+                                    :damage, :rep_est, :res_est, :rep_det, :res_det, :img
+                                )
+                            """),
+                            {
+                                "uid": user["id"],
+                                "lot": v.get("lot_inv_num"),
+                                "url": v.get("lot_url"),
+                                "year": v.get("year"),
+                                "make": v.get("make"),
+                                "model": v.get("model"),
+                                "odo": v.get("odometer"),
+                                "damage": v.get("damage_description"),
+                                "rep_est": v.get("repair_estimate"),
+                                "res_est": v.get("resale_estimate"),
+                                "rep_det": v.get("repair_details"),
+                                "res_det": v.get("resale_details"),
+                                "img": v.get("image_url"),
+                            },
+                        )
+                        print(f"✅ Cloned existing lot {lot_num} for user {user['id']}")
+        except Exception as e:
+            print(f"⚠️ Error cloning existing cars: {e}")
 
         # --- Step 2: Send the actual CSV to local Windows machine via ngrok ---
         try:

@@ -79,6 +79,12 @@ Vehicle Info:
 - Make: {make}
 - Model: {model}
 - Reported Damage: {damage}
+- Odometer: {odometer_display}
+
+Guidelines:
+- You may **assume mileage varies within ±10,000 miles** to estimate resale value.
+- When writing your explanation or mentioning mileage in text,
+  **always display the exact odometer value above** (do not make up a different number).
 
 From the photos, assess the following:
 
@@ -91,7 +97,7 @@ From the photos, assess the following:
 7. Review interior condition (seats, dash, controls, panels).
 8. Estimate conservative repair cost (parts, labor, paint, misc).
 9. Provide a realistic resale value **for a flip or wholesale resale**, factoring:
-   - 129,000+ miles
+   - Odometer reading of {odometer_display} miles (±10k range may be considered internally)
    - Possible branded/rebuilt title
    - Minor damage history
    - Current private party + auction values (not retail book value)

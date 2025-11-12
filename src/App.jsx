@@ -51,7 +51,7 @@ function Layout() {
       formData.append("file", uploadFile);
 
       const response = await fetch(
-        `${process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com"}/upload_csv`,
+        `${process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com"}/uploads`,
         {
           method: "POST",
           headers: {

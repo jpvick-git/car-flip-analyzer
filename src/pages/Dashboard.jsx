@@ -61,11 +61,23 @@ const Dashboard = () => {
         <p className="text-gray-600">No vehicles found.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {cars.map((car) => (
-            <div
-              key={car.id}
-              className="bg-white rounded-xl shadow-md p-4 hover:shadow-lg transition-shadow relative"
-            >
+          {Array.isArray(cars) && cars.length > 0 ? (
+			  cars.map((car) => (
+				<div
+				  key={car.id}
+				  className="bg-white rounded-xl shadow-md p-4 hover:shadow-lg transition-shadow relative"
+				>
+				  {/* --- your existing car card content goes here --- */}
+				</div>
+			  ))
+			) : (
+			  <div className="text-gray-600 text-center p-6">
+				{cars && !Array.isArray(cars)
+				  ? "Invalid data received from server."
+				  : "No vehicles found or server unreachable."}
+			  </div>
+			)}
+
               <img
                 src={
                   car.image_url ||

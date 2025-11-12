@@ -66,7 +66,6 @@ const Dashboard = () => {
         🚗 Vehicle Dashboard
       </h1>
 
-      {/* ✅ Safe check for array */}
       {!Array.isArray(cars) || cars.length === 0 ? (
         <p className="text-gray-600">No vehicles found.</p>
       ) : (

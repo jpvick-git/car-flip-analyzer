@@ -57,9 +57,6 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
             shutil.copyfileobj(file.file, buffer)
         print(f"📄 Saved upload to {file_path}")
 
-import pandas as pd
-from sqlalchemy import text
-
         # --- Step 2: Clone existing lots or mark for Copart ---
         df = pd.read_csv(file_path)
         new_lots = []

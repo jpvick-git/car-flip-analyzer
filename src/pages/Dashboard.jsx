@@ -308,7 +308,7 @@ const Dashboard = () => {
 
               <p><span className="font-medium">Repair Details:</span> {selectedCar.repair_details || "N/A"}</p>
               <p><span className="font-medium">Resale Details:</span> {selectedCar.resale_details || "N/A"}</p>
-            </div>
+            
 
             {selectedCar.lot_url && (
               <a

@@ -45,20 +45,20 @@ def decode_token(token: str):
 def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
     """
     Insert a new vehicle for the logged-in user.
-    If the lot_inv_num already exists for another user,
+    If the lot_number already exists for another user,
     copy that record (including AI fields) for this user.
     """
     user_id = user["id"]
-    lot_num = vehicle.get("lot_inv_num")
+    lot_num = vehicle.get("lot_number")
 
     if not lot_num:
-        raise HTTPException(status_code=400, detail="Missing lot_inv_num")
+        raise HTTPException(status_code=400, detail="Missing lot_number")
 
     with engine.begin() as conn:
         existing = conn.execute(
             text("""
                 SELECT TOP 1
-                    lot_inv_num,
+                    lot_number,
                     lot_url,
                     year,
                     make,
@@ -71,7 +71,7 @@ def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
                     resale_details,
                     image_url
                 FROM user_vehicles
-                WHERE lot_inv_num = :lot
+                WHERE lot_number = :lot
             """),
             {"lot": lot_num},
         ).fetchone()
@@ -81,7 +81,7 @@ def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
             conn.execute(
                 text("""
                     INSERT INTO user_vehicles (
-                        user_id, lot_inv_num, lot_url, year, make, model,
+                        user_id, lot_number, lot_url, year, make, model,
                         odometer, damage_description, repair_estimate,
                         resale_estimate, repair_details, resale_details, image_url
                     )
@@ -92,7 +92,7 @@ def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
                 """),
                 {
                     "uid": user_id,
-                    "lot": v["lot_inv_num"],
+                    "lot": v["lot_number"],
                     "url": v.get("lot_url"),
                     "year": v.get("year"),
                     "make": v.get("make"),
@@ -111,7 +111,7 @@ def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
         result = conn.execute(
             text("""
                 INSERT INTO user_vehicles (
-                    user_id, lot_inv_num, lot_url, year, make, model, damage_description
+                    user_id, lot_number, lot_url, year, make, model, damage_description
                 )
                 OUTPUT INSERTED.id
                 VALUES (:uid, :lot, :url, :year, :make, :model, :damage)
@@ -176,6 +176,10 @@ def get_user_vehicles(user=Depends(get_current_user)):
     vehicles = []
     for r in rows:
         v = dict(r._mapping)
+
+        v["avg_tax_rate"] = float(v["avg_tax_rate"]) if v.get("avg_tax_rate") is not None else 0
+        v["title_fee"]    = float(v["title_fee"])    if v.get("title_fee") is not None else 0
+
         lot_id = str(v.get("lot_number") or "").strip()
 
         img = v.get("image_url")
@@ -205,7 +209,7 @@ def analyze_vehicle_route(vehicle_id: int, user=Depends(get_current_user)):
     with engine.begin() as conn:
         row = conn.execute(
             text("""
-                SELECT lot_inv_num, year, make, model, damage_description
+                SELECT lot_number, year, make, model, damage_description
                 FROM user_vehicles
                 WHERE id = :id AND user_id = :uid
             """),

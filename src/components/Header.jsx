@@ -130,37 +130,21 @@ export default function Header({
                 {menuOpen ? <X size={20} /> : <Menu size={20} />}
               </button>
 
-              {menuOpen && (
-                <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      alert("Settings feature coming soon!");
-                    }}
-                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    ⚙️ Settings
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      alert("Help section coming soon!");
-                    }}
-                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    💬 Help
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      logout();
-                    }}
-                    className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                  >
-                    🚪 Logout
-                  </button>
-                </div>
-              )}
+				{menuOpen && (
+				  <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+
+					{/* Only show Logout for now */}
+					<button
+					  onClick={() => {
+						setMenuOpen(false);
+						logout();
+					  }}
+					  className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+					>
+					  🚪 Logout
+					</button>
+				  </div>
+				)}
             </div>
           </div>
         </div>

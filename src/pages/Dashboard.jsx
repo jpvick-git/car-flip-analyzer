@@ -7,6 +7,21 @@ const Dashboard = () => {
   const [selectedCar, setSelectedCar] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  const resale = Number(car.resale_estimate || 0);
+const repair = Number(car.repair_estimate || 0);
+const tax = Number(car.tax_amount || 0);
+const fees = Number(car.fees_amount || 0);
+
+let maxBid =
+  (0.85 * resale - tax - fees - repair) / 1.075;
+
+if (isNaN(maxBid) || maxBid < 0) maxBid = 0;
+
+const formattedMaxBid = maxBid.toLocaleString(undefined, {
+  maximumFractionDigits: 0,
+});
+
 
   // -----------------------------------------------
   // FETCH VEHICLES
@@ -24,15 +39,46 @@ const Dashboard = () => {
           }
         );
 
-        const data = response.data;
-        if (Array.isArray(data)) {
-          setCars(data);
-        } else if (data && Array.isArray(data.vehicles)) {
-          setCars(data.vehicles);
-        } else {
-          console.error("Unexpected data format:", data);
-          setCars([]);
-        }
+		const data = response.data;
+
+		let vehicles = [];
+
+		if (Array.isArray(data)) {
+		  vehicles = data;
+		} else if (data && Array.isArray(data.vehicles)) {
+		  vehicles = data.vehicles;
+		} else {
+		  console.error("Unexpected data format:", data);
+		  vehicles = [];
+		}
+
+		// -------------------------------------------
+		// ADD MAX BID TO EACH VEHICLE
+		// -------------------------------------------
+		vehicles = vehicles.map((car) => {
+		  const resale = Number(car.resale_estimate || 0);
+		  const repair = Number(car.repair_estimate || 0);
+		  const tax = Number(car.tax_amount || 0);     // flat tax $
+		  const fees = Number(car.fees_amount || 0);   // flat fees $
+
+		  // Formula:
+		  // max_bid = (0.85 * resale - tax - fees - repair) / 1.075
+		  let maxBid =
+			(0.85 * resale - tax - fees - repair) / 1.075;
+
+		  if (isNaN(maxBid) || maxBid < 0) {
+			maxBid = 0;
+		  }
+
+		  return {
+			...car,
+			max_bid: Math.round(maxBid),  // <-- add max_bid field
+		  };
+		});
+
+// store transformed results
+setCars(vehicles);
+
       } catch (err) {
         console.error("Error fetching cars:", err);
         setError("Failed to load vehicles");
@@ -141,7 +187,7 @@ const Dashboard = () => {
 				<div className="flex items-center space-x-1 mt-2 text-gray-700">
 				  <span className="text-sm font-medium">Max Bid:</span>
 				  <span className="text-sm">
-					{car.max_bid ? `$${car.max_bid}` : ""}
+					${car.max_bid?.toLocaleString() ?? ""}
 				  </span>
 				</div>
 

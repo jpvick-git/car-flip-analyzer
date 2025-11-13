@@ -1,211 +1,222 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
-import CarCard from "../components/CarCard";
+import { Wrench, DollarSign } from "lucide-react";
 
-export default function Dashboard() {
+const Dashboard = () => {
   const [cars, setCars] = useState([]);
   const [selectedCar, setSelectedCar] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const [modalRepair, setModalRepair] = useState("");
-  const [modalResale, setModalResale] = useState("");
-  const [modalMargin, setModalMargin] = useState(15);
-
+  // -----------------------------------------------
+  // FETCH VEHICLES
+  // -----------------------------------------------
   useEffect(() => {
+    const fetchCars = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(
+          `${process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com"}/get_vehicles`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
+
+        const data = response.data;
+        if (Array.isArray(data)) {
+          setCars(data);
+        } else if (data && Array.isArray(data.vehicles)) {
+          setCars(data.vehicles);
+        } else {
+          console.error("Unexpected data format:", data);
+          setCars([]);
+        }
+      } catch (err) {
+        console.error("Error fetching cars:", err);
+        setError("Failed to load vehicles");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchCars();
   }, []);
 
-  const fetchCars = async () => {
-    try {
-      const response = await axios.get(
-        `${process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com"}/get_vehicles`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
-
-      const data = response.data.vehicles;
-
-      const updated = data.map((car) => computeValues(car));
-      setCars(updated);
-    } catch (err) {
-      console.error("Error loading vehicles:", err);
-    }
-  };
-
-  // ------------------------------
-  // CALCULATIONS
-  // ------------------------------
-  const computeValues = (car) => {
-    const repair = Number(car.repair_estimate || 0);
-    const resale = Number(car.resale_estimate || 0);
-    const tax_rate = Number(car.avg_tax_rate || 0);
-    const title_fee = Number(car.title_fee || 0);
-    const copart_fee_rate = 0.075;
-    const margin = (car.margin_override || modalMargin) / 100;
-
-    // Solve for bid using your formula:
-    //
-    // total_cost = bid + repair + bid*tax + bid*copart + title_fee
-    // total_cost = resale - (resale * margin)
-    //
-    // bid * (1 + tax + copart) = resale*(1 - margin) - repair - title_fee
-
-    const target_total = resale * (1 - margin);
-    const variable_multiplier = 1 + copart_fee_rate + tax_rate / 100;
-
-    let bid =
-      (target_total - repair - title_fee) / variable_multiplier;
-
-    if (bid < 0 || !isFinite(bid)) bid = 0;
-
-    const tax_amount = bid * (tax_rate / 100);
-    const copart_fee = bid * copart_fee_rate;
-
-    const total_cost =
-      bid + repair + tax_amount + copart_fee + title_fee;
-
-    const potential_profit = resale - total_cost;
-
-    return {
-      ...car,
-      max_bid: bid,
-      potential_profit,
-      margin_override: car.margin_override || modalMargin,
-    };
-  };
-
-  // ------------------------------
-  // When user changes repair/resale on the card
-  // ------------------------------
-  const onUpdateValues = (carId, updates) => {
-    setCars((prev) =>
-      prev.map((car) => {
-        if (car.id !== carId) return car;
-        const updated = computeValues({ ...car, ...updates });
-        return updated;
-      })
-    );
-  };
-
-  // ------------------------------
-  // Modal open
-  // ------------------------------
-  const onOpenModal = (car) => {
-    setSelectedCar(car);
-    setModalRepair(car.repair_estimate || "");
-    setModalResale(car.resale_estimate || "");
-    setModalMargin(car.margin_override || 15);
-  };
-
-  // ------------------------------
-  // Modal save
-  // ------------------------------
-  const applyModalEdits = () => {
-    const updatedCar = {
-      ...selectedCar,
-      repair_estimate: modalRepair,
-      resale_estimate: modalResale,
-      margin_override: modalMargin,
-    };
-
-    const recalculated = computeValues(updatedCar);
-
-    setCars((prev) =>
-      prev.map((c) =>
-        c.id === selectedCar.id ? recalculated : c
-      )
+  // -----------------------------------------------
+  // RENDER
+  // -----------------------------------------------
+  if (loading)
+    return (
+      <div className="flex justify-center items-center h-screen text-gray-700">
+        Loading vehicles...
+      </div>
     );
 
-    setSelectedCar(null);
-  };
+  if (error)
+    return (
+      <div className="flex justify-center items-center h-screen text-red-600">
+        {error}
+      </div>
+    );
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">Your Vehicles</h1>
+    <main className="p-6 bg-gray-50 min-h-screen">
+      {!Array.isArray(cars) || cars.length === 0 ? (
+        <p className="text-gray-600">No vehicles found.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {cars.map((car) => (
+            <div
+              key={car.id}
+              className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden"
+            >
+              {/* IMAGE SECTION */}
+              <div className="relative">
+                <img
+                  src={car.image_url || "https://placehold.co/400x250?text=No+Image"}
+                  alt={`${car.make} ${car.model}`}
+                  className="w-full h-56 object-cover"
+                />
+                {/* DAMAGE BADGE */}
+                <div className="absolute top-3 left-3 bg-blue-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
+                  {car.damage_description || "Unknown Damage"}
+                </div>
+              </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {cars.map((car) => (
-          <CarCard
-            key={car.id}
-            car={car}
-            onOpenModal={onOpenModal}
-            onUpdateValues={onUpdateValues}
-          />
-        ))}
-      </div>
+              {/* DETAILS SECTION */}
+              <div className="p-4 space-y-2">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {car.year} {car.make} {car.model}
+                </h2>
+                <p className="text-sm text-gray-500">Lot #: {car.lot_number}</p>
+				<p className="text-sm text-gray-500">
+				  Location: {car.sale_name || "N/A"}
+				</p>
+				<p className="text-sm text-gray-500">
+				  Sale Date:{" "}
+				  {car.sale_date
+					? new Date(car.sale_date).toLocaleDateString("en-US", {
+							  month: "short",
+							  day: "numeric",
+							  year: "numeric",
+							})
+					: "N/A"}
+				</p>
 
+
+                {/* REPAIR & RESALE ROW */}
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                  <div className="flex items-center space-x-1 text-gray-700">
+                    <Wrench size={16} />
+                    <span className="text-sm font-medium">
+                      Repair: ${car.repair_estimate || "0"}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-1 text-gray-700">
+                    <DollarSign size={16} />
+                    <span className="text-sm font-medium">
+                      Resale: ${car.resale_estimate || "0"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* FOOTER BUTTONS */}
+                <div className="flex justify-between items-center pt-3">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedCar(car);
+                    }}
+                    className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 hover:bg-gray-50 transition"
+                  >
+                    View Details
+                  </button>
+                  
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* --------------------------------------------------
+         CAR DETAILS MODAL
+      -------------------------------------------------- */}
       {selectedCar && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg relative shadow-xl">
-
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 relative">
             <button
-              className="absolute top-3 right-3 text-gray-600 text-xl"
-              onClick={applyModalEdits}
+              onClick={() => setSelectedCar(null)}
+              className="absolute top-3 right-3 text-gray-500 hover:text-gray-800"
             >
               ✕
             </button>
 
-            <h2 className="text-xl font-semibold mb-2">
+            <h2 className="text-xl font-semibold mb-2 text-gray-800">
               {selectedCar.year} {selectedCar.make} {selectedCar.model}
             </h2>
 
-            <p className="text-gray-600">{selectedCar.location}</p>
-            <p className="text-gray-600 mb-4">{selectedCar.sale_date}</p>
+            <img
+              src={
+                selectedCar.image_url ||
+                "https://placehold.co/600x400?text=No+Image"
+              }
+              alt={`${selectedCar.make} ${selectedCar.model}`}
+              className="w-full h-48 object-cover rounded-lg mb-4"
+            />
 
-            {/* REPAIR */}
-            <div className="flex items-center gap-2 mb-3">
-              <span className="font-medium w-24">Repair: $</span>
-              <input
-                type="number"
-                className="border p-2 rounded w-32"
-                value={modalRepair}
-                onChange={(e) => setModalRepair(e.target.value)}
-              />
-            </div>
-
-            {/* RESALE */}
-            <div className="flex items-center gap-2 mb-3">
-              <span className="font-medium w-24">Resale: $</span>
-              <input
-                type="number"
-                className="border p-2 rounded w-32"
-                value={modalResale}
-                onChange={(e) => setModalResale(e.target.value)}
-              />
-            </div>
-
-            {/* MARGIN */}
-            <div className="flex items-center gap-2 mb-4">
-              <span className="font-medium w-24">Margin:</span>
-              <input
-                type="number"
-                className="border p-2 rounded w-20"
-                value={modalMargin}
-                onChange={(e) => setModalMargin(e.target.value)}
-              />
-              <span>%</span>
-            </div>
-
-            {/* BREAKDOWN */}
-            <div className="bg-gray-100 p-4 rounded-lg text-sm">
+            <div className="space-y-2 text-sm text-gray-700">
               <p>
-                <strong>Max Bid:</strong>{" "}
-                ${selectedCar.max_bid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <span className="font-medium">Lot Number:</span>{" "}
+                {selectedCar.lot_number}
               </p>
               <p>
-                <strong>Potential Profit:</strong>{" "}
-                ${selectedCar.potential_profit.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <span className="font-medium">Sale Date:</span>{" "}
+                {selectedCar.sale_date || "N/A"}
               </p>
-              <p><strong>Tax Rate:</strong> {selectedCar.avg_tax_rate}%</p>
-              <p><strong>Title Fee:</strong> ${selectedCar.title_fee}</p>
-              <p><strong>Copart Fee Rate:</strong> 7.5%</p>
+              <p>
+                <span className="font-medium">Damage:</span>{" "}
+                {selectedCar.damage_description || "Unknown"}
+              </p>
+              <p>
+                <span className="font-medium">Odometer:</span>{" "}
+                {selectedCar.odometer || "N/A"}
+              </p>
+              <p>
+                <span className="font-medium">Repair Estimate:</span>{" "}
+                ${selectedCar.repair_estimate || "0"}
+              </p>
+              <p>
+                <span className="font-medium">Resale Estimate:</span>{" "}
+                ${selectedCar.resale_estimate || "0"}
+              </p>
+              <p>
+                <span className="font-medium">Repair Details:</span>{" "}
+                {selectedCar.repair_details || "N/A"}
+              </p>
+              <p>
+                <span className="font-medium">Resale Details:</span>{" "}
+                {selectedCar.resale_details || "N/A"}
+              </p>
             </div>
 
+            {selectedCar.lot_url && (
+              <a
+                href={selectedCar.lot_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-block text-blue-600 hover:underline text-sm"
+              >
+                Open in Copart →
+              </a>
+            )}
           </div>
         </div>
       )}
-    </div>
+    </main>
   );
-}
+};
+
+export default Dashboard;

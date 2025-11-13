@@ -3,6 +3,7 @@ import { Wrench, DollarSign } from "lucide-react";
 export default function CarCard({ car, setSelectedCar }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
+      
       {/* Image Section */}
       <div className="relative">
         <img
@@ -22,16 +23,20 @@ export default function CarCard({ car, setSelectedCar }) {
         <h2 className="text-lg font-semibold text-gray-900">
           {car.year} {car.make} {car.model}
         </h2>
+
         <p className="text-sm text-gray-500">Lot #: {car.lot_number}</p>
-		<p className="text-sm text-gray-500">
-		  Location: {car.sale_name || car.location || "N/A"}
-		</p>
-		<p className="text-sm text-gray-500">
-		  Sale Date:{" "}
-		  {car.sale_date
-			? new Date(car.sale_date).toLocaleDateString()
-			: "N/A"}
-		</p>
+
+        <p className="text-sm text-gray-500">
+          Location: {car.sale_name || car.location || "N/A"}
+        </p>
+
+        <p className="text-sm text-gray-500">
+          Sale Date:{" "}
+          {car.sale_date
+            ? new Date(car.sale_date).toLocaleDateString()
+            : "N/A"}
+        </p>
+
         {/* Repair & Resale Row */}
         <div className="flex items-center justify-between pt-2 border-t border-gray-100">
           <div className="flex items-center space-x-1 text-gray-700">
@@ -40,6 +45,7 @@ export default function CarCard({ car, setSelectedCar }) {
               Repair: ${car.repair_estimate || "0"}
             </span>
           </div>
+
           <div className="flex items-center space-x-1 text-gray-700">
             <DollarSign size={16} />
             <span className="text-sm font-medium">
@@ -49,25 +55,16 @@ export default function CarCard({ car, setSelectedCar }) {
         </div>
 
         {/* Footer Buttons */}
-        <div className="flex justify-between items-center pt-3">
+        <div className="flex justify-start items-center pt-3">
           <button
             onClick={() => setSelectedCar(car)}
             className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 hover:bg-gray-50 transition"
           >
             View Details
           </button>
-          {car.lot_url && (
-            <a
-              href={car.lot_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-blue-600 hover:bg-blue-50 transition"
-            >
-              Copart →
-            </a>
-          )}
         </div>
       </div>
+      
     </div>
   );
 }

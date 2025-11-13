@@ -117,7 +117,7 @@ const Dashboard = () => {
 					<input
 					  type="number"
 					  defaultValue={car.repair_estimate || 0}
-					  className="w-20 text-sm border border-gray-300 rounded-md px-2 py-1
+					  className="w-20 text-sm border border-gray-300 rounded-md px-2 py-1 
 								 focus:ring-2 focus:ring-blue-500"
 					/>
 				  </div>
@@ -130,26 +130,47 @@ const Dashboard = () => {
 					<input
 					  type="number"
 					  defaultValue={car.resale_estimate || 0}
-					  className="w-20 text-sm border border-gray-300 rounded-md px-2 py-1
+					  className="w-20 text-sm border border-gray-300 rounded-md px-2 py-1 
 								 focus:ring-2 focus:ring-green-500"
 					/>
 				  </div>
 
 				</div>
 
+				{/* MAX BID */}
+				<div className="flex items-center space-x-1 mt-2 text-gray-700">
+				  <span className="text-sm font-medium">Max Bid:</span>
+				  <span className="text-sm">
+					{car.max_bid ? `$${car.max_bid}` : ""}
+				  </span>
+				</div>
+
+				{/* FOOTER BUTTONS */}
+				<div className="flex justify-between items-center pt-6">
+				  <button
+					onClick={(e) => {
+					  e.stopPropagation();
+					  setSelectedCar(car);
+					}}
+					className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 hover:bg-gray-50 transition"
+				  >
+					View Details
+				  </button>
+				</div>
+
+
                 {/* FOOTER BUTTONS */}
-                <div className="flex justify-between items-center pt-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedCar(car);
-                    }}
-                    className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 hover:bg-gray-50 transition"
-                  >
-                    View Details
-                  </button>
-                  
-                </div>
+                <div className="flex justify-between items-center pt-6">
+				  <button
+					onClick={(e) => {
+					  e.stopPropagation();
+					  setSelectedCar(car);
+					}}
+					className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 hover:bg-gray-50 transition"
+				  >
+					View Details
+				  </button>
+				</div>
               </div>
             </div>
           ))}

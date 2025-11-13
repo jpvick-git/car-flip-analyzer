@@ -46,8 +46,8 @@ def normalize_lot(val):
 @router.post("/upload_file")
 async def upload_and_process_file(request: Request, file: UploadFile, user=Depends(get_current_user)):
     """
-    Uploads a CSV, clones existing lots if possible, 
-    inserts new lots into DB, and triggers Copart + AI automation.
+    Uploads a CSV, clones existing lots if possible,
+    inserts new lots into DB with full fields, and triggers Copart + AI automation.
     """
     try:
         client_ip = request.client.host
@@ -109,7 +109,7 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                     print(f"⏩ User {user['id']} already has lot {lot_num}, skipping.")
                     continue
 
-                # Clone from any user if available
+                # Clone from another user if available
                 existing = conn.execute(
                     text("""
                         SELECT TOP 1 * FROM user_vehicles
@@ -175,31 +175,58 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                     print(f"✅ Cloned lot {lot_num} → user {user['id']}")
                     cloned_lots.append(lot_num)
                 else:
-                    # --- NEW: Insert minimal placeholder record ---
-                    conn.execute(
-                        text("""
-                            INSERT INTO user_vehicles (
-                                user_id, lot_number, sale_date, year, make, model,
-                                damage_description, sale_name, created_at
-                            )
-                            VALUES (
-                                :uid, :lot, :sale_date, :year, :make, :model,
-                                :damage, :sale_name, GETDATE()
-                            )
-                        """),
-                        {
-                            "uid": user["id"],
-                            "lot": lot_num,
-                            "sale_date": str(row.get("Sale date", "")),
-                            "year": str(row.get("Year", "")),
-                            "make": str(row.get("Make", "")),
-                            "model": str(row.get("Model", "")),
-                            "damage": str(row.get("Damage description", "")),
-                            "sale_name": str(row.get("Sale name", "")),
-                        },
-                    )
-                    print(f"🆕 Inserted new placeholder lot {lot_num} for user {user['id']}")
-                    new_lots.append(lot_num)
+                    # --- FULL INSERT for brand-new lots ---
+                    try:
+                        conn.execute(
+                            text("""
+                                INSERT INTO user_vehicles (
+                                    user_id, lot_url, lot_number, est_retail_value, sale_date,
+                                    year, make, model, engine_type, cylinders, vin, title_code,
+                                    odometer, odometer_description, damage_description,
+                                    current_bid, my_bid, item_number, sale_name,
+                                    auto_grade, sale_light, announcements,
+                                    repair_estimate, repair_details, resale_details, resale_estimate,
+                                    created_at, updated_at, image_url
+                                )
+                                VALUES (
+                                    :uid, :lot_url, :lot_number, :retail, :sale_date,
+                                    :year, :make, :model, :engine_type, :cylinders, :vin, :title_code,
+                                    :odometer, :odo_desc, :damage_description,
+                                    :current_bid, :my_bid, :item_number, :sale_name,
+                                    :auto_grade, :sale_light, :announcements,
+                                    NULL, NULL, NULL, NULL,
+                                    GETDATE(), NULL, NULL
+                                )
+                            """),
+                            {
+                                "uid": user["id"],
+                                "lot_url": str(row.get("Lot URL", "")),
+                                "lot_number": lot_num,
+                                "retail": str(row.get("Est. Retail value", "")),
+                                "sale_date": str(row.get("Sale date", "")),
+                                "year": str(row.get("Year", "")),
+                                "make": str(row.get("Make", "")),
+                                "model": str(row.get("Model", "")),
+                                "engine_type": str(row.get("Engine type", "")),
+                                "cylinders": str(row.get("Cylinders", "")),
+                                "vin": str(row.get("VIN", "")),
+                                "title_code": str(row.get("Title code", "")),
+                                "odometer": str(row.get("Odometer", "")),
+                                "odo_desc": str(row.get("Odometer description", "")),
+                                "damage_description": str(row.get("Damage description", "")),
+                                "current_bid": str(row.get("Current bid", "")),
+                                "my_bid": str(row.get("My bid", "")),
+                                "item_number": str(row.get("Item number", "")),
+                                "sale_name": str(row.get("Sale name", "")),
+                                "auto_grade": str(row.get("Auto grade", "")),
+                                "sale_light": str(row.get("Sale light", "")),
+                                "announcements": str(row.get("Announcements", "")),
+                            },
+                        )
+                        print(f"🆕 Inserted full CSV-based lot {lot_num} for user {user['id']}")
+                        new_lots.append(lot_num)
+                    except Exception as e:
+                        print(f"⚠️ Failed to insert new lot {lot_num}: {e}")
 
         print(f"✅ {len(cloned_lots)} cloned, {len(new_lots)} new for user {user['id']}")
 
@@ -223,4 +250,3 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
     except Exception as e:
         print(f"❌ Error processing file: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
-

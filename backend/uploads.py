@@ -106,8 +106,65 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                 ).fetchone()
 
                 if exists_user:
-                    print(f"⏩ User {user['id']} already has lot {lot_num}, skipping.")
+                    print(f"♻️ Updating existing lot {lot_num} for user {user['id']} from CSV data.")
+                    try:
+                        conn.execute(
+                            text("""
+                                UPDATE user_vehicles
+                                SET
+                                    lot_url = COALESCE(NULLIF(:lot_url, ''), lot_url),
+                                    est_retail_value = COALESCE(NULLIF(:retail, ''), est_retail_value),
+                                    sale_date = COALESCE(NULLIF(:sale_date, ''), sale_date),
+                                    year = COALESCE(NULLIF(:year, ''), year),
+                                    make = COALESCE(NULLIF(:make, ''), make),
+                                    model = COALESCE(NULLIF(:model, ''), model),
+                                    engine_type = COALESCE(NULLIF(:engine_type, ''), engine_type),
+                                    cylinders = COALESCE(NULLIF(:cylinders, ''), cylinders),
+                                    vin = COALESCE(NULLIF(:vin, ''), vin),
+                                    title_code = COALESCE(NULLIF(:title_code, ''), title_code),
+                                    odometer = COALESCE(NULLIF(:odometer, ''), odometer),
+                                    odometer_description = COALESCE(NULLIF(:odo_desc, ''), odometer_description),
+                                    damage_description = COALESCE(NULLIF(:damage_description, ''), damage_description),
+                                    current_bid = COALESCE(NULLIF(:current_bid, ''), current_bid),
+                                    my_bid = COALESCE(NULLIF(:my_bid, ''), my_bid),
+                                    item_number = COALESCE(NULLIF(:item_number, ''), item_number),
+                                    sale_name = COALESCE(NULLIF(:sale_name, ''), sale_name),
+                                    auto_grade = COALESCE(NULLIF(:auto_grade, ''), auto_grade),
+                                    sale_light = COALESCE(NULLIF(:sale_light, ''), sale_light),
+                                    announcements = COALESCE(NULLIF(:announcements, ''), announcements),
+                                    updated_at = GETDATE()
+                                WHERE user_id = :uid AND LTRIM(RTRIM(lot_number)) = :lot
+                            """),
+                            {
+                                "uid": user["id"],
+                                "lot": lot_num,
+                                "lot_url": str(row.get("Lot URL", "")),
+                                "retail": str(row.get("Est. Retail value", "")),
+                                "sale_date": str(row.get("Sale date", "")),
+                                "year": str(row.get("Year", "")),
+                                "make": str(row.get("Make", "")),
+                                "model": str(row.get("Model", "")),
+                                "engine_type": str(row.get("Engine type", "")),
+                                "cylinders": str(row.get("Cylinders", "")),
+                                "vin": str(row.get("VIN", "")),
+                                "title_code": str(row.get("Title code", "")),
+                                "odometer": str(row.get("Odometer", "")),
+                                "odo_desc": str(row.get("Odometer description", "")),
+                                "damage_description": str(row.get("Damage description", "")),
+                                "current_bid": str(row.get("Current bid", "")),
+                                "my_bid": str(row.get("My bid", "")),
+                                "item_number": str(row.get("Item number", "")),
+                                "sale_name": str(row.get("Sale name", "")),
+                                "auto_grade": str(row.get("Auto grade", "")),
+                                "sale_light": str(row.get("Sale light", "")),
+                                "announcements": str(row.get("Announcements", "")),
+                            },
+                        )
+                        print(f"✅ Updated lot {lot_num} for user {user['id']}")
+                    except Exception as e:
+                        print(f"⚠️ Failed to update lot {lot_num}: {e}")
                     continue
+
 
                 # Clone from another user if available
                 existing = conn.execute(

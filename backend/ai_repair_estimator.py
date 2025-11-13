@@ -337,10 +337,33 @@ if __name__ == "__main__":
 
     if LOTS:
         print(f"📦 Running AI estimator for specific lots: {LOTS}")
-        for lot in LOTS:
-            process_lot(lot.strip(), rds_engine)
-        print(f"✅ Completed manual AI run for user {USER_ID}.")
+        done = failed = 0
+        start_time = time.time()
+
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = []
+            for lot in LOTS:
+                lot = lot.strip()
+                print(f"▶️ Queuing lot {lot} for AI analysis...")
+                futures.append(executor.submit(process_lot, lot, rds_engine))
+                time.sleep(SLEEP_BETWEEN_LOTS)
+
+            for future in as_completed(futures):
+                try:
+                    if future.result(timeout=600):
+                        done += 1
+                    else:
+                        failed += 1
+                except Exception as e:
+                    print(f"⚠️ Thread exception: {e}")
+                    failed += 1
+
+        elapsed = time.time() - start_time
+        print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
+        print(f"🎯 Completed AI analysis for user {USER_ID} (manual lots mode).")
+
     else:
         print(f"📦 No lot list provided — falling back to CSV detection for user {USER_ID}")
         main(USER_ID)
+
 

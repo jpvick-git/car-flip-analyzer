@@ -255,13 +255,57 @@ const Dashboard = () => {
               className="w-full h-48 object-cover rounded-lg mb-4"
             />
 
-            <div className="space-y-2 text-sm text-gray-700">
-              <p><span className="font-medium">Lot Number:</span> {selectedCar.lot_number}</p>
-              <p><span className="font-medium">Sale Date:</span> {selectedCar.sale_date || "N/A"}</p>
-              <p><span className="font-medium">Damage:</span> {selectedCar.damage_description || "Unknown"}</p>
-              <p><span className="font-medium">Odometer:</span> {selectedCar.odometer || "N/A"}</p>
-              <p><span className="font-medium">Repair Estimate:</span> ${selectedCar.repair_estimate || "0"}</p>
-              <p><span className="font-medium">Resale Estimate:</span> ${selectedCar.resale_estimate || "0"}</p>
+			<div className="space-y-2 text-sm text-gray-700">
+			  <p><span className="font-medium">Lot Number:</span> {activeCar.lot_number}</p>
+			  <p><span className="font-medium">Sale Date:</span> {activeCar.sale_date || "N/A"}</p>
+			  <p><span className="font-medium">Damage:</span> {activeCar.damage_description || "Unknown"}</p>
+			  <p><span className="font-medium">Odometer:</span> {activeCar.odometer || "N/A"}</p>
+
+			  {/* REPAIR & RESALE INPUTS */}
+			  <div className="flex items-center justify-between space-x-4 mt-4 pt-3 border-t border-gray-200">
+
+				{/* REPAIR */}
+				<div className="flex items-center space-x-1 text-gray-700">
+				  <Wrench size={16} />
+				  <span className="text-sm font-medium">Repair:</span>
+				  <span className="text-sm">$</span>
+				  <input
+					type="number"
+					value={activeCar.repair_estimate}
+					onChange={(e) =>
+					  updateCarValue(activeCar.id, "repair_estimate", Number(e.target.value))
+					}
+					className="w-24 text-sm border border-gray-300 rounded-md px-2 py-1 focus:ring-2 focus:ring-blue-500"
+				  />
+				</div>
+
+				{/* RESALE */}
+				<div className="flex items-center space-x-1 text-gray-700">
+				  <DollarSign size={16} />
+				  <span className="text-sm font-medium">Resale:</span>
+				  <span className="text-sm">$</span>
+				  <input
+					type="number"
+					value={activeCar.resale_estimate}
+					onChange={(e) =>
+					  updateCarValue(activeCar.id, "resale_estimate", Number(e.target.value))
+					}
+					className="w-24 text-sm border border-gray-300 rounded-md px-2 py-1 focus:ring-2 focus:ring-green-500"
+				  />
+				</div>
+
+			  </div>
+
+			  {/* MAX BID DISPLAY */}
+			  <div className="flex items-center space-x-2 mt-4 text-gray-800">
+				<span className="text-sm font-semibold">Max Bid:</span>
+				<span className="text-base font-bold">
+				  ${activeCar.max_bid?.toLocaleString() ?? ""}
+				</span>
+			  </div>
+			</div>
+
+
               <p><span className="font-medium">Repair Details:</span> {selectedCar.repair_details || "N/A"}</p>
               <p><span className="font-medium">Resale Details:</span> {selectedCar.resale_details || "N/A"}</p>
             </div>

@@ -15,7 +15,7 @@ UPLOAD_DIR = "/root/car-flip-analyzer/user_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 LOCAL_TRIGGER_URL = "https://quinquevalent-hayley-unhackneyed.ngrok-free.dev/trigger"
-ALLOWED_IPS = {"68.186.200.184"}  # your allowed IP
+ALLOWED_IPS = {"68.186.200.184"}  # trusted upload IP
 
 # AWS RDS SQL Server connection
 RDS_CONN = (
@@ -46,14 +46,14 @@ def normalize_lot(val):
 @router.post("/upload_file")
 async def upload_and_process_file(request: Request, file: UploadFile, user=Depends(get_current_user)):
     """
-    Uploads a CSV, clones existing lots if possible,
-    inserts new lots into DB with full fields, and triggers Copart + AI automation.
+    Uploads a CSV, updates or inserts user_vehicles records,
+    and triggers Copart + AI pipeline for missing AI estimates.
     """
     try:
         client_ip = request.client.host
         print(f"🌐 Upload attempt from IP: {client_ip} by user {user['email']}")
 
-        # Restrict demo uploads
+        # Restrict demo uploads from outside your IP
         if user["email"].lower() == "demo@123.com" and client_ip not in ALLOWED_IPS:
             raise HTTPException(status_code=403, detail="Uploads restricted for demo users from this IP.")
 
@@ -74,12 +74,13 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
         return JSONResponse(status_code=500, content={"error": str(e)})
 
     # --------------------------------------------------
-    # Step 2: Process and insert lots
+    # Step 2: Insert / Update Lots
     # --------------------------------------------------
     try:
         df = pd.read_csv(file_path)
         new_lots = []
         cloned_lots = []
+        updated_lots = []
 
         with rds_engine.begin() as conn:
             print(f"🧾 CSV Columns Detected: {list(df.columns)}")
@@ -95,7 +96,7 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                     print(f"⚠️ Skipping row (no valid lot number): {row.to_dict()}")
                     continue
 
-                # Already exists for current user?
+                # Does user already have this lot?
                 exists_user = conn.execute(
                     text("""
                         SELECT 1 FROM user_vehicles
@@ -105,8 +106,9 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                     {"lot": lot_num, "uid": user["id"]},
                 ).fetchone()
 
+                # If lot already exists for user → update fields
                 if exists_user:
-                    print(f"♻️ Updating existing lot {lot_num} for user {user['id']} from CSV data.")
+                    print(f"♻️ Updating existing lot {lot_num} for user {user['id']}")
                     try:
                         conn.execute(
                             text("""
@@ -160,13 +162,12 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                                 "announcements": str(row.get("Announcements", "")),
                             },
                         )
-                        print(f"✅ Updated lot {lot_num} for user {user['id']}")
+                        updated_lots.append(lot_num)
                     except Exception as e:
                         print(f"⚠️ Failed to update lot {lot_num}: {e}")
                     continue
 
-
-                # Clone from another user if available
+                # Try to clone from any existing record
                 existing = conn.execute(
                     text("""
                         SELECT TOP 1 * FROM user_vehicles
@@ -229,81 +230,69 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                             "img": v.get("image_url"),
                         },
                     )
-                    print(f"✅ Cloned lot {lot_num} → user {user['id']}")
                     cloned_lots.append(lot_num)
+                    print(f"✅ Cloned lot {lot_num} → user {user['id']}")
                 else:
-                    # --- FULL INSERT for brand-new lots ---
-                    try:
-                        conn.execute(
-                            text("""
-                                INSERT INTO user_vehicles (
-                                    user_id, lot_url, lot_number, est_retail_value, sale_date,
-                                    year, make, model, engine_type, cylinders, vin, title_code,
-                                    odometer, odometer_description, damage_description,
-                                    current_bid, my_bid, item_number, sale_name,
-                                    auto_grade, sale_light, announcements,
-                                    repair_estimate, repair_details, resale_details, resale_estimate,
-                                    created_at, updated_at, image_url
-                                )
-                                VALUES (
-                                    :uid, :lot_url, :lot_number, :retail, :sale_date,
-                                    :year, :make, :model, :engine_type, :cylinders, :vin, :title_code,
-                                    :odometer, :odo_desc, :damage_description,
-                                    :current_bid, :my_bid, :item_number, :sale_name,
-                                    :auto_grade, :sale_light, :announcements,
-                                    NULL, NULL, NULL, NULL,
-                                    GETDATE(), NULL, NULL
-                                )
-                            """),
-                            {
-                                "uid": user["id"],
-                                "lot_url": str(row.get("Lot URL", "")),
-                                "lot_number": lot_num,
-                                "retail": str(row.get("Est. Retail value", "")),
-                                "sale_date": str(row.get("Sale date", "")),
-                                "year": str(row.get("Year", "")),
-                                "make": str(row.get("Make", "")),
-                                "model": str(row.get("Model", "")),
-                                "engine_type": str(row.get("Engine type", "")),
-                                "cylinders": str(row.get("Cylinders", "")),
-                                "vin": str(row.get("VIN", "")),
-                                "title_code": str(row.get("Title code", "")),
-                                "odometer": str(row.get("Odometer", "")),
-                                "odo_desc": str(row.get("Odometer description", "")),
-                                "damage_description": str(row.get("Damage description", "")),
-                                "current_bid": str(row.get("Current bid", "")),
-                                "my_bid": str(row.get("My bid", "")),
-                                "item_number": str(row.get("Item number", "")),
-                                "sale_name": str(row.get("Sale name", "")),
-                                "auto_grade": str(row.get("Auto grade", "")),
-                                "sale_light": str(row.get("Sale light", "")),
-                                "announcements": str(row.get("Announcements", "")),
-                            },
-                        )
-                        print(f"🆕 Inserted full CSV-based lot {lot_num} for user {user['id']}")
-                        new_lots.append(lot_num)
-                    except Exception as e:
-                        print(f"⚠️ Failed to insert new lot {lot_num}: {e}")
+                    # Insert minimal placeholder if no clone exists
+                    conn.execute(
+                        text("""
+                            INSERT INTO user_vehicles (
+                                user_id, lot_number, sale_date, year, make, model,
+                                damage_description, sale_name, created_at
+                            )
+                            VALUES (
+                                :uid, :lot, :sale_date, :year, :make, :model,
+                                :damage, :sale_name, GETDATE()
+                            )
+                        """),
+                        {
+                            "uid": user["id"],
+                            "lot": lot_num,
+                            "sale_date": str(row.get("Sale date", "")),
+                            "year": str(row.get("Year", "")),
+                            "make": str(row.get("Make", "")),
+                            "model": str(row.get("Model", "")),
+                            "damage": str(row.get("Damage description", "")),
+                            "sale_name": str(row.get("Sale name", "")),
+                        },
+                    )
+                    print(f"🆕 Inserted new placeholder lot {lot_num} for user {user['id']}")
+                    new_lots.append(lot_num)
 
-        print(f"✅ {len(cloned_lots)} cloned, {len(new_lots)} new for user {user['id']}")
+        print(f"✅ {len(cloned_lots)} cloned, {len(new_lots)} new, {len(updated_lots)} updated for user {user['id']}")
 
         # --------------------------------------------------
-        # Step 3: Trigger Copart + AI
+        # Step 3: Trigger Copart + AI for lots needing analysis
         # --------------------------------------------------
-        if new_lots:
-            try:
-                payload = {"user_id": user["id"], "new_lots": new_lots}
-                print(f"🔗 Triggering automation: {LOCAL_TRIGGER_URL} with {payload}")
-                response = requests.post(LOCAL_TRIGGER_URL, json=payload, timeout=15)
+        try:
+            missing_ai = conn.execute(
+                text("""
+                    SELECT lot_number
+                    FROM user_vehicles
+                    WHERE user_id = :uid
+                      AND (repair_estimate IS NULL OR repair_estimate = '')
+                """),
+                {"uid": user["id"]},
+            ).fetchall()
+
+            lots_to_run = [row[0] for row in missing_ai]
+
+            if not lots_to_run:
+                print("🚫 No lots require AI estimation at this time.")
+            else:
+                payload = {"user_id": user["id"], "new_lots": lots_to_run}
+                print(f"🔗 Triggering automation for {len(lots_to_run)} lots: {lots_to_run}")
+                response = requests.post(LOCAL_TRIGGER_URL, json=payload, timeout=20)
                 if response.ok:
                     print("✅ Copart + AI pipeline triggered successfully.")
                 else:
                     print(f"⚠️ Trigger returned {response.status_code}: {response.text}")
-            except Exception as e:
-                print(f"❌ Failed to trigger Copart automation: {e}")
-        else:
-            print("🚫 No new lots to trigger automation for.")
+
+        except Exception as e:
+            print(f"⚠️ Error during AI trigger step: {e}")
 
     except Exception as e:
         print(f"❌ Error processing file: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+    return {"status": "success", "uploaded": file.filename}

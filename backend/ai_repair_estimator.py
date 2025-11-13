@@ -324,12 +324,23 @@ def main(user_id: int):
 # --------------------------------------------------
 # ENTRY POINT
 # --------------------------------------------------
-
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        USER_ID = int(sys.argv[1])
-    else:
-        print("❌ No user ID provided. Example: python ai_repair_estimator.py 2")
-        sys.exit(1)
+    import argparse
 
-    main(USER_ID)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("user_id", type=int, help="User ID")
+    parser.add_argument("--lots", type=str, help="Comma-separated lot numbers", default=None)
+    args = parser.parse_args()
+
+    USER_ID = args.user_id
+    LOTS = args.lots.split(",") if args.lots else []
+
+    if LOTS:
+        print(f"📦 Running AI estimator for specific lots: {LOTS}")
+        for lot in LOTS:
+            process_lot(lot.strip(), rds_engine)
+        print(f"✅ Completed manual AI run for user {USER_ID}.")
+    else:
+        print(f"📦 No lot list provided — falling back to CSV detection for user {USER_ID}")
+        main(USER_ID)
+

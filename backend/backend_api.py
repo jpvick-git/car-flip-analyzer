@@ -185,6 +185,8 @@ async def trigger_pipeline(request: Request):
                     "python",
                     "ai_repair_estimator.py",
                     user_id,
+                    "--lots",
+                    lot_str,
                 ],
                 cwd=BASE_DIR,
             )

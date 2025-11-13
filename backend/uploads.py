@@ -261,7 +261,8 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
     # Step 3: Trigger Copart + AI
     # --------------------------------------------------
     try:
-        copart_lots = new_lots  # new only
+        # --- Identify which lots need Copart or AI ---
+        copart_lots = new_lots  # Copart only runs for brand new records
         ai_lots = []
 
         with rds_engine.connect() as conn:
@@ -274,13 +275,17 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                 """),
                 {"uid": user["id"]},
             ).fetchall()
-            ai_lots = [r[0] for r in rows]
+            ai_lots = [str(r[0]) for r in rows]
 
         print(f"🧠 {len(ai_lots)} lots need AI | 🚗 {len(copart_lots)} lots need Copart")
 
         # --- Copart trigger (new only) ---
         if copart_lots:
-            payload = {"user_id": user["id"], "copart_lots": copart_lots}
+            payload = {
+                "user_id": int(user["id"]),
+                "copart_lots": [str(x) for x in copart_lots],
+                "ai_lots": [],
+            }
             print(f"🔗 Triggering Copart download: {payload}")
             response = requests.post(LOCAL_TRIGGER_URL, json=payload, timeout=25)
             if response.ok:
@@ -290,7 +295,11 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
 
         # --- AI trigger (missing repair_estimate) ---
         if ai_lots:
-            payload = {"user_id": user["id"], "ai_lots": ai_lots}
+            payload = {
+                "user_id": int(user["id"]),
+                "ai_lots": [str(x) for x in ai_lots],
+                "copart_lots": [],
+            }
             print(f"🤖 Triggering AI estimator: {payload}")
             response = requests.post(LOCAL_TRIGGER_URL, json=payload, timeout=25)
             if response.ok:
@@ -305,3 +314,4 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
         print(f"⚠️ Error during automation trigger step: {e}")
 
     return {"status": "success", "uploaded": file.filename}
+

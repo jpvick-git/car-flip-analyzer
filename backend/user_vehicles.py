@@ -1,243 +1,407 @@
-# --------------------------------------------------
-# Car Flip Analyzer - User Vehicles API
-# --------------------------------------------------
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import text
-from jose import jwt, JWTError
-from .auth import get_current_user
-from .db import get_engine
-from .ai_repair_estimator import analyze_vehicle
-import os
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { Wrench, DollarSign } from "lucide-react";
 
-router = APIRouter()
-engine = get_engine()
+const Dashboard = () => {
+  const [cars, setCars] = useState([]);
+  const [selectedCar, setSelectedCar] = useState(null);
 
-# --------------------------------------------------
-# JWT CONFIG
-# --------------------------------------------------
-SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
-ALGORITHM = "HS256"
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+  // Modal values
+  const [modalRepair, setModalRepair] = useState(0);
+  const [modalResale, setModalResale] = useState(0);
+  const [margin, setMargin] = useState(15); // default 15%
 
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-def decode_token(token: str):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("id") or payload.get("sub")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload"
-            )
-        return user_id
-    except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token"
-        )
+  // ----------------------------------------------
+  // MATH HELPERS — Always safe numeric conversions
+  // ----------------------------------------------
+  const number = (v) => {
+    const n = Number(v);
+    return isFinite(n) ? n : 0;
+  };
 
+  const calcMaxBid = (resale, repair, taxRate, titleFee, marginPct) => {
+    resale = number(resale);
+    repair = number(repair);
+    taxRate = number(taxRate);
+    titleFee = number(titleFee);
+    marginPct = number(marginPct);
 
-# --------------------------------------------------
-# 1️⃣ Upload a new vehicle for the logged-in user
-# --------------------------------------------------
-@router.post("/upload_vehicle")
-def upload_vehicle(vehicle: dict, user=Depends(get_current_user)):
-    """
-    Insert a new vehicle for the logged-in user.
-    If the lot_number already exists for another user,
-    copy that record (including AI fields) for this user.
-    """
-    user_id = user["id"]
-    lot_num = vehicle.get("lot_number")
+    const marginMultiplier = 1 - marginPct / 100;
+    const feeMultiplier = 1 + 0.075 + taxRate / 100;
 
-    if not lot_num:
-        raise HTTPException(status_code=400, detail="Missing lot_number")
+    const numerator = resale * marginMultiplier - repair - titleFee;
+    if (feeMultiplier <= 0) return 0;
 
-    with engine.begin() as conn:
-        existing = conn.execute(
-            text("""
-                SELECT TOP 1
-                    lot_number,
-                    lot_url,
-                    year,
-                    make,
-                    model,
-                    odometer,
-                    damage_description,
-                    repair_estimate,
-                    resale_estimate,
-                    repair_details,
-                    resale_details,
-                    image_url
-                FROM user_vehicles
-                WHERE lot_number = :lot
-            """),
-            {"lot": lot_num},
-        ).fetchone()
+    const result = numerator / feeMultiplier;
+    return isFinite(result) ? Math.max(result, 0) : 0;
+  };
 
-        if existing:
-            v = dict(existing._mapping)
-            conn.execute(
-                text("""
-                    INSERT INTO user_vehicles (
-                        user_id, lot_number, lot_url, year, make, model,
-                        odometer, damage_description, repair_estimate,
-                        resale_estimate, repair_details, resale_details, image_url
-                    )
-                    VALUES (
-                        :uid, :lot, :url, :year, :make, :model,
-                        :odo, :damage, :rep_est, :res_est, :rep_det, :res_det, :img
-                    )
-                """),
-                {
-                    "uid": user_id,
-                    "lot": v["lot_number"],
-                    "url": v.get("lot_url"),
-                    "year": v.get("year"),
-                    "make": v.get("make"),
-                    "model": v.get("model"),
-                    "odo": v.get("odometer"),
-                    "damage": v.get("damage_description"),
-                    "rep_est": v.get("repair_estimate"),
-                    "res_est": v.get("resale_estimate"),
-                    "rep_det": v.get("repair_details"),
-                    "res_det": v.get("resale_details"),
-                    "img": v.get("image_url"),
-                },
-            )
-            return {"message": f"✅ Vehicle {lot_num} copied for user {user_id}"}
+  const calcProfit = (bid, resale, repair, taxRate, titleFee) => {
+    bid = number(bid);
+    resale = number(resale);
+    repair = number(repair);
+    taxRate = number(taxRate);
+    titleFee = number(titleFee);
 
-        result = conn.execute(
-            text("""
-                INSERT INTO user_vehicles (
-                    user_id, lot_number, lot_url, year, make, model, damage_description
-                )
-                OUTPUT INSERTED.id
-                VALUES (:uid, :lot, :url, :year, :make, :model, :damage)
-            """),
-            {
-                "uid": user_id,
-                "lot": lot_num,
-                "url": vehicle.get("lot_url"),
-                "year": vehicle.get("year"),
-                "make": vehicle.get("make"),
-                "model": vehicle.get("model"),
-                "damage": vehicle.get("damage_description", ""),
+    const copartFee = bid * 0.075;
+    const taxAmount = bid * (taxRate / 100);
+
+    const totalCost = bid + copartFee + taxAmount + repair + titleFee;
+
+    const profit = resale - totalCost;
+    return isFinite(profit) ? profit : 0;
+  };
+
+  // ----------------------------------------------
+  // Load vehicles
+  // ----------------------------------------------
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+
+        const res = await axios.get(
+          `${process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com"}/get_vehicles`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
             },
-        )
-        vehicle_id = result.scalar()
+          }
+        );
 
-    return {"message": f"✅ Vehicle {lot_num} uploaded successfully", "vehicle_id": vehicle_id}
+        const vehicles = res.data?.vehicles || [];
 
+        // Convert numeric fields to numbers to prevent NaN
+        const cleaned = vehicles.map((c) => ({
+          ...c,
+          title_fee: number(c.title_fee),
+          avg_tax_rate: number(c.avg_tax_rate),
+          userRepair: number(c.repair_estimate),
+          userResale: number(c.resale_estimate),
+        }));
 
-# --------------------------------------------------
-# 2️⃣ Get all vehicles for the logged-in user
-# --------------------------------------------------
-@router.get("/get_vehicles")
-def get_user_vehicles(user=Depends(get_current_user)):
-    """
-    Returns all vehicles for the authenticated user,
-    now including sale_date and sale_name (Location).
-    """
-    from .backend_api import get_first_image
-    engine = get_engine()
-    user_id = user["id"]
+        setCars(cleaned);
+      } catch (e) {
+        setError("Failed to load vehicles");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    with engine.connect() as conn:
-        rows = conn.execute(text("""
-            SELECT
-                uv.id,
-                uv.lot_number,
-                uv.lot_url,
-                uv.year,
-                uv.make,
-                uv.model,
-                uv.odometer,
-                uv.damage_description,
-                uv.repair_estimate,
-                uv.resale_estimate,
-                uv.repair_details,
-                uv.resale_details,
-                uv.created_at,
-                uv.image_url,
-                uv.sale_date,   
-                uv.sale_name,  
-                u.state_code,
-                ttf.title_fee,
-                ttf.avg_tax_rate
-            FROM user_vehicles uv
-            INNER JOIN users u ON uv.user_id = u.id
-            LEFT JOIN tax_title_fees ttf ON ttf.state_code = u.state_code
-            WHERE uv.user_id = :uid
-            ORDER BY uv.created_at DESC
-        """), {"uid": user_id}).fetchall()
+    load();
+  }, []);
 
-    vehicles = []
-    for r in rows:
-        v = dict(r._mapping)
+  // ----------------------------------------------
+  // Update card input (repair/resale)
+  // ----------------------------------------------
+  const updateCarField = (carId, field, value) => {
+    setCars((prev) =>
+      prev.map((car) =>
+        car.id === carId
+          ? { ...car, [field]: number(value) }
+          : car
+      )
+    );
+  };
 
-        v["avg_tax_rate"] = float(v["avg_tax_rate"]) if v.get("avg_tax_rate") is not None else 0
-        v["title_fee"]    = float(v["title_fee"])    if v.get("title_fee") is not None else 0
+  // ----------------------------------------------
+  // Modal open
+  // ----------------------------------------------
+  const openModal = (car) => {
+    setSelectedCar(car);
+    setModalRepair(number(car.userRepair));
+    setModalResale(number(car.userResale));
+  };
 
-        lot_id = str(v.get("lot_number") or "").strip()
-
-        img = v.get("image_url")
-        if not img or img.lower() in ("", "none", "null"):
-            local_img = get_first_image(lot_id)
-            v["image_url"] = (
-                local_img
-                or f"https://api.carflipanalyzer.com/backend/downloads/{lot_id}/{lot_id}_Image_1.jpg"
-            )
-
-        # ✅ Add frontend-friendly label for clarity (optional)
-        v["location"] = v.get("sale_name")
-
-        vehicles.append(v)
-
-    return {"vehicles": vehicles}
-
-
-# --------------------------------------------------
-# 3️⃣ Analyze a specific vehicle (trigger AI estimator)
-# --------------------------------------------------
-@router.post("/analyze_vehicle/{vehicle_id}")
-def analyze_vehicle_route(vehicle_id: int, user=Depends(get_current_user)):
-    """
-    Run the AI repair/resale analysis for one vehicle and update DB.
-    """
-    with engine.begin() as conn:
-        row = conn.execute(
-            text("""
-                SELECT lot_number, year, make, model, damage_description
-                FROM user_vehicles
-                WHERE id = :id AND user_id = :uid
-            """),
-            {"id": vehicle_id, "uid": user["id"]}
-        ).fetchone()
-
-        if not row:
-            raise HTTPException(status_code=404, detail="Vehicle not found")
-
-        vehicle = dict(row._mapping)
-        ai_data = analyze_vehicle(vehicle)
-
-        conn.execute(
-            text("""
-                UPDATE user_vehicles
-                SET repair_estimate = :repair_estimate,
-                    resale_estimate = :resale_estimate,
-                    repair_details = :repair_details,
-                    resale_details = :resale_details
-                WHERE id = :id
-            """),
-            {
-                "id": vehicle_id,
-                "repair_estimate": ai_data.get("repair_estimate"),
-                "resale_estimate": ai_data.get("resale_estimate"),
-                "repair_details": ai_data.get("repair_details"),
-                "resale_details": ai_data.get("resale_details")
+  // ----------------------------------------------
+  // Sync modal edits back to card
+  // ----------------------------------------------
+  const syncModalBack = () => {
+    if (!selectedCar) return;
+    setCars((prev) =>
+      prev.map((car) =>
+        car.id === selectedCar.id
+          ? {
+              ...car,
+              userRepair: number(modalRepair),
+              userResale: number(modalResale),
             }
-        )
+          : car
+      )
+    );
+  };
 
-    return {"message": "✅ Vehicle analyzed successfully"}
+  // ----------------------------------------------
+  // Render
+  // ----------------------------------------------
+  if (loading)
+    return (
+      <div className="flex justify-center items-center h-screen text-gray-700">
+        Loading…
+      </div>
+    );
+
+  if (error)
+    return (
+      <div className="flex justify-center items-center h-screen text-red-600">
+        {error}
+      </div>
+    );
+
+  return (
+    <main className="p-6 bg-gray-50 min-h-screen">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+
+        {cars.map((car) => {
+          const tax = number(car.avg_tax_rate);
+          const title = number(car.title_fee);
+
+          const maxBid = calcMaxBid(
+            car.userResale,
+            car.userRepair,
+            tax,
+            title,
+            margin
+          );
+
+          const profit = calcProfit(
+            maxBid,
+            car.userResale,
+            car.userRepair,
+            tax,
+            title
+          );
+
+          return (
+            <div
+              key={car.id}
+              className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden"
+            >
+              {/* IMAGE */}
+              <div className="relative">
+                <img
+                  src={car.image_url || "https://placehold.co/400x250?text=No+Image"}
+                  alt=""
+                  className="w-full h-56 object-cover"
+                />
+                <div className="absolute top-3 left-3 bg-blue-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
+                  {car.damage_description || "Unknown Damage"}
+                </div>
+              </div>
+
+              {/* CONTENT */}
+              <div className="p-4 space-y-2">
+
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {car.year} {car.make} {car.model}
+                </h2>
+
+                <p className="text-sm text-gray-500">Lot #: {car.lot_number}</p>
+                <p className="text-sm text-gray-500">
+                  Location: {car.sale_name || "N/A"}
+                </p>
+                <p className="text-sm text-gray-500">
+                  Sale Date:{" "}
+                  {car.sale_date
+                    ? new Date(car.sale_date).toLocaleDateString()
+                    : "N/A"}
+                </p>
+
+                {/* Editable Repair + Resale / Calculated Max Bid + Profit */}
+                <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                  
+                  {/* LEFT - Inputs */}
+                  <div className="space-y-1">
+                    {/* Repair */}
+                    <div className="flex items-center space-x-1 text-gray-700">
+                      <Wrench size={16} />
+                      <span className="text-sm font-medium">Repair: $</span>
+                      <input
+                        type="number"
+                        value={car.userRepair}
+                        onChange={(e) =>
+                          updateCarField(car.id, "userRepair", e.target.value)
+                        }
+                        className="w-20 p-1 border border-gray-300 rounded-md text-sm"
+                      />
+                    </div>
+
+                    {/* Resale */}
+                    <div className="flex items-center space-x-1 text-gray-700">
+                      <DollarSign size={16} />
+                      <span className="text-sm font-medium">Resale: $</span>
+                      <input
+                        type="number"
+                        value={car.userResale}
+                        onChange={(e) =>
+                          updateCarField(car.id, "userResale", e.target.value)
+                        }
+                        className="w-20 p-1 border border-gray-300 rounded-md text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* RIGHT - Calculated */}
+                  <div className="space-y-1 text-right">
+                    <p className="text-sm font-medium text-gray-700">
+                      Max Bid: ${maxBid.toFixed(0)}
+                    </p>
+                    <p className="text-sm font-medium text-gray-700">
+                      Profit: ${profit.toFixed(0)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* VIEW DETAILS */}
+                <div className="flex justify-start items-center pt-3">
+                  <button
+                    onClick={() => openModal(car)}
+                    className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 hover:bg-gray-50 transition"
+                  >
+                    View Details
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+      </div>
+
+      {/* ----------------------------------------------
+          MODAL
+      ---------------------------------------------- */}
+      {selectedCar && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-2xl shadow-xl max-w-xl w-full relative">
+
+            <button
+              onClick={() => {
+                syncModalBack();
+                setSelectedCar(null);
+              }}
+              className="absolute top-3 right-3 text-gray-500 hover:text-gray-800"
+            >
+              ✕
+            </button>
+
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+              {selectedCar.year} {selectedCar.make} {selectedCar.model}
+            </h2>
+
+            {/* Editable Fields */}
+            <div className="space-y-3 mb-4">
+              
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Repair Cost
+                </label>
+                <input
+                  type="number"
+                  value={modalRepair}
+                  onChange={(e) => setModalRepair(number(e.target.value))}
+                  className="w-full p-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Resale Value
+                </label>
+                <input
+                  type="number"
+                  value={modalResale}
+                  onChange={(e) => setModalResale(number(e.target.value))}
+                  className="w-full p-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Profit Margin (%)
+                </label>
+                <input
+                  type="number"
+                  value={margin}
+                  onChange={(e) => setMargin(number(e.target.value))}
+                  className="w-full p-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+            </div>
+
+            {/* Cost Breakdown */}
+            {(() => {
+              const tax = number(selectedCar.avg_tax_rate);
+              const title = number(selectedCar.title_fee);
+
+              const bid = calcMaxBid(
+                modalResale,
+                modalRepair,
+                tax,
+                title,
+                margin
+              );
+
+              const profit = calcProfit(
+                bid,
+                modalResale,
+                modalRepair,
+                tax,
+                title
+              );
+
+              const copart = bid * 0.075;
+              const taxAmt = bid * (tax / 100);
+              const totalCost =
+                bid + copart + taxAmt + modalRepair + title;
+
+              return (
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p>
+                    Max Bid: <strong>${bid.toFixed(0)}</strong>
+                  </p>
+                  <p>
+                    Potential Profit:{" "}
+                    <strong>${profit.toFixed(0)}</strong>
+                  </p>
+
+                  <hr className="my-2" />
+
+                  <p>Copart Fee (7.5%): ${copart.toFixed(0)}</p>
+                  <p>
+                    Tax ({tax}%): ${taxAmt.toFixed(0)}
+                  </p>
+                  <p>Title Fee: ${title}</p>
+                  <p>Repair: ${modalRepair}</p>
+
+                  <hr className="my-2" />
+
+                  <p>
+                    Total Cost: <strong>${totalCost.toFixed(0)}</strong>
+                  </p>
+                </div>
+              );
+            })()}
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => {
+                  syncModalBack();
+                  setSelectedCar(null);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+};
+
+export default Dashboard;

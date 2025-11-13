@@ -1,181 +1,190 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
-import CarCard from "../components/CarCard";
 
-export default function Dashboard() {
+const Dashboard = () => {
   const [cars, setCars] = useState([]);
   const [selectedCar, setSelectedCar] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Modal state
-  const [modalRepair, setModalRepair] = useState("");
-  const [modalResale, setModalResale] = useState("");
-  const [modalMargin, setModalMargin] = useState(15); // default 15%
-
+  // --------------------------------------------------
+  // FETCH VEHICLES
+  // --------------------------------------------------
   useEffect(() => {
+    const fetchCars = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(
+          `${process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com"}/get_vehicles`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
+
+        const data = response.data;
+        if (Array.isArray(data)) {
+          setCars(data);
+        } else if (data && Array.isArray(data.vehicles)) {
+          setCars(data.vehicles);
+        } else {
+          console.error("Unexpected data format:", data);
+          setCars([]);
+        }
+      } catch (err) {
+        console.error("Error fetching vehicles:", err);
+        setError("Failed to load vehicles.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchCars();
   }, []);
 
-  const fetchCars = async () => {
-    try {
-      const response = await axios.get(
-        `${process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com"}/get_vehicles`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
-
-      const data = response.data.vehicles;
-
-      const updated = data.map((car) => computeValues(car));
-      setCars(updated);
-    } catch (error) {
-      console.error("Error fetching vehicles:", error);
-    }
+  // --------------------------------------------------
+  // UI HELPERS
+  // --------------------------------------------------
+  const formatCurrency = (value) => {
+    if (!value || isNaN(value)) return "—";
+    return `$${Number(value).toLocaleString()}`;
   };
 
-  // Fee + Bid Calculations
-  const computeValues = (car) => {
-    const repair = Number(car.repair_estimate || 0);
-    const resale = Number(car.resale_estimate || 0);
-    const bid = Number(car.max_bid || 0); // original AI max bid
-    const tax_rate = Number(car.avg_tax_rate || 0);
-    const title_fee = Number(car.title_fee || 0);
-    const copart_fee_rate = 0.075;
-    const margin = modalMargin / 100;
-
-    // Calculate potential profit (based on the displayed bid)
-    const tax_amount = bid * (tax_rate / 100);
-    const copart_fee = bid * copart_fee_rate;
-    const total_cost = bid + repair + tax_amount + copart_fee + title_fee;
-
-    const potential_profit = resale - total_cost;
-
-    return {
-      ...car,
-      max_bid: bid,
-      potential_profit
-    };
+  const getStatus = (car) => {
+    if (!car.repair_estimate && !car.resale_estimate) return "🧠 Awaiting AI";
+    if (car.repair_estimate && car.resale_estimate) return "✅ Complete";
+    return "⚙️ Processing";
   };
 
-  // When opening modal
-  const onOpenModal = (car) => {
-    setSelectedCar(car);
-    setModalRepair(car.repair_estimate || "");
-    setModalResale(car.resale_estimate || "");
+  const getImage = (car) => {
+    if (car.image_url) return car.image_url;
+    if (car.lot_number)
+      return `https://api.carflipanalyzer.com/backend/downloads/${car.lot_number}/${car.lot_number}_Image_1.jpg`;
+    return "https://via.placeholder.com/300x200?text=No+Image";
   };
 
-  // Update card from modal
-  const applyModalEdits = () => {
-    if (!selectedCar) return;
-
-    const updatedCar = {
-      ...selectedCar,
-      repair_estimate: modalRepair,
-      resale_estimate: modalResale
-    };
-
-    const recalculated = computeValues(updatedCar);
-
-    setCars((prev) =>
-      prev.map((c) => (c.id === selectedCar.id ? recalculated : c))
-    );
-
-    setSelectedCar(null);
-  };
-
-  // Update card inline values
-  const onUpdateValues = (carId, updates) => {
-    setCars((prev) =>
-      prev.map((car) => {
-        if (car.id !== carId) return car;
-        const updated = computeValues({ ...car, ...updates });
-        return updated;
-      })
-    );
-  };
+  // --------------------------------------------------
+  // MAIN RENDER
+  // --------------------------------------------------
+  if (loading) return <div className="text-center mt-10 text-gray-400">Loading vehicles...</div>;
+  if (error) return <div className="text-center mt-10 text-red-500">{error}</div>;
+  if (!cars.length) return <div className="text-center mt-10 text-gray-400">No vehicles found.</div>;
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">Your Vehicles</h1>
+    <div className="min-h-screen bg-gray-900 text-gray-100 px-4 py-6">
+      <h1 className="text-3xl font-bold text-center mb-8 tracking-tight">
+        🚗 Car Flip Analyzer Dashboard
+      </h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {cars.map((car) => (
-          <CarCard
+          <div
             key={car.id}
-            car={car}
-            onOpenModal={onOpenModal}
-            onUpdateValues={onUpdateValues}
-          />
+            className="bg-gray-800 rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition duration-300 cursor-pointer"
+            onClick={() => setSelectedCar(car)}
+          >
+            <div className="relative">
+              <img
+                src={getImage(car)}
+                alt={`${car.year} ${car.make} ${car.model}`}
+                className="w-full h-48 object-cover"
+                onError={(e) => (e.target.src = "https://via.placeholder.com/300x200?text=No+Image")}
+              />
+              <span
+                className={`absolute top-3 right-3 text-xs px-3 py-1 rounded-full ${
+                  getStatus(car) === "✅ Complete"
+                    ? "bg-green-600"
+                    : getStatus(car) === "🧠 Awaiting AI"
+                    ? "bg-yellow-600"
+                    : "bg-blue-600"
+                }`}
+              >
+                {getStatus(car)}
+              </span>
+            </div>
+
+            <div className="p-4">
+              <h2 className="font-semibold text-lg mb-1">
+                {car.year} {car.make} {car.model}
+              </h2>
+              <p className="text-sm text-gray-400 mb-1">
+                {car.damage_description || "No damage info"}
+              </p>
+              <p className="text-sm text-gray-400">
+                <strong>Title:</strong> {car.title_code || "Unknown"}
+              </p>
+
+              <div className="mt-3 flex justify-between text-sm">
+                <span>Repair: {formatCurrency(car.repair_estimate)}</span>
+                <span>Resale: {formatCurrency(car.resale_estimate)}</span>
+              </div>
+            </div>
+          </div>
         ))}
       </div>
 
-      {/* Modal */}
+      {/* ------------------------ DETAILS MODAL ------------------------ */}
       {selectedCar && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg relative shadow-xl">
-
+        <div
+          className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-6"
+          onClick={() => setSelectedCar(null)}
+        >
+          <div
+            className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-3xl p-6 relative overflow-y-auto max-h-[85vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
-              className="absolute top-3 right-3 text-gray-600"
-              onClick={applyModalEdits}
+              className="absolute top-3 right-3 text-gray-400 hover:text-white text-xl"
+              onClick={() => setSelectedCar(null)}
             >
               ✕
             </button>
 
-            <h2 className="text-xl font-semibold mb-2">
+            <h2 className="text-2xl font-bold mb-2">
               {selectedCar.year} {selectedCar.make} {selectedCar.model}
             </h2>
+            <p className="text-sm text-gray-400 mb-2">
+              Lot: {selectedCar.lot_number} • Title: {selectedCar.title_code || "Unknown"}
+            </p>
 
-            <p className="text-gray-600">{selectedCar.sale_name}</p>
-            <p className="text-gray-600 mb-4">{selectedCar.sale_date}</p>
+            <img
+              src={getImage(selectedCar)}
+              alt="Car"
+              className="w-full h-72 object-cover rounded-lg mb-4"
+            />
 
-            {/* Repair */}
-            <div className="flex items-center gap-2 mb-3">
-              <span className="font-medium w-20">Repair: $</span>
-              <input
-                type="number"
-                className="border p-2 rounded w-32"
-                value={modalRepair}
-                onChange={(e) => setModalRepair(e.target.value)}
-              />
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-semibold text-gray-300 mb-1">Damage</h3>
+                <p className="text-gray-400">{selectedCar.damage_description || "N/A"}</p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-gray-300 mb-1">Repair Estimate</h3>
+                <p className="text-gray-400">
+                  {formatCurrency(selectedCar.repair_estimate)}
+                </p>
+                <p className="text-gray-500 text-sm mt-1">
+                  {selectedCar.repair_details || "No details available."}
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-gray-300 mb-1">Resale Estimate</h3>
+                <p className="text-gray-400">
+                  {formatCurrency(selectedCar.resale_estimate)}
+                </p>
+                <p className="text-gray-500 text-sm mt-1">
+                  {selectedCar.resale_details || "No resale details yet."}
+                </p>
+              </div>
             </div>
-
-            {/* Resale */}
-            <div className="flex items-center gap-2 mb-3">
-              <span className="font-medium w-20">Resale: $</span>
-              <input
-                type="number"
-                className="border p-2 rounded w-32"
-                value={modalResale}
-                onChange={(e) => setModalResale(e.target.value)}
-              />
-            </div>
-
-            {/* Margin */}
-            <div className="flex items-center gap-2 mb-4">
-              <span className="font-medium w-20">Margin:</span>
-              <input
-                type="number"
-                className="border p-2 rounded w-20"
-                value={modalMargin}
-                onChange={(e) => setModalMargin(e.target.value)}
-              />
-              <span>%</span>
-            </div>
-
-            {/* Readout */}
-            <div className="bg-gray-100 p-4 rounded-lg text-sm">
-              <p><strong>Max Bid:</strong> ${Number(selectedCar.max_bid).toLocaleString()}</p>
-              <p><strong>Potential Profit:</strong> ${Number(selectedCar.potential_profit).toLocaleString()}</p>
-              <p><strong>Tax Rate:</strong> {selectedCar.avg_tax_rate}%</p>
-              <p><strong>Title Fee:</strong> ${selectedCar.title_fee}</p>
-              <p><strong>Copart Fee Rate:</strong> 7.5%</p>
-            </div>
-
           </div>
         </div>
       )}
     </div>
   );
-}
+};
+
+export default Dashboard;

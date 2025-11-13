@@ -133,16 +133,7 @@ const Dashboard = () => {
                   >
                     View Details
                   </button>
-                  {car.lot_url && (
-                    <a
-                      href={car.lot_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-blue-600 hover:bg-blue-50 transition"
-                    >
-                      Copart →
-                    </a>
-                  )}
+                  
                 </div>
               </div>
             </div>

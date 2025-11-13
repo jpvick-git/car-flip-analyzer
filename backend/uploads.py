@@ -265,17 +265,18 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
         # Step 3: Trigger Copart + AI for lots needing analysis
         # --------------------------------------------------
         try:
-            missing_ai = conn.execute(
-                text("""
-                    SELECT lot_number
-                    FROM user_vehicles
-                    WHERE user_id = :uid
-                      AND (repair_estimate IS NULL OR repair_estimate = '')
-                """),
-                {"uid": user["id"]},
-            ).fetchall()
+            with rds_engine.connect() as conn:
+                missing_ai = conn.execute(
+                    text("""
+                        SELECT lot_number
+                        FROM user_vehicles
+                        WHERE user_id = :uid
+                          AND (repair_estimate IS NULL OR repair_estimate = '')
+                    """),
+                    {"uid": user["id"]},
+                ).fetchall()
 
-            lots_to_run = [row[0] for row in missing_ai]
+                lots_to_run = [row[0] for row in missing_ai]
 
             if not lots_to_run:
                 print("🚫 No lots require AI estimation at this time.")
@@ -290,6 +291,7 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
 
         except Exception as e:
             print(f"⚠️ Error during AI trigger step: {e}")
+
 
     except Exception as e:
         print(f"❌ Error processing file: {e}")

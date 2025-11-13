@@ -8,18 +8,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-
-
-let maxBid =
-  (0.85 * resale - tax - fees - repair) / 1.075;
-
-if (isNaN(maxBid) || maxBid < 0) maxBid = 0;
-
-const formattedMaxBid = maxBid.toLocaleString(undefined, {
-  maximumFractionDigits: 0,
-});
-
-
   // -----------------------------------------------
   // FETCH VEHICLES
   // -----------------------------------------------

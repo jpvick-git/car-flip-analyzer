@@ -172,7 +172,7 @@ export default function Login() {
                   ))}
                 </select>
 
-                {/* ZIP with validation */}
+                {/* ZIP */}
                 <div className="flex flex-col w-28">
                   <input
                     type="text"
@@ -231,6 +231,12 @@ export default function Login() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => {
+                // Prevent Enter from submitting the form from password field
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                }
+              }}
               placeholder="••••••••"
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-gray-900"
             />
@@ -239,6 +245,7 @@ export default function Login() {
 
         {/* Action Button */}
         <button
+          id="authButton"
           onClick={() => handleAuth(isRegistering ? "register" : "login")}
           className="w-full mt-6 bg-gradient-to-r from-blue-600 to-teal-500 text-white py-2 rounded-lg font-medium hover:opacity-90 transition"
         >

@@ -46,8 +46,8 @@ def normalize_lot(val):
 @router.post("/upload_file")
 async def upload_and_process_file(request: Request, file: UploadFile, user=Depends(get_current_user)):
     """
-    Uploads a CSV, clones existing lots for this user if they exist in DB,
-    and only triggers Copart download + AI if any new lots remain.
+    Uploads a CSV, clones existing lots if possible, 
+    inserts new lots into DB, and triggers Copart + AI automation.
     """
     try:
         client_ip = request.client.host
@@ -74,7 +74,7 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
         return JSONResponse(status_code=500, content={"error": str(e)})
 
     # --------------------------------------------------
-    # Step 2: Clone existing lots or mark new ones
+    # Step 2: Process and insert lots
     # --------------------------------------------------
     try:
         df = pd.read_csv(file_path)
@@ -86,15 +86,13 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
 
             for _, row in df.iterrows():
                 lot_num = None
-
-                # Handle multiple possible Copart column names
                 for col in ["lot_number", "lot_inv_num", "Lot", "Lot #", "Lot/Inv #"]:
                     if col in df.columns:
                         lot_num = normalize_lot(row[col])
                         break
 
                 if not lot_num:
-                    print(f"⚠️ Skipping row (no valid lot number found): {row.to_dict()}")
+                    print(f"⚠️ Skipping row (no valid lot number): {row.to_dict()}")
                     continue
 
                 # Already exists for current user?
@@ -111,11 +109,10 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                     print(f"⏩ User {user['id']} already has lot {lot_num}, skipping.")
                     continue
 
-                # Look for same lot in DB (any user)
+                # Clone from any user if available
                 existing = conn.execute(
                     text("""
-                        SELECT TOP 1 *
-                        FROM user_vehicles
+                        SELECT TOP 1 * FROM user_vehicles
                         WHERE REPLACE(LTRIM(RTRIM(lot_number)), ',', '') = :lot
                         ORDER BY updated_at DESC
                     """),
@@ -178,71 +175,52 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                     print(f"✅ Cloned lot {lot_num} → user {user['id']}")
                     cloned_lots.append(lot_num)
                 else:
-                    print(f"❌ Lot {lot_num} not found in DB for any user — will require Copart.")
+                    # --- NEW: Insert minimal placeholder record ---
+                    conn.execute(
+                        text("""
+                            INSERT INTO user_vehicles (
+                                user_id, lot_number, sale_date, year, make, model,
+                                damage_description, sale_name, created_at
+                            )
+                            VALUES (
+                                :uid, :lot, :sale_date, :year, :make, :model,
+                                :damage, :sale_name, GETDATE()
+                            )
+                        """),
+                        {
+                            "uid": user["id"],
+                            "lot": lot_num,
+                            "sale_date": str(row.get("Sale date", "")),
+                            "year": str(row.get("Year", "")),
+                            "make": str(row.get("Make", "")),
+                            "model": str(row.get("Model", "")),
+                            "damage": str(row.get("Damage description", "")),
+                            "sale_name": str(row.get("Sale name", "")),
+                        },
+                    )
+                    print(f"🆕 Inserted new placeholder lot {lot_num} for user {user['id']}")
                     new_lots.append(lot_num)
 
         print(f"✅ {len(cloned_lots)} cloned, {len(new_lots)} new for user {user['id']}")
 
         # --------------------------------------------------
-        # Step 3: Recheck DB after cloning (SQL Server compatible)
+        # Step 3: Trigger Copart + AI
         # --------------------------------------------------
-        try:
-            lot_list = [normalize_lot(l) for l in df["Lot/Inv #"] if not pd.isna(l)]
-            if not lot_list:
-                print("⚠️ No valid lot numbers found in CSV for recheck.")
-                existing_count = 0
-            else:
-                # Dynamically build placeholders for SQL Server
-                placeholders = ", ".join([f":lot{i}" for i in range(len(lot_list))])
-                query = text(f"""
-                    SELECT COUNT(*) AS cnt
-                    FROM user_vehicles
-                    WHERE user_id = :uid
-                      AND lot_number IN ({placeholders})
-                """)
-
-                params = {"uid": user["id"]}
-                for i, lot in enumerate(lot_list):
-                    params[f"lot{i}"] = lot
-
-                with rds_engine.begin() as conn:
-                    existing_count = conn.execute(query, params).scalar()
-
-            if existing_count == len(lot_list):
-                print(f"🚫 All {existing_count} lots now exist for user {user['id']} — skipping Copart/AI.")
-                return JSONResponse(
-                    content={
-                        "message": f"✅ All {existing_count} lots cloned for user {user['id']} — no new lots to process.",
-                        "cloned_lots": cloned_lots,
-                    }
-                )
-
-            # --------------------------------------------------
-            # Step 4: Trigger Copart + AI pipeline for new lots
-            # --------------------------------------------------
-            if new_lots:
-                try:
-                    trigger_url = LOCAL_TRIGGER_URL
-                    payload = {"user_id": user["id"], "new_lots": new_lots}
-                    print(f"🔗 Triggering automation: {trigger_url} with {payload}")
-
-                    response = requests.post(trigger_url, json=payload, timeout=15)
-
-                    if response.ok:
-                        print("✅ Copart + AI pipeline triggered successfully.")
-                    else:
-                        print(f"⚠️ Trigger returned {response.status_code}: {response.text}")
-
-                except Exception as e:
-                    print(f"❌ Failed to trigger Copart automation: {e}")
-            else:
-                print("🚫 No new lots to trigger automation for.")
-
-
-        except Exception as e:
-            print(f"❌ Error during final lot existence check: {e}")
-            return JSONResponse(status_code=500, content={"error": str(e)})
+        if new_lots:
+            try:
+                payload = {"user_id": user["id"], "new_lots": new_lots}
+                print(f"🔗 Triggering automation: {LOCAL_TRIGGER_URL} with {payload}")
+                response = requests.post(LOCAL_TRIGGER_URL, json=payload, timeout=15)
+                if response.ok:
+                    print("✅ Copart + AI pipeline triggered successfully.")
+                else:
+                    print(f"⚠️ Trigger returned {response.status_code}: {response.text}")
+            except Exception as e:
+                print(f"❌ Failed to trigger Copart automation: {e}")
+        else:
+            print("🚫 No new lots to trigger automation for.")
 
     except Exception as e:
-        print(f"❌ Error in upload_and_process_file: {e}")
+        print(f"❌ Error processing file: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+

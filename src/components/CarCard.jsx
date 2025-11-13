@@ -1,70 +1,82 @@
-import { Wrench, DollarSign } from "lucide-react";
+import React from "react";
 
-export default function CarCard({ car, setSelectedCar }) {
+export default function CarCard({
+  car,
+  onOpenModal,
+  onUpdateValues
+}) {
+  const handleRepairChange = (e) => {
+    onUpdateValues(car.id, {
+      repair_estimate: e.target.value
+    });
+  };
+
+  const handleResaleChange = (e) => {
+    onUpdateValues(car.id, {
+      resale_estimate: e.target.value
+    });
+  };
+
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
-      
-      {/* Image Section */}
-      <div className="relative">
-        <img
-          src={car.image_url || "https://placehold.co/400x250?text=No+Image"}
-          alt={`${car.make} ${car.model}`}
-          className="w-full h-56 object-cover"
-        />
+    <div className="bg-white rounded-2xl shadow-md p-4">
+      <img
+        src={car.image_url}
+        alt=""
+        className="w-full h-64 object-cover rounded-xl"
+      />
 
-        {/* Damage Badge */}
-        <div className="absolute top-3 left-3 bg-blue-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
-          {car.damage_description || "Unknown Damage"}
+      <h2 className="text-xl font-semibold mt-4">
+        {car.year} {car.make} {car.model}
+      </h2>
+
+      <p className="text-gray-600 text-sm">Lot #: {car.lot_number}</p>
+      <p className="text-gray-600 text-sm">
+        Location: {car.sale_name}
+      </p>
+      <p className="text-gray-600 text-sm">
+        Sale Date: {car.sale_date}
+      </p>
+
+      {/* Repair / Resale - inline */}
+      <div className="mt-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="font-medium w-20">Repair: $</span>
+          <input
+            type="number"
+            className="border rounded p-2 w-32"
+            value={car.repair_estimate || ""}
+            onChange={handleRepairChange}
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="font-medium w-20">Resale: $</span>
+          <input
+            type="number"
+            className="border rounded p-2 w-32"
+            value={car.resale_estimate || ""}
+            onChange={handleResaleChange}
+          />
         </div>
       </div>
 
-      {/* Info Section */}
-      <div className="p-4 space-y-2">
-        <h2 className="text-lg font-semibold text-gray-900">
-          {car.year} {car.make} {car.model}
-        </h2>
-
-        <p className="text-sm text-gray-500">Lot #: {car.lot_number}</p>
-
-        <p className="text-sm text-gray-500">
-          Location: {car.sale_name || car.location || "N/A"}
+      {/* Max Bid + Profit */}
+      <div className="flex justify-between mt-4">
+        <p className="text-sm font-semibold">
+          Max Bid: ${Number(car.max_bid || 0).toLocaleString()}
         </p>
 
-        <p className="text-sm text-gray-500">
-          Sale Date:{" "}
-          {car.sale_date
-            ? new Date(car.sale_date).toLocaleDateString()
-            : "N/A"}
+        <p className="text-sm font-semibold">
+          Profit: ${Number(car.potential_profit || 0).toLocaleString()}
         </p>
-
-        {/* Repair & Resale Row */}
-        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-          <div className="flex items-center space-x-1 text-gray-700">
-            <Wrench size={16} />
-            <span className="text-sm font-medium">
-              Repair: ${car.repair_estimate || "0"}
-            </span>
-          </div>
-
-          <div className="flex items-center space-x-1 text-gray-700">
-            <DollarSign size={16} />
-            <span className="text-sm font-medium">
-              Resale: ${car.resale_estimate || "0"}
-            </span>
-          </div>
-        </div>
-
-        {/* Footer Buttons */}
-        <div className="flex justify-start items-center pt-3">
-          <button
-            onClick={() => setSelectedCar(car)}
-            className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 hover:bg-gray-50 transition"
-          >
-            View Details
-          </button>
-        </div>
       </div>
-      
+
+      <button
+        className="mt-4 bg-black text-white px-4 py-2 rounded-lg"
+        onClick={() => onOpenModal(car)}
+      >
+        View Details
+      </button>
     </div>
   );
 }

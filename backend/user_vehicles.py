@@ -1,322 +1,269 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
+import os
+import json
+import shutil
+import pandas as pd
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from sqlalchemy import text
+from database import get_db
+from auth_utils import get_current_user
 
-// --------------------------------------------------
-// SAFE DATE PARSER (Prevents modal from crashing)
-// --------------------------------------------------
-const safeDate = (input) => {
-  if (!input) return "N/A";
+router = APIRouter()
 
-  // Try native JS parser first
-  const d = new Date(input);
-  if (!isNaN(d.getTime())) {
-    return d.toLocaleDateString();
-  }
+# ----------------------------------------------------
+# PATHS
+# ----------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DOWNLOAD_DIR = (
+    os.path.join(BASE_DIR, "downloads")
+    if "backend" in BASE_DIR.lower()
+    else os.path.join(BASE_DIR, "backend", "downloads")
+)
 
-  // Try Copart-style:
-  // "11/13/2025 12:00 pm CST"
-  try {
-    const parts = input.split(" ");
-    const datePart = parts[0];       // "11/13/2025"
-    const timePart = parts[1];       // "12:00"
-    const ampmRaw = parts[2] || "";  // "pm"
-    const ampm = ampmRaw.toUpperCase().replace("CST", "").trim(); 
+UPLOADS_DIR = (
+    os.path.join(os.path.dirname(BASE_DIR), "user_uploads")
+    if "backend" in BASE_DIR.lower()
+    else os.path.join(BASE_DIR, "user_uploads")
+)
 
-    const formatted = `${datePart} ${timePart} ${ampm}`;
-    const d2 = new Date(formatted);
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-    if (!isNaN(d2.getTime())) {
-      return d2.toLocaleDateString();
-    }
-  } catch (err) {
-    console.warn("Could not parse sale_date:", input, err);
-  }
+# ----------------------------------------------------
+# HELPERS
+# ----------------------------------------------------
+def safe_get(row, col, default=""):
+    return row[col] if col in row and pd.notna(row[col]) else default
 
-  return "N/A";
-};
 
-export default function Dashboard() {
-  const [cars, setCars] = useState([]);
-  const [selectedCar, setSelectedCar] = useState(null);
-  const [loading, setLoading] = useState(true);
+# ----------------------------------------------------
+# GET VEHICLES
+# ----------------------------------------------------
+@router.get("/get_vehicles")
+def get_vehicles(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    try:
+        query = text("""
+            SELECT
+                id,
+                user_id,
+                lot_number,
+                lot_url,
+                year,
+                make,
+                model,
+                damage_description,
+                odometer,
+                title_code,
+                repair_estimate,
+                resale_estimate,
+                repair_details,
+                resale_details,
+                tax_amount,
+                fees_amount,
+                image_paths
+            FROM user_vehicles
+            WHERE user_id = :user_id
+            ORDER BY id DESC;
+        """)
 
-  // Editable in modal only
-  const [marginPercent, setMarginPercent] = useState(15);
+        result = db.execute(query, {"user_id": current_user["id"]}).fetchall()
 
-  useEffect(() => {
-    const fetchCars = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(
-          `${process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com"}/get_vehicles`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }
-        );
+        vehicles = []
+        for row in result:
+            vehicles.append({
+                "id": row.id,
+                "user_id": row.user_id,
+                "lot_number": row.lot_number,
+                "lot_url": row.lot_url,
+                "year": row.year,
+                "make": row.make,
+                "model": row.model,
+                "damage_description": row.damage_description,
+                "odometer": row.odometer,
+                "title_code": row.title_code,
+                "repair_estimate": row.repair_estimate,
+                "resale_estimate": row.resale_estimate,
+                "repair_details": row.repair_details,
+                "resale_details": row.resale_details,
+                "tax_amount": row.tax_amount,
+                "fees_amount": row.fees_amount,
+                "images": json.loads(row.image_paths) if row.image_paths else []
+            })
 
-        const data = response.data?.vehicles || [];
-        const mapped = data.map((car) => ({
-          ...car,
+        return vehicles
 
-          // Convert to numbers to prevent NaN/profit explosion
-          repair_estimate: Number(car.repair_estimate) || 0,
-          resale_estimate: Number(car.resale_estimate) || 0,
-          avg_tax_rate: Number(car.avg_tax_rate) || 0,
-          title_fee: Number(car.title_fee) || 0,
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-          // Local edits
-          userRepair: Number(car.repair_estimate) || 0,
-          userResale: Number(car.resale_estimate) || 0,
-        }));
 
-        setCars(mapped);
-      } catch (error) {
-        console.error("Error fetching vehicles:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+# ----------------------------------------------------
+# UPLOAD CSV FOR USER
+# ----------------------------------------------------
+@router.post("/upload_user_file")
+async def upload_user_file(
+    file: UploadFile = File(...),
+    db=Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        if not file.filename.endswith((".csv", ".xlsx")):
+            raise HTTPException(status_code=400, detail="Only CSV or XLSX allowed.")
 
-    fetchCars();
-  }, []);
+        # Save uploaded file
+        save_path = os.path.join(UPLOADS_DIR, file.filename)
+        with open(save_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-  // --------------------------------------------------
-  // CALCULATIONS
-  // --------------------------------------------------
-  const calcMaxBid = (car) => {
-    const repair = Number(car.userRepair) || 0;
-    const resale = Number(car.userResale) || 0;
-    const titleFee = Number(car.title_fee) || 0;
-    const taxRate = Number(car.avg_tax_rate) || 0;
-    const margin = Number(marginPercent) / 100;
+        # Load into DataFrame
+        df = pd.read_csv(save_path) if file.filename.endswith(".csv") else pd.read_excel(save_path)
 
-    // Core formula:
-    // maxBid * (1 + 0.075 + taxRate) + repair + titleFee + (resale * margin) = resale
-    const feeMultiplier = 1 + 0.075 + taxRate / 100;
-    const totalOtherCosts = repair + titleFee + resale * margin;
+        inserted = 0
 
-    const maxBid = (resale - totalOtherCosts) / feeMultiplier;
-    return Math.max(0, Math.round(maxBid)); 
-  };
+        for _, row in df.iterrows():
+            lot_number = safe_get(row, "lot_number", "")
+            lot_url = safe_get(row, "lot_url", "")
 
-  const calcProfit = (car) => {
-    const maxBid = calcMaxBid(car);
-    const repair = Number(car.userRepair) || 0;
-    const resale = Number(car.userResale) || 0;
-    const titleFee = Number(car.title_fee) || 0;
-    const taxRate = Number(car.avg_tax_rate) || 0;
+            year = safe_get(row, "year", "")
+            make = safe_get(row, "make", "")
+            model = safe_get(row, "model", "")
 
-    const copartFee = maxBid * 0.075;
-    const taxAmount = maxBid * (taxRate / 100);
+            damage = safe_get(row, "damage_description", "")
+            odometer = safe_get(row, "odometer", "")
+            title_code = safe_get(row, "title_code", "")
 
-    const totalCost = maxBid + copartFee + repair + taxAmount + titleFee;
-    return Math.round(resale - totalCost);
-  };
+            repair_est = safe_get(row, "repair_estimate", "")
+            resale_est = safe_get(row, "resale_estimate", "")
+            repair_details = safe_get(row, "repair_details", "")
+            resale_details = safe_get(row, "resale_details", "")
 
-  // --------------------------------------------------
-  // UPDATE CARD (repair/resale edits)
-  // --------------------------------------------------
-  const updateCarLocal = (id, field, value) => {
-    setCars((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? { ...c, [field]: Number(value) || 0 }
-          : c
-      )
-    );
+            tax_amount = safe_get(row, "tax_amount", "")
+            fees_amount = safe_get(row, "fees_amount", "")
 
-    // Also sync selected modal
-    if (selectedCar && selectedCar.id === id) {
-      setSelectedCar((prev) => ({
-        ...prev,
-        [field]: Number(value) || 0,
-      }));
-    }
-  };
+            # Construct local image path structure
+            img_dir = os.path.join(DOWNLOAD_DIR, str(lot_number))
+            images = []
 
-  if (loading) return <div className="text-white p-6">Loading vehicles...</div>;
+            if os.path.isdir(img_dir):
+                for filename in sorted(os.listdir(img_dir)):
+                    if filename.lower().endswith((".jpg", ".jpeg", ".png")):
+                        images.append(os.path.join(img_dir, filename))
 
-  return (
-    <div className="p-6">
-      <h1 className="text-xl font-bold text-white mb-4">Your Vehicles</h1>
+            query = text("""
+                INSERT INTO user_vehicles
+                (user_id, lot_number, lot_url, year, make, model, damage_description, odometer,
+                 title_code, repair_estimate, resale_estimate, repair_details, resale_details,
+                 tax_amount, fees_amount, image_paths)
+                VALUES
+                (:user_id, :lot_number, :lot_url, :year, :make, :model, :damage_description,
+                 :odometer, :title_code, :repair_estimate, :resale_estimate,
+                 :repair_details, :resale_details, :tax_amount, :fees_amount, :image_paths);
+            """)
 
-      {/* -------------------------------------------------- */}
-      {/* CAR GRID */}
-      {/* -------------------------------------------------- */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {cars.map((car) => (
-          <div
-            key={car.id}
-            className="bg-white border border-gray-200 rounded-xl shadow-md p-4"
-          >
+            db.execute(query, {
+                "user_id": current_user["id"],
+                "lot_number": lot_number,
+                "lot_url": lot_url,
+                "year": year,
+                "make": make,
+                "model": model,
+                "damage_description": damage,
+                "odometer": odometer,
+                "title_code": title_code,
+                "repair_estimate": repair_est,
+                "resale_estimate": resale_est,
+                "repair_details": repair_details,
+                "resale_details": resale_details,
+                "tax_amount": tax_amount,
+                "fees_amount": fees_amount,
+                "image_paths": json.dumps(images)
+            })
 
-            {/* ---- IMAGE ---- */}
-            <img
-              src={car.image_url}
-              alt=""
-              className="w-full h-48 object-cover rounded-md mb-3"
-            />
+            db.commit()
+            inserted += 1
 
-            {/* ---- TITLE ---- */}
-            <h2 className="text-lg font-bold text-gray-900">
-              {car.year} {car.make} {car.model}
-            </h2>
+        return {"status": "success", "inserted_rows": inserted}
 
-            {/* ---- LOT ---- */}
-            <p className="text-sm text-gray-600">Lot #: {car.lot_number}</p>
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-            {/* ---- SALE DATE ---- */}
-            <p className="text-sm text-gray-600">
-              Sale Date: {safeDate(car.sale_date)}
-            </p>
 
-            {/* ---- LOCATION ---- */}
-            <p className="text-sm text-gray-600">
-              Location: {car.location || "N/A"}
-            </p>
+# ----------------------------------------------------
+# ADD SINGLE VEHICLE (Manual Entry)
+# ----------------------------------------------------
+@router.post("/add_vehicle")
+def add_vehicle(payload: dict, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    try:
+        lot_number = payload.get("lot_number")
+        if not lot_number:
+            raise HTTPException(status_code=400, detail="lot_number required.")
 
-            {/* ---- EDITABLE REPAIR ---- */}
-            <div className="mt-3">
-              <label className="text-sm font-medium text-gray-700">
-                Repair:
-              </label>
-              <input
-                type="number"
-                value={car.userRepair}
-                onChange={(e) =>
-                  updateCarLocal(car.id, "userRepair", e.target.value)
-                }
-                className="w-full p-2 border rounded-md mt-1"
-              />
-            </div>
+        img_dir = os.path.join(DOWNLOAD_DIR, str(lot_number))
+        images = []
 
-            {/* ---- EDITABLE RESALE ---- */}
-            <div className="mt-2">
-              <label className="text-sm font-medium text-gray-700">
-                Resale:
-              </label>
-              <input
-                type="number"
-                value={car.userResale}
-                onChange={(e) =>
-                  updateCarLocal(car.id, "userResale", e.target.value)
-                }
-                className="w-full p-2 border rounded-md mt-1"
-              />
-            </div>
+        if os.path.isdir(img_dir):
+            for filename in sorted(os.listdir(img_dir)):
+                if filename.lower().endswith((".jpg", ".jpeg", ".png")):
+                    images.append(os.path.join(img_dir, filename))
 
-            {/* ---- MAX BID ---- */}
-            <p className="mt-3 text-md font-semibold text-gray-900">
-              Max Bid: ${calcMaxBid(car)}
-            </p>
+        query = text("""
+            INSERT INTO user_vehicles
+            (user_id, lot_number, lot_url, year, make, model, damage_description, odometer,
+             title_code, repair_estimate, resale_estimate, repair_details, resale_details,
+             tax_amount, fees_amount, image_paths)
+            VALUES
+            (:user_id, :lot_number, :lot_url, :year, :make, :model, :damage_description,
+             :odometer, :title_code, :repair_estimate, :resale_estimate, :repair_details,
+             :resale_details, :tax_amount, :fees_amount, :image_paths);
+        """)
 
-            {/* ---- PROFIT (visible on card now) ---- */}
-            <p className="text-sm font-semibold text-gray-700">
-              Potential Profit: ${calcProfit(car)}
-            </p>
+        db.execute(query, {
+            "user_id": current_user["id"],
+            "lot_number": payload.get("lot_number"),
+            "lot_url": payload.get("lot_url", ""),
+            "year": payload.get("year", ""),
+            "make": payload.get("make", ""),
+            "model": payload.get("model", ""),
+            "damage_description": payload.get("damage_description", ""),
+            "odometer": payload.get("odometer", ""),
+            "title_code": payload.get("title_code", ""),
+            "repair_estimate": payload.get("repair_estimate", ""),
+            "resale_estimate": payload.get("resale_estimate", ""),
+            "repair_details": payload.get("repair_details", ""),
+            "resale_details": payload.get("resale_details", ""),
+            "tax_amount": payload.get("tax_amount", ""),
+            "fees_amount": payload.get("fees_amount", ""),
+            "image_paths": json.dumps(images),
+        })
 
-            {/* ---- DETAILS BUTTON ---- */}
-            <button
-              onClick={() => setSelectedCar(car)}
-              className="mt-4 px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-700"
-            >
-              View Details
-            </button>
-          </div>
-        ))}
-      </div>
+        db.commit()
 
-      {/* -------------------------------------------------- */}
-      {/* MODAL */}
-      {/* -------------------------------------------------- */}
-      {selectedCar && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-6 z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        return {"status": "success"}
 
-            {/* CLOSE */}
-            <button
-              onClick={() => setSelectedCar(null)}
-              className="float-right text-gray-600 hover:text-black"
-            >
-              ✕
-            </button>
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
-              {selectedCar.year} {selectedCar.make} {selectedCar.model}
-            </h2>
 
-            {/* SALE DATE */}
-            <p className="text-sm">Sale Date: {safeDate(selectedCar.sale_date)}</p>
+# ----------------------------------------------------
+# DELETE VEHICLE
+# ----------------------------------------------------
+@router.delete("/delete_vehicle/{vehicle_id}")
+def delete_vehicle(vehicle_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    try:
+        query = text("""
+            DELETE FROM user_vehicles
+            WHERE id = :vehicle_id AND user_id = :user_id;
+        """)
 
-            {/* LOCATION */}
-            <p className="text-sm mb-3">
-              Location: {selectedCar.location || "N/A"}
-            </p>
+        result = db.execute(query, {
+            "vehicle_id": vehicle_id,
+            "user_id": current_user["id"],
+        })
 
-            {/* MARGIN EDIT */}
-            <div className="mt-3">
-              <label className="text-sm font-medium text-gray-700">
-                Target Profit Margin (%):
-              </label>
-              <input
-                type="number"
-                value={marginPercent}
-                onChange={(e) => setMarginPercent(Number(e.target.value) || 0)}
-                className="w-full p-2 border rounded-md mt-1"
-              />
-            </div>
+        db.commit()
 
-            {/* REPAIR */}
-            <div className="mt-4">
-              <label className="text-sm font-medium text-gray-700">
-                Repair Estimate:
-              </label>
-              <input
-                type="number"
-                value={selectedCar.userRepair}
-                onChange={(e) =>
-                  updateCarLocal(selectedCar.id, "userRepair", e.target.value)
-                }
-                className="w-full p-2 border rounded-md mt-1"
-              />
-            </div>
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Vehicle not found.")
 
-            {/* RESALE */}
-            <div className="mt-4">
-              <label className="text-sm font-medium text-gray-700">
-                Resale Estimate:
-              </label>
-              <input
-                type="number"
-                value={selectedCar.userResale}
-                onChange={(e) =>
-                  updateCarLocal(selectedCar.id, "userResale", e.target.value)
-                }
-                className="w-full p-2 border rounded-md mt-1"
-              />
-            </div>
+        return {"status": "deleted"}
 
-            {/* MAX BID */}
-            <p className="mt-4 text-lg font-bold text-gray-900">
-              Max Bid: ${calcMaxBid(selectedCar)}
-            </p>
-
-            {/* PROFIT */}
-            <p className="text-md font-semibold text-gray-700">
-              Potential Profit: ${calcProfit(selectedCar)}
-            </p>
-
-            <button
-              onClick={() => setSelectedCar(null)}
-              className="mt-6 px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-700"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

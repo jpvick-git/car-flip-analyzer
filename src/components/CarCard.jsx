@@ -1,6 +1,10 @@
 import { Wrench, DollarSign } from "lucide-react";
 
-export default function CarCard({ car, setSelectedCar, onUpdateValues }) {
+export default function CarCard({
+  car,
+  setSelectedCar,
+  onUpdateValues, // <-- parent will pass this
+}) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
       {/* Image Section */}
@@ -43,10 +47,11 @@ export default function CarCard({ car, setSelectedCar, onUpdateValues }) {
           <div className="flex items-center space-x-1 text-gray-700">
             <Wrench size={16} />
             <span className="text-sm font-medium">Repair: $</span>
+
             <input
               type="number"
               className="w-20 border border-gray-300 rounded-md px-1 py-0.5 text-sm"
-              value={car.repair_estimate || ""}
+              value={car.repair_estimate}
               onChange={(e) =>
                 onUpdateValues(car.id, {
                   repair_estimate: Number(e.target.value),
@@ -59,10 +64,11 @@ export default function CarCard({ car, setSelectedCar, onUpdateValues }) {
           <div className="flex items-center space-x-1 text-gray-700">
             <DollarSign size={16} />
             <span className="text-sm font-medium">Resale: $</span>
+
             <input
               type="number"
               className="w-24 border border-gray-300 rounded-md px-1 py-0.5 text-sm"
-              value={car.resale_estimate || ""}
+              value={car.resale_estimate}
               onChange={(e) =>
                 onUpdateValues(car.id, {
                   resale_estimate: Number(e.target.value),
@@ -70,7 +76,6 @@ export default function CarCard({ car, setSelectedCar, onUpdateValues }) {
               }
             />
           </div>
-
         </div>
 
         {/* Footer Buttons */}
@@ -93,7 +98,6 @@ export default function CarCard({ car, setSelectedCar, onUpdateValues }) {
             </a>
           )}
         </div>
-
       </div>
     </div>
   );

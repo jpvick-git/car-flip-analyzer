@@ -25,7 +25,6 @@ const Dashboard = () => {
         );
 
         const data = response.data;
-
         let vehicles = [];
 
         if (Array.isArray(data)) {
@@ -37,21 +36,15 @@ const Dashboard = () => {
           vehicles = [];
         }
 
-        // -------------------------------------------
-        // ADD MAX BID TO EACH VEHICLE
-        // -------------------------------------------
+        // CALCULATE INITIAL MAX BID FOR EACH VEHICLE
         vehicles = vehicles.map((car) => {
           const resale = Number(car.resale_estimate || 0);
           const repair = Number(car.repair_estimate || 0);
-          const tax = Number(car.tax_amount || 0); // flat tax $
-          const fees = Number(car.fees_amount || 0); // flat fees $
+          const tax = Number(car.tax_amount || 0);
+          const fees = Number(car.fees_amount || 0);
 
-          let maxBid =
-            (0.85 * resale - tax - fees - repair) / 1.075;
-
-          if (isNaN(maxBid) || maxBid < 0) {
-            maxBid = 0;
-          }
+          let maxBid = (0.85 * resale - tax - fees - repair) / 1.075;
+          if (isNaN(maxBid) || maxBid < 0) maxBid = 0;
 
           return {
             ...car,
@@ -81,23 +74,26 @@ const Dashboard = () => {
 
         const updatedCar = { ...car, [field]: value };
 
-        // Recalculate max bid
         const resale = Number(updatedCar.resale_estimate || 0);
         const repair = Number(updatedCar.repair_estimate || 0);
         const tax = Number(updatedCar.tax_amount || 0);
         const fees = Number(updatedCar.fees_amount || 0);
 
-        let maxBid =
-          (0.85 * resale - tax - fees - repair) / 1.075;
-
+        let maxBid = (0.85 * resale - tax - fees - repair) / 1.075;
         if (isNaN(maxBid) || maxBid < 0) maxBid = 0;
 
         updatedCar.max_bid = Math.round(maxBid);
-
         return updatedCar;
       })
     );
   };
+
+  // -----------------------------------------------
+  // ACTIVE CAR (LIVE SYNCED MODAL DATA)
+  // -----------------------------------------------
+  const activeCar = selectedCar
+    ? cars.find((c) => c.id === selectedCar.id)
+    : null;
 
   // -----------------------------------------------
   // RENDER
@@ -149,7 +145,9 @@ const Dashboard = () => {
                 </h2>
 
                 <p className="text-sm text-gray-500">Lot #: {car.lot_number}</p>
-                <p className="text-sm text-gray-500">Location: {car.sale_name || "N/A"}</p>
+                <p className="text-sm text-gray-500">
+                  Location: {car.sale_name || "N/A"}
+                </p>
 
                 <p className="text-sm text-gray-500">
                   Sale Date:{" "}
@@ -162,7 +160,7 @@ const Dashboard = () => {
                     : "N/A"}
                 </p>
 
-                {/* REPAIR & RESALE */}
+                {/* REPAIR & RESALE INPUTS */}
                 <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                   {/* REPAIR */}
                   <div className="flex items-center space-x-1 text-gray-700">
@@ -230,11 +228,12 @@ const Dashboard = () => {
       )}
 
       {/* --------------------------------------------------
-         CAR DETAILS MODAL
+          CAR DETAILS MODAL
       -------------------------------------------------- */}
-      {selectedCar && (
+      {activeCar && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 relative">
+
             <button
               onClick={() => setSelectedCar(null)}
               className="absolute top-3 right-3 text-gray-500 hover:text-gray-800"
@@ -243,76 +242,91 @@ const Dashboard = () => {
             </button>
 
             <h2 className="text-xl font-semibold mb-2 text-gray-800">
-              {selectedCar.year} {selectedCar.make} {selectedCar.model}
+              {activeCar.year} {activeCar.make} {activeCar.model}
             </h2>
 
             <img
               src={
-                selectedCar.image_url ||
+                activeCar.image_url ||
                 "https://placehold.co/600x400?text=No+Image"
               }
-              alt={`${selectedCar.make} ${selectedCar.model}`}
+              alt={`${activeCar.make} ${activeCar.model}`}
               className="w-full h-48 object-cover rounded-lg mb-4"
             />
 
-			<div className="space-y-2 text-sm text-gray-700">
-			  <p><span className="font-medium">Lot Number:</span> {activeCar.lot_number}</p>
-			  <p><span className="font-medium">Sale Date:</span> {activeCar.sale_date || "N/A"}</p>
-			  <p><span className="font-medium">Damage:</span> {activeCar.damage_description || "Unknown"}</p>
-			  <p><span className="font-medium">Odometer:</span> {activeCar.odometer || "N/A"}</p>
+            {/* MAIN INFO */}
+            <div className="space-y-2 text-sm text-gray-700">
 
-			  {/* REPAIR & RESALE INPUTS */}
-			  <div className="flex items-center justify-between space-x-4 mt-4 pt-3 border-t border-gray-200">
+              <p><span className="font-medium">Lot Number:</span> {activeCar.lot_number}</p>
+              <p><span className="font-medium">Sale Date:</span> {activeCar.sale_date || "N/A"}</p>
+              <p><span className="font-medium">Damage:</span> {activeCar.damage_description || "Unknown"}</p>
+              <p><span className="font-medium">Odometer:</span> {activeCar.odometer || "N/A"}</p>
 
-				{/* REPAIR */}
-				<div className="flex items-center space-x-1 text-gray-700">
-				  <Wrench size={16} />
-				  <span className="text-sm font-medium">Repair:</span>
-				  <span className="text-sm">$</span>
-				  <input
-					type="number"
-					value={activeCar.repair_estimate}
-					onChange={(e) =>
-					  updateCarValue(activeCar.id, "repair_estimate", Number(e.target.value))
-					}
-					className="w-24 text-sm border border-gray-300 rounded-md px-2 py-1 focus:ring-2 focus:ring-blue-500"
-				  />
-				</div>
+              {/* REPAIR & RESALE INPUTS */}
+              <div className="flex items-center justify-between space-x-4 mt-4 pt-3 border-t border-gray-300">
 
-				{/* RESALE */}
-				<div className="flex items-center space-x-1 text-gray-700">
-				  <DollarSign size={16} />
-				  <span className="text-sm font-medium">Resale:</span>
-				  <span className="text-sm">$</span>
-				  <input
-					type="number"
-					value={activeCar.resale_estimate}
-					onChange={(e) =>
-					  updateCarValue(activeCar.id, "resale_estimate", Number(e.target.value))
-					}
-					className="w-24 text-sm border border-gray-300 rounded-md px-2 py-1 focus:ring-2 focus:ring-green-500"
-				  />
-				</div>
+                {/* REPAIR */}
+                <div className="flex items-center space-x-1 text-gray-700">
+                  <Wrench size={16} />
+                  <span className="text-sm font-medium">Repair:</span>
+                  <span className="text-sm">$</span>
+                  <input
+                    type="number"
+                    value={activeCar.repair_estimate}
+                    onChange={(e) =>
+                      updateCarValue(
+                        activeCar.id,
+                        "repair_estimate",
+                        Number(e.target.value)
+                      )
+                    }
+                    className="w-24 text-sm border border-gray-300 rounded-md px-2 py-1 focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
 
-			  </div>
+                {/* RESALE */}
+                <div className="flex items-center space-x-1 text-gray-700">
+                  <DollarSign size={16} />
+                  <span className="text-sm font-medium">Resale:</span>
+                  <span className="text-sm">$</span>
+                  <input
+                    type="number"
+                    value={activeCar.resale_estimate}
+                    onChange={(e) =>
+                      updateCarValue(
+                        activeCar.id,
+                        "resale_estimate",
+                        Number(e.target.value)
+                      )
+                    }
+                    className="w-24 text-sm border border-gray-300 rounded-md px-2 py-1 focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+              </div>
 
-			  {/* MAX BID DISPLAY */}
-			  <div className="flex items-center space-x-2 mt-4 text-gray-800">
-				<span className="text-sm font-semibold">Max Bid:</span>
-				<span className="text-base font-bold">
-				  ${activeCar.max_bid?.toLocaleString() ?? ""}
-				</span>
-			  </div>
-			</div>
+              {/* MAX BID */}
+              <div className="flex items-center space-x-2 mt-4 text-gray-800">
+                <span className="text-sm font-semibold">Max Bid:</span>
+                <span className="text-base font-bold">
+                  ${activeCar.max_bid?.toLocaleString() ?? ""}
+                </span>
+              </div>
 
+              {/* REPAIR & RESALE DETAILS */}
+              <p>
+                <span className="font-medium">Repair Details:</span>{" "}
+                {activeCar.repair_details || "N/A"}
+              </p>
+              <p>
+                <span className="font-medium">Resale Details:</span>{" "}
+                {activeCar.resale_details || "N/A"}
+              </p>
+            </div>
 
-              <p><span className="font-medium">Repair Details:</span> {selectedCar.repair_details || "N/A"}</p>
-              <p><span className="font-medium">Resale Details:</span> {selectedCar.resale_details || "N/A"}</p>
-            
-
-            {selectedCar.lot_url && (
+            {/* OPEN IN COPART LINK */}
+            {activeCar.lot_url && (
               <a
-                href={selectedCar.lot_url}
+                href={activeCar.lot_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-4 inline-block text-blue-600 hover:underline text-sm"

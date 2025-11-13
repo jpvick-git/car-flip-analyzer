@@ -109,23 +109,29 @@ const Dashboard = () => {
 				{/* REPAIR & RESALE ROW */}
 				<div className="flex items-center justify-between pt-2 border-t border-gray-100">
 
-				  {/* REPAIR INPUT */}
+				  {/* REPAIR */}
 				  <div className="flex items-center space-x-1 text-gray-700">
 					<Wrench size={16} />
+					<span className="text-sm font-medium">Repair:</span>
+					<span className="text-sm">$</span>
 					<input
 					  type="number"
 					  defaultValue={car.repair_estimate || 0}
-					  className="w-20 text-sm border border-gray-300 rounded-md px-2 py-1 focus:ring-2 focus:ring-blue-500"
+					  className="w-20 text-sm border border-gray-300 rounded-md px-2 py-1
+								 focus:ring-2 focus:ring-blue-500"
 					/>
 				  </div>
 
-				  {/* RESALE INPUT */}
+				  {/* RESALE */}
 				  <div className="flex items-center space-x-1 text-gray-700">
 					<DollarSign size={16} />
+					<span className="text-sm font-medium">Resale:</span>
+					<span className="text-sm">$</span>
 					<input
 					  type="number"
 					  defaultValue={car.resale_estimate || 0}
-					  className="w-20 text-sm border border-gray-300 rounded-md px-2 py-1 focus:ring-2 focus:ring-green-500"
+					  className="w-20 text-sm border border-gray-300 rounded-md px-2 py-1
+								 focus:ring-2 focus:ring-green-500"
 					/>
 				  </div>
 

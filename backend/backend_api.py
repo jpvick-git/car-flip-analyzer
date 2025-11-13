@@ -1,14 +1,15 @@
 # --------------------------------------------------
 # Car Flip Analyzer Backend (Clean Build)
 # --------------------------------------------------
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from dotenv import load_dotenv
+from pydantic import BaseModel
+import subprocess
 import os
 import time
-import subprocess
 
 # --------------------------------------------------
 # ENV + APP CONFIG
@@ -97,109 +98,209 @@ def test_db():
 
 
 # --------------------------------------------------
-# DB HEALTH + INIT
+# TRIGGER ENDPOINT
 # --------------------------------------------------
-def wait_for_db(max_retries=5, delay=3):
-    for attempt in range(1, max_retries + 1):
-        try:
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-            print(f"✅ Database connected on attempt {attempt}")
-            return True
-        except Exception as e:
-            print(f"⏳ DB not ready (attempt {attempt}/{max_retries}): {e}")
-            time.sleep(delay)
-    raise RuntimeError("❌ Could not connect to the database after several attempts.")
+class TriggerPayload(BaseModel):
+    user_id: int
+    ai_lots: list[str] = []
+    copart_lots: list[str] = []
 
 
-@app.on_event("startup")
-def create_tables_if_needed():
-    """Ensure the user_vehicles table exists."""
-    wait_for_db()
-    with engine.begin() as conn:
-        conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='user_vehicles' AND xtype='U')
-            CREATE TABLE user_vehicles (
-                id INT IDENTITY(1,1) PRIMARY KEY,
-                user_id INT NOT NULL,
-                lot_number VARCHAR(50),
-                lot_url NVARCHAR(MAX),
-                year INT,
-                make VARCHAR(100),
-                model VARCHAR(100),
-                damage_description NVARCHAR(MAX),
-                repair_estimate DECIMAL(12,2),
-                resale_estimate DECIMAL(12,2),
-                repair_details NVARCHAR(MAX),
-                resale_details NVARCHAR(MAX),
-                created_at DATETIME DEFAULT GETDATE()
-            );
-        """))
-    print("✅ user_vehicles table verified and ready!")
-
-
-# --------------------------------------------------
-# TRIGGER ENDPOINT: Copart Downloader + AI Estimator
-# --------------------------------------------------
 @app.post("/trigger")
-async def trigger_pipeline(request: Request):
-    """
-    Handles automation triggers from uploads.py.
-    Runs Copart downloader for new records, AI estimator for missing repair_estimates.
-    """
+async def trigger_pipeline(payload: TriggerPayload):
+    user_id = payload.user_id
+    ai_lots = payload.ai_lots
+    copart_lots = payload.copart_lots
+
+    print(f"🚀 Trigger received for user {user_id}")
+    print(f"🧠 AI Lots: {ai_lots} | 🚗 Copart Lots: {copart_lots}")
+
+    if not ai_lots and not copart_lots:
+        return {"error": "No lot numbers provided"}
+
     try:
-        data = await request.json()
-        user_id = str(data.get("user_id"))
-        copart_lots = data.get("copart_lots", [])
-        ai_lots = data.get("ai_lots", [])
-
-        print(f"🚀 Trigger received: user={user_id}, copart={len(copart_lots)}, ai={len(ai_lots)}")
-
-        # No work to do
-        if not copart_lots and not ai_lots:
-            print("🚫 No Copart or AI lots to trigger — doing nothing.")
-            return {"status": "no_action"}
-
-        # --- Copart downloader for new lots ---
         if copart_lots:
-            lot_str = ",".join(copart_lots)
-            print(f"📦 Launching Copart downloader for new lots: {lot_str}")
+            copart_str = ",".join(copart_lots)
+            print(f"📦 Launching Copart downloader for lots: {copart_str}")
             subprocess.Popen(
-                [
-                    "python",
-                    "copart_download_parallel.py",
-                    user_id,
-                    "--lots",
-                    lot_str,
-                    "--download",
-                ],
-                cwd=BASE_DIR,
+                ["python", "backend/copart_download_parallel.py", str(user_id), "--lots", copart_str, "--download"],
+                cwd=os.path.dirname(__file__),
             )
 
-        # --- AI estimator for missing repair_estimates ---
         if ai_lots:
-            lot_str = ",".join(ai_lots)
-            print(f"🧠 Launching AI estimator for lots missing repair_estimate: {lot_str}")
+            ai_str = ",".join(ai_lots)
+            print(f"🤖 Launching AI estimator for lots: {ai_str}")
             subprocess.Popen(
-                [
-                    "python",
-                    "ai_repair_estimator.py",
-                    user_id,
-                    "--lots",
-                    lot_str,
-                ],
-                cwd=BASE_DIR,
+                ["python", "backend/ai_repair_estimator.py", str(user_id), "--lots", ai_str],
+                cwd=os.path.dirname(__file__),
             )
 
-        return {
-            "status": "triggered",
-            "user_id": user_id,
-            "copart_triggered": len(copart_lots),
-            "ai_triggered": len(ai_lots),
-        }
+        return {"status": "success", "user_id": user_id, "ai_lots": ai_lots, "copart_lots": copart_lots}
 
     except Exception as e:
-        print(f"❌ Trigger endpoint error: {e}")
+        print(f"❌ Trigger error: {e}")
+        return {"error": str(e)}
+
+
+# --------------------------------------------------
+# ROUTER REGISTRATION
+# --------------------------------------------------
+from .uploads import router as uploads_router
+from .user_vehicles import router as vehicles_router
+from .auth import router as auth_router
+
+app.include_router(uploads_router)
+app.include_router(vehicles_router)
+app.include_router(auth_router)
+
+
+# --------------------------------------------------
+# MAIN ENTRY POINT
+# --------------------------------------------------
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("backend.backend_api:app", host="0.0.0.0", port=8000)
+# --------------------------------------------------
+# Car Flip Analyzer Backend (Clean Build)
+# --------------------------------------------------
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+from dotenv import load_dotenv
+from pydantic import BaseModel
+import subprocess
+import os
+import time
+
+# --------------------------------------------------
+# ENV + APP CONFIG
+# --------------------------------------------------
+load_dotenv()
+app = FastAPI(title="Car Flip Analyzer API", version="0.1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        # Production
+        "https://www.carflipanalyzer.com",
+        "https://carflipanalyzer.com",
+
+        # Vercel deployments
+        "https://car-flip-analyzer-git-main-jpvick-gits-projects.vercel.app",
+        "https://carflipanalyzer-git-main-jpvick-gits-projects.vercel.app",
+
+        # Local dev
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --------------------------------------------------
+# IMAGE CONFIGURATION
+# --------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
+
+print(f"📂 Serving static images from: {DOWNLOAD_DIR}")
+
+# ✅ Serve static images
+app.mount("/backend/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
+
+
+def get_first_image(lot_id: str):
+    """Return the first found image for a given lot."""
+    lot_id = str(lot_id).split(".")[0].strip()
+    lot_folder = os.path.join(DOWNLOAD_DIR, lot_id)
+    if not os.path.exists(lot_folder):
+        return None
+
+    # Prefer _Image_1.*
+    for ext in (".jpg", ".jpeg", ".png"):
+        candidate = f"{lot_id}_Image_1{ext}"
+        path = os.path.join(lot_folder, candidate)
+        if os.path.exists(path):
+            return f"https://api.carflipanalyzer.com/backend/downloads/{lot_id}/{candidate}"
+
+    # Fallback: first image in folder
+    for file in sorted(os.listdir(lot_folder)):
+        if file.lower().endswith((".jpg", ".jpeg", ".png")):
+            return f"https://api.carflipanalyzer.com/backend/downloads/{lot_id}/{file}"
+
+    return None
+
+
+# --------------------------------------------------
+# DATABASE CONFIGURATION
+# --------------------------------------------------
+from .db import get_engine
+engine = get_engine()
+
+
+# --------------------------------------------------
+# BASIC ROUTES
+# --------------------------------------------------
+@app.get("/")
+def root():
+    return {"status": "✅ Backend is running and serving images!"}
+
+
+@app.get("/test_db")
+def test_db():
+    """Quick database connection test."""
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(text("SELECT DB_NAME(), SUSER_NAME();")).fetchone()
+            return {"database": row[0], "user": row[1]}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# --------------------------------------------------
+# TRIGGER ENDPOINT
+# --------------------------------------------------
+class TriggerPayload(BaseModel):
+    user_id: int
+    ai_lots: list[str] = []
+    copart_lots: list[str] = []
+
+
+@app.post("/trigger")
+async def trigger_pipeline(payload: TriggerPayload):
+    user_id = payload.user_id
+    ai_lots = payload.ai_lots
+    copart_lots = payload.copart_lots
+
+    print(f"🚀 Trigger received for user {user_id}")
+    print(f"🧠 AI Lots: {ai_lots} | 🚗 Copart Lots: {copart_lots}")
+
+    if not ai_lots and not copart_lots:
+        return {"error": "No lot numbers provided"}
+
+    try:
+        if copart_lots:
+            copart_str = ",".join(copart_lots)
+            print(f"📦 Launching Copart downloader for lots: {copart_str}")
+            subprocess.Popen(
+                ["python", "backend/copart_download_parallel.py", str(user_id), "--lots", copart_str, "--download"],
+                cwd=os.path.dirname(__file__),
+            )
+
+        if ai_lots:
+            ai_str = ",".join(ai_lots)
+            print(f"🤖 Launching AI estimator for lots: {ai_str}")
+            subprocess.Popen(
+                ["python", "backend/ai_repair_estimator.py", str(user_id), "--lots", ai_str],
+                cwd=os.path.dirname(__file__),
+            )
+
+        return {"status": "success", "user_id": user_id, "ai_lots": ai_lots, "copart_lots": copart_lots}
+
+    except Exception as e:
+        print(f"❌ Trigger error: {e}")
         return {"error": str(e)}
 
 

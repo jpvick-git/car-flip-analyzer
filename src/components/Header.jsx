@@ -11,7 +11,10 @@ export default function Header({
   const [userIP, setUserIP] = useState("");
   const [isAllowed, setIsAllowed] = useState(false);
 
-  // ✅ Your authorized IP
+  // Error messaging for uploads
+  const [uploadError, setUploadError] = useState("");
+
+  // Your authorized IP
   const allowedIP = "68.186.200.184";
 
   // --------------------------------------------------
@@ -29,6 +32,51 @@ export default function Header({
       .catch((err) => console.error("Failed to get IP:", err));
   }, []);
 
+  // --------------------------------------------------
+  // HANDLE CSV FILE SELECTION + CLIENT-SIDE VALIDATION
+  // --------------------------------------------------
+  const handleFileSelect = (e) => {
+    setUploadError(""); // clear old error
+    const file = e.target.files[0];
+
+    if (!file) {
+      setUploadFile(null);
+      return;
+    }
+
+    // Must be a CSV
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setUploadError("Please upload a valid CSV file.");
+      setUploadFile(null);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target.result;
+
+      // Split lines, remove empty lines
+      const rows = text
+        .split("\n")
+        .map((r) => r.trim())
+        .filter((r) => r.length > 0);
+
+      // Subtract header row
+      const dataRows = rows.length - 1;
+
+      if (dataRows > 10) {
+        setUploadError(
+          `Maximum allowed cars is 10. Your CSV contains ${dataRows} rows.`
+        );
+        setUploadFile(null); // block upload
+      } else {
+        setUploadFile(file); // allow upload
+      }
+    };
+
+    reader.readAsText(file);
+  };
+
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
       <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-3">
@@ -45,27 +93,42 @@ export default function Header({
         </div>
 
         {/* Right: Upload + Menu */}
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col items-end gap-1">
+
           {/* Upload Section (only visible to allowed IP) */}
           {isAllowed && (
             <div className="flex items-center gap-2">
               <input
                 type="file"
                 accept=".csv"
-                onChange={(e) => setUploadFile(e.target.files[0])}
+                onChange={(e) => handleFileSelect(e)}
                 className="text-sm text-gray-700 border border-gray-300 rounded-md px-2 py-1 bg-gray-50 hover:bg-gray-100 cursor-pointer focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
+
               <button
                 onClick={uploadUserFile}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition"
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition 
+                  ${
+                    uploadFile
+                      ? "bg-blue-600 hover:bg-blue-700 text-white"
+                      : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                  }`}
+                disabled={!uploadFile}
               >
                 Upload CSV
               </button>
             </div>
           )}
 
+          {/* Error Banner */}
+          {uploadError && (
+            <div className="w-full bg-red-100 border border-red-300 text-red-700 px-3 py-1.5 rounded-md text-sm mt-1">
+              {uploadError}
+            </div>
+          )}
+
           {/* Hamburger Menu */}
-          <div className="relative">
+          <div className="relative mt-1">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
               className="p-2 rounded-md hover:bg-gray-100 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -111,7 +174,8 @@ export default function Header({
       {/* Optional: show detected IP in small footer line for you */}
       {!isAllowed && (
         <p className="text-center text-xs text-gray-400 pb-1">
-          Uploads restricted — your IP: <span className="font-mono">{userIP || "..."}</span>
+          Uploads restricted — your IP:{" "}
+          <span className="font-mono">{userIP || "..."}</span>
         </p>
       )}
     </header>

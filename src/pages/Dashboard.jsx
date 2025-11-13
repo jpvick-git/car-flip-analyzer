@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Wrench, DollarSign } from "lucide-react";
+import CarCard from "../components/CarCard";
 
-const Dashboard = () => {
+export default function Dashboard() {
   const [cars, setCars] = useState([]);
   const [selectedCar, setSelectedCar] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [modalMargin, setModalMargin] = useState(15); // default 15%
 
   // -----------------------------------------------
   // FETCH VEHICLES
@@ -14,7 +13,6 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchCars = async () => {
       try {
-        setLoading(true);
         const response = await axios.get(
           `${process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com"}/get_vehicles`,
           {
@@ -24,126 +22,90 @@ const Dashboard = () => {
           }
         );
 
-        const data = response.data;
+        let data = response.data;
         if (Array.isArray(data)) {
           setCars(data);
         } else if (data && Array.isArray(data.vehicles)) {
           setCars(data.vehicles);
         } else {
-          console.error("Unexpected data format:", data);
           setCars([]);
         }
       } catch (err) {
-        console.error("Error fetching cars:", err);
-        setError("Failed to load vehicles");
-      } finally {
-        setLoading(false);
+        console.error("Failed to load vehicles:", err);
       }
     };
 
     fetchCars();
   }, []);
 
-  // -----------------------------------------------
+  // ----------------------------------------------------
+  // UPDATE VALUES (for both card + modal)
+  // ----------------------------------------------------
+  const handleUpdateValues = (id, payload) => {
+    setCars((prev) =>
+      prev.map((c) =>
+        c.id === id ? { ...c, ...payload } : c
+      )
+    );
+
+    // keep modal in sync if it's open
+    if (selectedCar && selectedCar.id === id) {
+      setSelectedCar((prev) => ({ ...prev, ...payload }));
+    }
+  };
+
+  // ----------------------------------------------------
+  // CALCULATE FINANCIALS
+  // ----------------------------------------------------
+  const calculateFinancials = (car) => {
+    const repair = Number(car.repair_estimate || 0);
+    const resale = Number(car.resale_estimate || 0);
+    const taxRate = Number(car.avg_tax_rate || 0);
+    const titleFee = Number(car.title_fee || 0);
+    const margin = Number(modalMargin) / 100;
+    const copartFeeRate = 0.075;
+
+    // Solve for max bid
+    const denominator = 1 + taxRate / 100 + copartFeeRate;
+    let maxBid = (resale - resale * margin - repair - titleFee) / denominator;
+    if (maxBid < 0) maxBid = 0;
+
+    const taxAmount = maxBid * (taxRate / 100);
+    const copartFee = maxBid * copartFeeRate;
+
+    const totalCost =
+      maxBid + repair + titleFee + taxAmount + copartFee;
+
+    const profit = resale - totalCost;
+
+    return {
+      maxBid: Math.round(maxBid),
+      taxAmount: Math.round(taxAmount),
+      copartFee: Math.round(copartFee),
+      profit: Math.round(profit),
+    };
+  };
+
+  // ----------------------------------------------------
   // RENDER
-  // -----------------------------------------------
-  if (loading)
-    return (
-      <div className="flex justify-center items-center h-screen text-gray-700">
-        Loading vehicles...
-      </div>
-    );
-
-  if (error)
-    return (
-      <div className="flex justify-center items-center h-screen text-red-600">
-        {error}
-      </div>
-    );
-
+  // ----------------------------------------------------
   return (
-    <main className="p-6 bg-gray-50 min-h-screen">
-      {!Array.isArray(cars) || cars.length === 0 ? (
-        <p className="text-gray-600">No vehicles found.</p>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {cars.map((car) => (
-            <div
-              key={car.id}
-              className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden"
-            >
-              {/* IMAGE SECTION */}
-              <div className="relative">
-                <img
-                  src={car.image_url || "https://placehold.co/400x250?text=No+Image"}
-                  alt={`${car.make} ${car.model}`}
-                  className="w-full h-56 object-cover"
-                />
-                {/* DAMAGE BADGE */}
-                <div className="absolute top-3 left-3 bg-blue-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
-                  {car.damage_description || "Unknown Damage"}
-                </div>
-              </div>
+    <div className="p-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {cars.map((car) => (
+          <CarCard
+            key={car.id}
+            car={car}
+            setSelectedCar={setSelectedCar}
+            onUpdate={(payload) => handleUpdateValues(car.id, payload)}
+            financials={calculateFinancials(car)}
+          />
+        ))}
+      </div>
 
-              {/* DETAILS SECTION */}
-              <div className="p-4 space-y-2">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {car.year} {car.make} {car.model}
-                </h2>
-                <p className="text-sm text-gray-500">Lot #: {car.lot_number}</p>
-				<p className="text-sm text-gray-500">
-				  Location: {car.sale_name || "N/A"}
-				</p>
-				<p className="text-sm text-gray-500">
-				  Sale Date:{" "}
-				  {car.sale_date
-					? new Date(car.sale_date).toLocaleDateString("en-US", {
-							  month: "short",
-							  day: "numeric",
-							  year: "numeric",
-							})
-					: "N/A"}
-				</p>
-
-
-                {/* REPAIR & RESALE ROW */}
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                  <div className="flex items-center space-x-1 text-gray-700">
-                    <Wrench size={16} />
-                    <span className="text-sm font-medium">
-                      Repair: ${car.repair_estimate || "0"}
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-1 text-gray-700">
-                    <DollarSign size={16} />
-                    <span className="text-sm font-medium">
-                      Resale: ${car.resale_estimate || "0"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* FOOTER BUTTONS */}
-                <div className="flex justify-between items-center pt-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedCar(car);
-                    }}
-                    className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 hover:bg-gray-50 transition"
-                  >
-                    View Details
-                  </button>
-                  
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* --------------------------------------------------
-         CAR DETAILS MODAL
-      -------------------------------------------------- */}
+      {/* ---------------------------- */}
+      {/*           MODAL              */}
+      {/* ---------------------------- */}
       {selectedCar && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 relative">
@@ -158,65 +120,84 @@ const Dashboard = () => {
               {selectedCar.year} {selectedCar.make} {selectedCar.model}
             </h2>
 
-            <img
-              src={
-                selectedCar.image_url ||
-                "https://placehold.co/600x400?text=No+Image"
+            <p className="text-sm text-gray-600 mb-4">
+              Lot #{selectedCar.lot_number}
+            </p>
+
+            {/* ------------------ */}
+            {/* Editable Inputs */}
+            {/* ------------------ */}
+
+            <p className="text-sm font-semibold text-gray-700">Repair Estimate:</p>
+            <input
+              type="number"
+              className="w-full p-2 border rounded-md mb-3"
+              value={selectedCar.repair_estimate}
+              onChange={(e) =>
+                handleUpdateValues(selectedCar.id, {
+                  repair_estimate: Number(e.target.value),
+                })
               }
-              alt={`${selectedCar.make} ${selectedCar.model}`}
-              className="w-full h-48 object-cover rounded-lg mb-4"
             />
 
-            <div className="space-y-2 text-sm text-gray-700">
-              <p>
-                <span className="font-medium">Lot Number:</span>{" "}
-                {selectedCar.lot_number}
-              </p>
-              <p>
-                <span className="font-medium">Sale Date:</span>{" "}
-                {selectedCar.sale_date || "N/A"}
-              </p>
-              <p>
-                <span className="font-medium">Damage:</span>{" "}
-                {selectedCar.damage_description || "Unknown"}
-              </p>
-              <p>
-                <span className="font-medium">Odometer:</span>{" "}
-                {selectedCar.odometer || "N/A"}
-              </p>
-              <p>
-                <span className="font-medium">Repair Estimate:</span>{" "}
-                ${selectedCar.repair_estimate || "0"}
-              </p>
-              <p>
-                <span className="font-medium">Resale Estimate:</span>{" "}
-                ${selectedCar.resale_estimate || "0"}
-              </p>
-              <p>
-                <span className="font-medium">Repair Details:</span>{" "}
-                {selectedCar.repair_details || "N/A"}
-              </p>
-              <p>
-                <span className="font-medium">Resale Details:</span>{" "}
-                {selectedCar.resale_details || "N/A"}
-              </p>
-            </div>
+            <p className="text-sm font-semibold text-gray-700">Resale Estimate:</p>
+            <input
+              type="number"
+              className="w-full p-2 border rounded-md mb-3"
+              value={selectedCar.resale_estimate}
+              onChange={(e) =>
+                handleUpdateValues(selectedCar.id, {
+                  resale_estimate: Number(e.target.value),
+                })
+              }
+            />
 
-            {selectedCar.lot_url && (
-              <a
-                href={selectedCar.lot_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 inline-block text-blue-600 hover:underline text-sm"
-              >
-                Open in Copart →
-              </a>
-            )}
+            {/* NEW: TAX + FEES */}
+            {(() => {
+              const f = calculateFinancials(selectedCar);
+              return (
+                <div className="mb-4 text-sm text-gray-700">
+                  <p>
+                    Tax Amount:{" "}
+                    <span className="font-semibold">${f.taxAmount}</span>
+                  </p>
+                  <p>
+                    Copart Fee:{" "}
+                    <span className="font-semibold">${f.copartFee}</span>
+                  </p>
+                </div>
+              );
+            })()}
+
+            <p className="text-sm font-semibold text-gray-700">
+              Margin (%):
+            </p>
+            <input
+              type="number"
+              className="w-full p-2 border rounded-md mb-3"
+              value={modalMargin}
+              onChange={(e) => setModalMargin(Number(e.target.value))}
+            />
+
+            {/* ------------------ */}
+            {/*  Financial Results */}
+            {/* ------------------ */}
+            {(() => {
+              const { maxBid, profit } = calculateFinancials(selectedCar);
+              return (
+                <div className="mt-4 p-4 bg-gray-100 rounded-lg">
+                  <p className="text-md font-semibold text-gray-800">
+                    Max Bid: ${maxBid}
+                  </p>
+                  <p className="text-md font-semibold text-gray-800">
+                    Potential Profit: ${profit}
+                  </p>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
-};
-
-export default Dashboard;
+}

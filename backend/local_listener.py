@@ -1,50 +1,55 @@
-from flask import Flask, request
-import os
+from flask import Flask, request, jsonify
 import subprocess
-import threading
+import os
 
 app = Flask(__name__)
 
-UPLOAD_DIR = r"C:\car-flip-analyzer\user_uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
 @app.route("/trigger", methods=["POST"])
-def trigger_download():
-    data = request.get_json(silent=True)
-    if not data:
-        return {"error": "Invalid JSON payload"}, 400
+def trigger():
+    try:
+        # ✅ Safely parse JSON body
+        data = request.get_json(force=True)
+        print(f"📦 Received trigger payload: {data}")
 
-    user_id = str(data.get("user_id", "2"))
-    new_lots = data.get("new_lots", [])
+        user_id = data.get("user_id")
+        ai_lots = data.get("ai_lots", [])
+        copart_lots = data.get("copart_lots", [])
 
-    if not new_lots:
-        return {"error": "No lot numbers provided"}, 400
+        # ✅ Validation
+        if not user_id:
+            return jsonify({"error": "Missing user_id"}), 400
+        if not ai_lots and not copart_lots:
+            return jsonify({"error": "No lot numbers provided"}), 400
 
-    print(f"🚀 Received trigger for user {user_id} with lots: {new_lots}")
+        # ✅ Trigger Copart downloader (new lots only)
+        if copart_lots:
+            print(f"🚗 Launching Copart downloader for lots: {copart_lots}")
+            subprocess.Popen([
+                "python", "/copart_download_parallel.py",
+                str(user_id),
+                "--lots", ",".join(map(str, copart_lots))
+            ])
 
-    # Start the Copart download script in a background thread
-    def run_scraper():
-        try:
-            print(f"▶️ Starting Copart download for user {user_id}")
-            subprocess.run(
-                [
-                    "python",
-                    "copart_download_parallel.py",
-                    str(user_id),
-                    "--lots",
-                    ",".join(new_lots),
-                    "--download",
-                ],
-                cwd=r"C:\car-flip-analyzer\backend",
-            )
-            print("✅ Copart download completed.")
-        except Exception as e:
-            print(f"❌ Error in run_scraper: {e}")
+        # ✅ Trigger AI estimator (missing repair_estimates)
+        if ai_lots:
+            print(f"🤖 Launching AI estimator for lots: {ai_lots}")
+            subprocess.Popen([
+                "python", "ai_repair_estimator.py",
+                str(user_id),
+                "--lots", ",".join(map(str, ai_lots))
+            ])
 
-    threading.Thread(target=run_scraper).start()
+        return jsonify({
+            "status": "success",
+            "user_id": user_id,
+            "ai_lots": ai_lots,
+            "copart_lots": copart_lots
+        }), 200
 
-    return {"status": "success", "lots": new_lots}
+    except Exception as e:
+        print(f"❌ Error in trigger: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
-    app.run(port=5001)
+    app.run(host="127.0.0.1", port=5001)

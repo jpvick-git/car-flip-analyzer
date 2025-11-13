@@ -1,5 +1,5 @@
 # auth.py
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -77,18 +77,49 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 # ROUTES
 # --------------------------------------------------
 @router.post("/register")
-def register(form: OAuth2PasswordRequestForm = Depends()):
+def register(
+    username: str = Form(...),
+    password: str = Form(...),
+    name: str = Form(None),
+    street: str = Form(None),
+    city: str = Form(None),
+    state_code: str = Form(None),
+    zip_code: str = Form(None),
+    phone: str = Form(None),
+):
     with engine.begin() as conn:
+        # Prevent duplicate accounts
         existing = conn.execute(
-            text("SELECT 1 FROM users WHERE email=:email"), {"email": form.username}
+            text("SELECT 1 FROM users WHERE email = :email"),
+            {"email": username}
         ).fetchone()
+
         if existing:
             raise HTTPException(status_code=400, detail="User already exists")
 
         conn.execute(
-            text("INSERT INTO users (username, email, password_hash) VALUES (:u, :e, :p)"),
-            {"u": form.username, "e": form.username, "p": hash_password(form.password)},
+            text("""
+                INSERT INTO users (
+                    username, email, password_hash, created_at,
+                    name, street, city, state_code, zip_code, phone
+                ) VALUES (
+                    :u, :e, :p, GETDATE(),
+                    :name, :street, :city, :state_code, :zip_code, :phone
+                )
+            """),
+            {
+                "u": username,
+                "e": username,
+                "p": hash_password(password),
+                "name": name,
+                "street": street,
+                "city": city,
+                "state_code": state_code,
+                "zip_code": zip_code,
+                "phone": phone
+            }
         )
+
     return {"message": "User created successfully"}
 
 @router.post("/login")

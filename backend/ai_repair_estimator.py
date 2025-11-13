@@ -62,6 +62,19 @@ def analyze_vehicle(vehicle):
     damage = vehicle.get("damage_description", "")
     lot_number = vehicle.get("lot_number")
     image_paths = vehicle.get("images", [])
+    odometer_display = vehicle.get("odometer", "Unknown")
+    # Normalize title type for clarity
+    raw_title = vehicle.get("title_code", "Unknown")
+    title_code = str(raw_title).strip().title() if raw_title else "Unknown"
+
+    # Handle common Copart variants (normalize terms)
+    if any(term in title_code.lower() for term in ["salvage", "rebuilt", "junk", "flood", "lemon"]):
+        title_code = "Branded"
+    elif "clean" in title_code.lower():
+        title_code = "Clean"
+    elif "unknown" in title_code.lower() or not title_code.strip():
+        title_code = "Unknown"
+    
 
     system_prompt = (
         "You are an experienced automotive appraiser, body shop estimator, "
@@ -70,9 +83,8 @@ def analyze_vehicle(vehicle):
     )
 
     user_prompt = f"""
-You are a salvage auction analyst evaluating vehicles for wholesale resale or flipping.
-This vehicle was acquired from a salvage/wholesale auction and may have a branded or unknown title.
-Assume it is not dealer retail ready, and avoid any retail-based pricing logic.
+You are a professional automotive appraiser and auction analyst who evaluates vehicles for wholesale resale or flipping.
+This vehicle was acquired from a salvage or wholesale auction.
 
 Vehicle Info:
 - Year: {year}
@@ -80,30 +92,32 @@ Vehicle Info:
 - Model: {model}
 - Reported Damage: {damage}
 - Odometer: {odometer_display}
+- Title Type: {title_code}
 
 Guidelines:
-- You may **assume mileage varies within ±10,000 miles** to estimate resale value.
-- When writing your explanation or mentioning mileage in text,
-  **always display the exact odometer value above** (do not make up a different number).
+- Treat all vehicles as **non-retail ready** unless the title type explicitly states "Clean."
+- If the title type is Salvage, Rebuilt, Flood, Lemon, Junk, or similar, apply appropriate discounts (typically 30–50% below clean title values).
+- You may assume mileage varies within ±10,000 miles when estimating resale.
+- When writing your explanation, **always reference the odometer value shown above** (never invent a different number).
 
-From the photos, assess the following:
+From the provided photos and details, assess the following:
 
-1. Describe all visible exterior and structural damage (front, rear, sides, roof, undercarriage).
-2. Identify components that likely require replacement (e.g., bumper, hood, lights).
-3. List items that could be repaired (e.g., trim, scratches, PDR).
+1. Describe visible exterior and structural damage (front, rear, sides, roof, undercarriage).
+2. Identify parts that likely require replacement (e.g., bumper, hood, headlights).
+3. List components that could be repaired (e.g., trim, scratches, paintless dent repair).
 4. Estimate realistic labor hours for body and paint work.
-5. Flag any signs of frame, flood, or mechanical damage (if visible).
-6. Check for missing parts, airbag deployment, or tire/wheel issues.
+5. Note any signs of frame, flood, or mechanical damage.
+6. Check for missing parts, deployed airbags, or wheel/tire issues.
 7. Review interior condition (seats, dash, controls, panels).
-8. Estimate conservative repair cost (parts, labor, paint, misc).
-9. Provide a realistic resale value **for a flip or wholesale resale**, factoring:
-   - Odometer reading of {odometer_display} miles (±10k range may be considered internally)
-   - Possible branded/rebuilt title
-   - Minor damage history
-   - Current private party + auction values (not retail book value)
-10. Give a brief expert-level summary with flip viability.
+8. Estimate a conservative repair cost (parts + labor + paint).
+9. Estimate a realistic **wholesale resale value**, factoring:
+   - Odometer reading of {odometer_display} miles (±10k internal range)
+   - Title Type: {title_code}
+   - Damage severity
+   - Current wholesale and auction trends
+10. Provide a short expert summary assessing overall flip potential.
 
-Return ONLY valid JSON in this structure:
+Return **only valid JSON** in the following structure:
 {{
   "repair_estimate": number,
   "repair_details": "string",
@@ -111,7 +125,7 @@ Return ONLY valid JSON in this structure:
   "resale_details": "string"
 }}
 """
-    # Build messages for OpenAI
+
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
@@ -173,7 +187,7 @@ def process_lot(lot, rds_engine):
         with rds_engine.connect() as conn:
             row = conn.execute(
                 text("""
-                    SELECT TOP 1 year, make, model, damage_description, repair_estimate
+                    SELECT TOP 1 year, make, model, damage_description, odometer, title_code, repair_estimate
                     FROM user_vehicles
                     WHERE lot_number = :lot
                 """),
@@ -184,7 +198,7 @@ def process_lot(lot, rds_engine):
             print(f"⚠️ No user_vehicles record found for lot {lot}")
             return False
 
-        year, make, model, damage, existing_repair = row
+        year, make, model, damage, odometer, title_code, existing_repair = row
         if existing_repair:
             print(f"⏩ Skipping lot {lot} (already analyzed)")
             return True
@@ -209,6 +223,8 @@ def process_lot(lot, rds_engine):
             "model": model,
             "damage_description": damage,
             "images": images,
+            "odometer": odometer or "Unknown",
+            "title_code": title_code if title_code else "Unknown",
         }
 
         ai_result = analyze_vehicle(vehicle)

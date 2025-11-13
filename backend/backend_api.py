@@ -1,13 +1,14 @@
 # --------------------------------------------------
 # Car Flip Analyzer Backend (Clean Build)
 # --------------------------------------------------
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from dotenv import load_dotenv
 import os
 import time
+import subprocess
 
 # --------------------------------------------------
 # ENV + APP CONFIG
@@ -67,6 +68,7 @@ def get_first_image(lot_id: str):
             return f"https://api.carflipanalyzer.com/backend/downloads/{lot_id}/{file}"
 
     return None
+
 
 # --------------------------------------------------
 # DATABASE CONFIGURATION
@@ -134,6 +136,69 @@ def create_tables_if_needed():
             );
         """))
     print("✅ user_vehicles table verified and ready!")
+
+
+# --------------------------------------------------
+# TRIGGER ENDPOINT: Copart Downloader + AI Estimator
+# --------------------------------------------------
+@app.post("/trigger")
+async def trigger_pipeline(request: Request):
+    """
+    Handles automation triggers from uploads.py.
+    Runs Copart downloader for new records, AI estimator for missing repair_estimates.
+    """
+    try:
+        data = await request.json()
+        user_id = str(data.get("user_id"))
+        copart_lots = data.get("copart_lots", [])
+        ai_lots = data.get("ai_lots", [])
+
+        print(f"🚀 Trigger received: user={user_id}, copart={len(copart_lots)}, ai={len(ai_lots)}")
+
+        # No work to do
+        if not copart_lots and not ai_lots:
+            print("🚫 No Copart or AI lots to trigger — doing nothing.")
+            return {"status": "no_action"}
+
+        # --- Copart downloader for new lots ---
+        if copart_lots:
+            lot_str = ",".join(copart_lots)
+            print(f"📦 Launching Copart downloader for new lots: {lot_str}")
+            subprocess.Popen(
+                [
+                    "python",
+                    "copart_download_parallel.py",
+                    user_id,
+                    "--lots",
+                    lot_str,
+                    "--download",
+                ],
+                cwd=BASE_DIR,
+            )
+
+        # --- AI estimator for missing repair_estimates ---
+        if ai_lots:
+            lot_str = ",".join(ai_lots)
+            print(f"🧠 Launching AI estimator for lots missing repair_estimate: {lot_str}")
+            subprocess.Popen(
+                [
+                    "python",
+                    "ai_repair_estimator.py",
+                    user_id,
+                ],
+                cwd=BASE_DIR,
+            )
+
+        return {
+            "status": "triggered",
+            "user_id": user_id,
+            "copart_triggered": len(copart_lots),
+            "ai_triggered": len(ai_lots),
+        }
+
+    except Exception as e:
+        print(f"❌ Trigger endpoint error: {e}")
+        return {"error": str(e)}
 
 
 # --------------------------------------------------

@@ -15,7 +15,7 @@ UPLOAD_DIR = "/root/car-flip-analyzer/user_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 LOCAL_TRIGGER_URL = "https://quinquevalent-hayley-unhackneyed.ngrok-free.dev/trigger"
-ALLOWED_IPS = {"68.186.200.184"}  # trusted upload IP
+ALLOWED_IPS = {"68.186.200.184"}
 
 # AWS RDS SQL Server connection
 RDS_CONN = (
@@ -25,7 +25,6 @@ RDS_CONN = (
 rds_engine = create_engine(RDS_CONN, pool_pre_ping=True)
 
 router = APIRouter()
-
 
 # --------------------------------------------------
 # HELPERS
@@ -39,7 +38,6 @@ def normalize_lot(val):
         val = val[:-2]
     return val.replace(",", "").strip()
 
-
 # --------------------------------------------------
 # ROUTE: Upload and process CSV
 # --------------------------------------------------
@@ -47,13 +45,13 @@ def normalize_lot(val):
 async def upload_and_process_file(request: Request, file: UploadFile, user=Depends(get_current_user)):
     """
     Uploads a CSV, updates or inserts user_vehicles records,
-    and triggers Copart + AI pipeline for missing AI estimates.
+    triggers Copart for new lots, and triggers AI for any missing repair_estimates.
     """
     try:
         client_ip = request.client.host
         print(f"🌐 Upload attempt from IP: {client_ip} by user {user['email']}")
 
-        # Restrict demo uploads from outside your IP
+        # Restrict demo uploads from outside approved IP
         if user["email"].lower() == "demo@123.com" and client_ip not in ALLOWED_IPS:
             raise HTTPException(status_code=403, detail="Uploads restricted for demo users from this IP.")
 
@@ -74,13 +72,11 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
         return JSONResponse(status_code=500, content={"error": str(e)})
 
     # --------------------------------------------------
-    # Step 2: Insert / Update Lots
+    # Step 2: Insert or Update Lots
     # --------------------------------------------------
     try:
         df = pd.read_csv(file_path)
-        new_lots = []
-        cloned_lots = []
-        updated_lots = []
+        new_lots, updated_lots, cloned_lots = [], [], []
 
         with rds_engine.begin() as conn:
             print(f"🧾 CSV Columns Detected: {list(df.columns)}")
@@ -96,7 +92,7 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                     print(f"⚠️ Skipping row (no valid lot number): {row.to_dict()}")
                     continue
 
-                # Does user already have this lot?
+                # Already exists for current user?
                 exists_user = conn.execute(
                     text("""
                         SELECT 1 FROM user_vehicles
@@ -106,68 +102,64 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                     {"lot": lot_num, "uid": user["id"]},
                 ).fetchone()
 
-                # If lot already exists for user → update fields
                 if exists_user:
-                    print(f"♻️ Updating existing lot {lot_num} for user {user['id']}")
-                    try:
-                        conn.execute(
-                            text("""
-                                UPDATE user_vehicles
-                                SET
-                                    lot_url = COALESCE(NULLIF(:lot_url, ''), lot_url),
-                                    est_retail_value = COALESCE(NULLIF(:retail, ''), est_retail_value),
-                                    sale_date = COALESCE(NULLIF(:sale_date, ''), sale_date),
-                                    year = COALESCE(NULLIF(:year, ''), year),
-                                    make = COALESCE(NULLIF(:make, ''), make),
-                                    model = COALESCE(NULLIF(:model, ''), model),
-                                    engine_type = COALESCE(NULLIF(:engine_type, ''), engine_type),
-                                    cylinders = COALESCE(NULLIF(:cylinders, ''), cylinders),
-                                    vin = COALESCE(NULLIF(:vin, ''), vin),
-                                    title_code = COALESCE(NULLIF(:title_code, ''), title_code),
-                                    odometer = COALESCE(NULLIF(:odometer, ''), odometer),
-                                    odometer_description = COALESCE(NULLIF(:odo_desc, ''), odometer_description),
-                                    damage_description = COALESCE(NULLIF(:damage_description, ''), damage_description),
-                                    current_bid = COALESCE(NULLIF(:current_bid, ''), current_bid),
-                                    my_bid = COALESCE(NULLIF(:my_bid, ''), my_bid),
-                                    item_number = COALESCE(NULLIF(:item_number, ''), item_number),
-                                    sale_name = COALESCE(NULLIF(:sale_name, ''), sale_name),
-                                    auto_grade = COALESCE(NULLIF(:auto_grade, ''), auto_grade),
-                                    sale_light = COALESCE(NULLIF(:sale_light, ''), sale_light),
-                                    announcements = COALESCE(NULLIF(:announcements, ''), announcements),
-                                    updated_at = GETDATE()
-                                WHERE user_id = :uid AND LTRIM(RTRIM(lot_number)) = :lot
-                            """),
-                            {
-                                "uid": user["id"],
-                                "lot": lot_num,
-                                "lot_url": str(row.get("Lot URL", "")),
-                                "retail": str(row.get("Est. Retail value", "")),
-                                "sale_date": str(row.get("Sale date", "")),
-                                "year": str(row.get("Year", "")),
-                                "make": str(row.get("Make", "")),
-                                "model": str(row.get("Model", "")),
-                                "engine_type": str(row.get("Engine type", "")),
-                                "cylinders": str(row.get("Cylinders", "")),
-                                "vin": str(row.get("VIN", "")),
-                                "title_code": str(row.get("Title code", "")),
-                                "odometer": str(row.get("Odometer", "")),
-                                "odo_desc": str(row.get("Odometer description", "")),
-                                "damage_description": str(row.get("Damage description", "")),
-                                "current_bid": str(row.get("Current bid", "")),
-                                "my_bid": str(row.get("My bid", "")),
-                                "item_number": str(row.get("Item number", "")),
-                                "sale_name": str(row.get("Sale name", "")),
-                                "auto_grade": str(row.get("Auto grade", "")),
-                                "sale_light": str(row.get("Sale light", "")),
-                                "announcements": str(row.get("Announcements", "")),
-                            },
-                        )
-                        updated_lots.append(lot_num)
-                    except Exception as e:
-                        print(f"⚠️ Failed to update lot {lot_num}: {e}")
+                    # Update existing record (partial update)
+                    conn.execute(
+                        text("""
+                            UPDATE user_vehicles
+                            SET
+                                lot_url = COALESCE(NULLIF(:lot_url, ''), lot_url),
+                                est_retail_value = COALESCE(NULLIF(:retail, ''), est_retail_value),
+                                sale_date = COALESCE(NULLIF(:sale_date, ''), sale_date),
+                                year = COALESCE(NULLIF(:year, ''), year),
+                                make = COALESCE(NULLIF(:make, ''), make),
+                                model = COALESCE(NULLIF(:model, ''), model),
+                                engine_type = COALESCE(NULLIF(:engine_type, ''), engine_type),
+                                cylinders = COALESCE(NULLIF(:cylinders, ''), cylinders),
+                                vin = COALESCE(NULLIF(:vin, ''), vin),
+                                title_code = COALESCE(NULLIF(:title_code, ''), title_code),
+                                odometer = COALESCE(NULLIF(:odometer, ''), odometer),
+                                odometer_description = COALESCE(NULLIF(:odo_desc, ''), odometer_description),
+                                damage_description = COALESCE(NULLIF(:damage_description, ''), damage_description),
+                                current_bid = COALESCE(NULLIF(:current_bid, ''), current_bid),
+                                my_bid = COALESCE(NULLIF(:my_bid, ''), my_bid),
+                                item_number = COALESCE(NULLIF(:item_number, ''), item_number),
+                                sale_name = COALESCE(NULLIF(:sale_name, ''), sale_name),
+                                auto_grade = COALESCE(NULLIF(:auto_grade, ''), auto_grade),
+                                sale_light = COALESCE(NULLIF(:sale_light, ''), sale_light),
+                                announcements = COALESCE(NULLIF(:announcements, ''), announcements),
+                                updated_at = GETDATE()
+                            WHERE user_id = :uid AND LTRIM(RTRIM(lot_number)) = :lot
+                        """),
+                        {
+                            "uid": user["id"],
+                            "lot": lot_num,
+                            "lot_url": str(row.get("Lot URL", "")),
+                            "retail": str(row.get("Est. Retail value", "")),
+                            "sale_date": str(row.get("Sale date", "")),
+                            "year": str(row.get("Year", "")),
+                            "make": str(row.get("Make", "")),
+                            "model": str(row.get("Model", "")),
+                            "engine_type": str(row.get("Engine type", "")),
+                            "cylinders": str(row.get("Cylinders", "")),
+                            "vin": str(row.get("VIN", "")),
+                            "title_code": str(row.get("Title code", "")),
+                            "odometer": str(row.get("Odometer", "")),
+                            "odo_desc": str(row.get("Odometer description", "")),
+                            "damage_description": str(row.get("Damage description", "")),
+                            "current_bid": str(row.get("Current bid", "")),
+                            "my_bid": str(row.get("My bid", "")),
+                            "item_number": str(row.get("Item number", "")),
+                            "sale_name": str(row.get("Sale name", "")),
+                            "auto_grade": str(row.get("Auto grade", "")),
+                            "sale_light": str(row.get("Sale light", "")),
+                            "announcements": str(row.get("Announcements", "")),
+                        },
+                    )
+                    updated_lots.append(lot_num)
                     continue
 
-                # Try to clone from any existing record
+                # --- Clone if same lot exists for another user ---
                 existing = conn.execute(
                     text("""
                         SELECT TOP 1 * FROM user_vehicles
@@ -233,7 +225,7 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                     cloned_lots.append(lot_num)
                     print(f"✅ Cloned lot {lot_num} → user {user['id']}")
                 else:
-                    # Insert minimal placeholder if no clone exists
+                    # --- Insert new placeholder ---
                     conn.execute(
                         text("""
                             INSERT INTO user_vehicles (
@@ -256,45 +248,60 @@ async def upload_and_process_file(request: Request, file: UploadFile, user=Depen
                             "sale_name": str(row.get("Sale name", "")),
                         },
                     )
-                    print(f"🆕 Inserted new placeholder lot {lot_num} for user {user['id']}")
                     new_lots.append(lot_num)
+                    print(f"🆕 Inserted new lot {lot_num} for user {user['id']}")
 
         print(f"✅ {len(cloned_lots)} cloned, {len(new_lots)} new, {len(updated_lots)} updated for user {user['id']}")
-
-        # --------------------------------------------------
-        # Step 3: Trigger Copart + AI for lots needing analysis
-        # --------------------------------------------------
-        try:
-            with rds_engine.connect() as conn:
-                missing_ai = conn.execute(
-                    text("""
-                        SELECT lot_number
-                        FROM user_vehicles
-                        WHERE user_id = :uid
-                          AND (repair_estimate IS NULL OR repair_estimate = '')
-                    """),
-                    {"uid": user["id"]},
-                ).fetchall()
-
-                lots_to_run = [row[0] for row in missing_ai]
-
-            if not lots_to_run:
-                print("🚫 No lots require AI estimation at this time.")
-            else:
-                payload = {"user_id": user["id"], "new_lots": lots_to_run}
-                print(f"🔗 Triggering automation for {len(lots_to_run)} lots: {lots_to_run}")
-                response = requests.post(LOCAL_TRIGGER_URL, json=payload, timeout=20)
-                if response.ok:
-                    print("✅ Copart + AI pipeline triggered successfully.")
-                else:
-                    print(f"⚠️ Trigger returned {response.status_code}: {response.text}")
-
-        except Exception as e:
-            print(f"⚠️ Error during AI trigger step: {e}")
-
 
     except Exception as e:
         print(f"❌ Error processing file: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+    # --------------------------------------------------
+    # Step 3: Trigger Copart + AI
+    # --------------------------------------------------
+    try:
+        copart_lots = new_lots  # new only
+        ai_lots = []
+
+        with rds_engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT lot_number
+                    FROM user_vehicles
+                    WHERE user_id = :uid
+                      AND (repair_estimate IS NULL OR repair_estimate = '')
+                """),
+                {"uid": user["id"]},
+            ).fetchall()
+            ai_lots = [r[0] for r in rows]
+
+        print(f"🧠 {len(ai_lots)} lots need AI | 🚗 {len(copart_lots)} lots need Copart")
+
+        # --- Copart trigger (new only) ---
+        if copart_lots:
+            payload = {"user_id": user["id"], "copart_lots": copart_lots}
+            print(f"🔗 Triggering Copart download: {payload}")
+            response = requests.post(LOCAL_TRIGGER_URL, json=payload, timeout=25)
+            if response.ok:
+                print("✅ Copart downloader triggered successfully.")
+            else:
+                print(f"⚠️ Copart trigger returned {response.status_code}: {response.text}")
+
+        # --- AI trigger (missing repair_estimate) ---
+        if ai_lots:
+            payload = {"user_id": user["id"], "ai_lots": ai_lots}
+            print(f"🤖 Triggering AI estimator: {payload}")
+            response = requests.post(LOCAL_TRIGGER_URL, json=payload, timeout=25)
+            if response.ok:
+                print("✅ AI estimator triggered successfully.")
+            else:
+                print(f"⚠️ AI trigger returned {response.status_code}: {response.text}")
+
+        if not copart_lots and not ai_lots:
+            print("🚫 No lots require Copart or AI processing.")
+
+    except Exception as e:
+        print(f"⚠️ Error during automation trigger step: {e}")
 
     return {"status": "success", "uploaded": file.filename}

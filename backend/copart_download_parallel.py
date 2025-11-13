@@ -111,7 +111,7 @@ def process_lots_directly(lots, user_id):
                     subprocess.run(
                         [
                             "python",
-                            "copart_image_downloader.py",  # (adjust if your script name differs)
+                            "copart_download_parallel.py",  # (adjust if your script name differs)
                             str(lot),
                         ],
                         cwd=BASE_DIR,

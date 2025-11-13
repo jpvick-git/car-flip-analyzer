@@ -8,10 +8,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  const resale = Number(car.resale_estimate || 0);
-const repair = Number(car.repair_estimate || 0);
-const tax = Number(car.tax_amount || 0);
-const fees = Number(car.fees_amount || 0);
+
 
 let maxBid =
   (0.85 * resale - tax - fees - repair) / 1.075;

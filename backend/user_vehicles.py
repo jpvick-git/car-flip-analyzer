@@ -9,7 +9,7 @@ from sqlalchemy import text
 from .db import get_engine
 
 # Your existing auth import:
-from auth_utils import get_current_user
+from .auth import get_current_user
 
 # Provide get_db so Depends(get_db) keeps working
 def get_db():

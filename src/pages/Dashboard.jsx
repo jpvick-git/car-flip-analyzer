@@ -279,14 +279,31 @@ const Dashboard = () => {
                 <div className="flex items-center space-x-2 mt-4">
                   <span className="font-medium">Desired Margin:</span>
                   <input
-                    type="number"
-                    value={tempMargin}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      if (v >= 0 && v <= 90) setTempMargin(v);
-                    }}
-                    className="w-20 border border-gray-300 rounded-md px-2 py-1"
-                  />
+					  type="number"
+					  value={tempMargin}
+					  onChange={(e) => {
+						const raw = e.target.value;
+
+						// Prevent crash if user clears the input
+						if (raw === "" || raw === null) {
+						  setTempMargin(0);
+						  return;
+						}
+
+						let val = Number(raw);
+
+						// Prevent NaN
+						if (isNaN(val)) val = 0;
+
+						// Clamp value between 0–90%
+						if (val < 0) val = 0;
+						if (val > 90) val = 90;
+
+						setTempMargin(val);
+					  }}
+					  className="w-20 border border-gray-300 rounded-md px-2 py-1"
+					/>
+
                   <span>%</span>
                 </div>
 

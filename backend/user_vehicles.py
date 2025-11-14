@@ -70,9 +70,7 @@ def get_vehicles(db=Depends(get_db), current_user: dict = Depends(get_current_us
                 resale_estimate,
                 repair_details,
                 resale_details,
-                tax_amount,
-                fees_amount,
-                image_paths
+                image_url
             FROM user_vehicles
             WHERE user_id = :user_id
             ORDER BY id DESC;
@@ -97,16 +95,15 @@ def get_vehicles(db=Depends(get_db), current_user: dict = Depends(get_current_us
                 "resale_estimate": row.resale_estimate,
                 "repair_details": row.repair_details,
                 "resale_details": row.resale_details,
-                "tax_amount": row.tax_amount,
-                "fees_amount": row.fees_amount,
-                "images": json.loads(row.image_paths) if row.image_paths else []
+
+                # Convert single URL into list to match frontend
+                "images": [row.image_url] if row.image_url else []
             })
 
         return vehicles
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 # ----------------------------------------------------
 # UPLOAD CSV FOR USER

@@ -285,7 +285,6 @@ const Dashboard = () => {
 
 				  {/* COST BREAKDOWN */}
 				  <div className="mt-4 text-gray-800 text-sm">
-					<p><span className="font-semibold">Max Bid:</span> ${bid.toLocaleString()}</p>
 					<hr className="my-2" />
 					<p>Buyer Fee (7.5%): ${buyerFee.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
 					<p>Tax: ${tax.toLocaleString()}</p>

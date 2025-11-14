@@ -43,9 +43,10 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 
+
 print(f"📂 Serving static images from: {DOWNLOAD_DIR}")
 
-# Serve static images
+# ✅ Serve static images
 app.mount("/backend/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
 
@@ -56,14 +57,14 @@ def get_first_image(lot_id: str):
     if not os.path.exists(lot_folder):
         return None
 
-    # Prefer _Image_1
+    # Prefer _Image_1.*
     for ext in (".jpg", ".jpeg", ".png"):
         candidate = f"{lot_id}_Image_1{ext}"
-        full = os.path.join(lot_folder, candidate)
-        if os.path.exists(full):
+        path = os.path.join(lot_folder, candidate)
+        if os.path.exists(path):
             return f"https://api.carflipanalyzer.com/backend/downloads/{lot_id}/{candidate}"
 
-    # Fallback: any image
+    # Fallback: first image in folder
     for file in sorted(os.listdir(lot_folder)):
         if file.lower().endswith((".jpg", ".jpeg", ".png")):
             return f"https://api.carflipanalyzer.com/backend/downloads/{lot_id}/{file}"
@@ -98,7 +99,7 @@ def test_db():
 
 
 # --------------------------------------------------
-# TRIGGER ENDPOINT (CORRECT VERSION ONLY)
+# TRIGGER ENDPOINT
 # --------------------------------------------------
 class TriggerPayload(BaseModel):
     user_id: int
@@ -118,43 +119,24 @@ async def trigger_pipeline(payload: TriggerPayload):
     if not ai_lots and not copart_lots:
         return {"error": "No lot numbers provided"}
 
-    # Correct local script paths
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    COPART_SCRIPT = os.path.join(BASE_DIR, "copart_download_parallel.py")
-    AI_SCRIPT = os.path.join(BASE_DIR, "ai_repair_estimator.py")
-
     try:
-        # --- Copart downloader ---
         if copart_lots:
             copart_str = ",".join(copart_lots)
-            print(f"📦 Launching Copart downloader: {copart_str}")
+            print(f"📦 Launching Copart downloader for lots: {copart_str}")
+            subprocess.Popen(
+                ["python", "backend/copart_download_parallel.py", str(user_id), "--lots", copart_str, "--download"],
+                cwd=os.path.dirname(__file__),
+            )
 
-            subprocess.Popen([
-                "python",
-                COPART_SCRIPT,
-                str(user_id),
-                "--lots", copart_str,
-                "--download"
-            ])
-
-        # --- AI estimator ---
         if ai_lots:
             ai_str = ",".join(ai_lots)
-            print(f"🤖 Launching AI estimator: {ai_str}")
+            print(f"🤖 Launching AI estimator for lots: {ai_str}")
+            subprocess.Popen(
+                ["python", "backend/ai_repair_estimator.py", str(user_id), "--lots", ai_str],
+                cwd=os.path.dirname(__file__),
+            )
 
-            subprocess.Popen([
-                "python",
-                AI_SCRIPT,
-                str(user_id),
-                "--lots", ai_str
-            ])
-
-        return {
-            "status": "success",
-            "user_id": user_id,
-            "ai_lots": ai_lots,
-            "copart_lots": copart_lots
-        }
+        return {"status": "success", "user_id": user_id, "ai_lots": ai_lots, "copart_lots": copart_lots}
 
     except Exception as e:
         print(f"❌ Trigger error: {e}")
@@ -179,3 +161,4 @@ app.include_router(auth_router)
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend.backend_api:app", host="0.0.0.0", port=8000)
+

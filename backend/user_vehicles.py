@@ -159,13 +159,13 @@ async def upload_user_file(
 
             query = text("""
                 INSERT INTO user_vehicles
-                (user_id, lot_number, lot_url, year, make, model, damage_description, odometer,
-                 title_code, repair_estimate, resale_estimate, repair_details, resale_details,
-                 tax_amount, fees_amount, image_paths)
+                (user_id, lot_number, lot_url, year, make, model,
+                 damage_description, odometer, title_code,
+                 repair_estimate, resale_estimate, repair_details, resale_details, image_url)
                 VALUES
-                (:user_id, :lot_number, :lot_url, :year, :make, :model, :damage_description,
-                 :odometer, :title_code, :repair_estimate, :resale_estimate,
-                 :repair_details, :resale_details, :tax_amount, :fees_amount, :image_paths);
+                (:user_id, :lot_number, :lot_url, :year, :make, :model,
+                 :damage_description, :odometer, :title_code,
+                 :repair_estimate, :resale_estimate, :repair_details, :resale_details, :image_url);
             """)
 
             db.execute(query, {
@@ -182,9 +182,7 @@ async def upload_user_file(
                 "resale_estimate": resale_est,
                 "repair_details": repair_details,
                 "resale_details": resale_details,
-                "tax_amount": tax_amount,
-                "fees_amount": fees_amount,
-                "image_paths": json.dumps(images)
+                "image_url": "",  # you can update this later after downloads
             })
 
             db.commit()

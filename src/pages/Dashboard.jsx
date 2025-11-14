@@ -314,6 +314,7 @@ const Dashboard = () => {
                   <p><span className="font-semibold">Total Cost:</span> ${live.total_cost.toLocaleString()}</p>
                   <p><span className="font-semibold">Profit:</span> ${live.profit.toLocaleString()}</p>
                   <p><span className="font-semibold">Margin:</span> {live.margin_actual}%</p>
+				  <hr className="my-3 border-gray-300" />
                 </div>
 
                 {/* DETAILS */}

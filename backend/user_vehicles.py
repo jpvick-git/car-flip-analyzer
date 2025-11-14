@@ -4,8 +4,21 @@ import shutil
 import pandas as pd
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlalchemy import text
-from database import get_db
+
+# ✅ Correct import for package mode
+from .db import get_engine
+
+# Your existing auth import:
 from auth_utils import get_current_user
+
+# Provide get_db so Depends(get_db) keeps working
+def get_db():
+    engine = get_engine()
+    conn = engine.connect()
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 router = APIRouter()
 

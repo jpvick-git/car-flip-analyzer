@@ -204,11 +204,13 @@ const Dashboard = () => {
 		  // --- Cost Breakdown ---
 		  const bid = Number(activeCar.max_bid || 0);
 		  const buyerFee = bid * 0.075;
-		  const tax = Number(activeCar.tax_amount || 0);
-		  const fees = Number(activeCar.fees_amount || 0);
+		 // Correct fields:
+		 const avgTaxRate = Number(activeCar.avg_tax_rate || 0);  // percentage
+		 const titleFee = Number(activeCar.title_fee || 0);       // flat $
+		 const tax = bid * (avgTaxRate / 100);
+		 const fees = titleFee;
 		  const repair = Number(activeCar.repair_estimate || 0);
 		  const resale = Number(activeCar.resale_estimate || 0);
-
 		  const totalCost = bid + buyerFee + tax + fees + repair;
 		  const profit = resale - totalCost;
 		  const margin = resale > 0 ? ((profit / resale) * 100).toFixed(1) : "0";

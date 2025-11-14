@@ -42,8 +42,6 @@ app.add_middleware(
 # --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
-COPART_SCRIPT = os.path.join(BASE_DIR, "copart_download_parallel.py")
-AI_SCRIPT = os.path.join(BASE_DIR, "ai_repair_estimator.py")
 
 
 print(f"📂 Serving static images from: {DOWNLOAD_DIR}")
@@ -103,6 +101,11 @@ def test_db():
 # --------------------------------------------------
 # TRIGGER ENDPOINT
 # --------------------------------------------------
+class TriggerPayload(BaseModel):
+    user_id: int
+    ai_lots: list[str] = []
+    copart_lots: list[str] = []
+    
 @app.post("/trigger")
 async def trigger_pipeline(payload: TriggerPayload):
     user_id = payload.user_id

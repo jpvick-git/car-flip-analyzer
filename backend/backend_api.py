@@ -42,6 +42,8 @@ app.add_middleware(
 # --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
+COPART_SCRIPT = os.path.join(BASE_DIR, "copart_download_parallel.py")
+AI_SCRIPT = os.path.join(BASE_DIR, "ai_repair_estimator.py")
 
 
 print(f"📂 Serving static images from: {DOWNLOAD_DIR}")
@@ -101,12 +103,6 @@ def test_db():
 # --------------------------------------------------
 # TRIGGER ENDPOINT
 # --------------------------------------------------
-class TriggerPayload(BaseModel):
-    user_id: int
-    ai_lots: list[str] = []
-    copart_lots: list[str] = []
-
-
 @app.post("/trigger")
 async def trigger_pipeline(payload: TriggerPayload):
     user_id = payload.user_id
@@ -116,32 +112,45 @@ async def trigger_pipeline(payload: TriggerPayload):
     print(f"🚀 Trigger received for user {user_id}")
     print(f"🧠 AI Lots: {ai_lots} | 🚗 Copart Lots: {copart_lots}")
 
-    if not ai_lots and not copart_lots:
-        return {"error": "No lot numbers provided"}
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+    COPART_SCRIPT = os.path.join(BASE_DIR, "copart_download_parallel.py")
+    AI_SCRIPT = os.path.join(BASE_DIR, "ai_repair_estimator.py")
 
     try:
+        # Launch Copart downloader
         if copart_lots:
             copart_str = ",".join(copart_lots)
             print(f"📦 Launching Copart downloader for lots: {copart_str}")
-            subprocess.Popen(
-                ["python", "backend/copart_download_parallel.py", str(user_id), "--lots", copart_str, "--download"],
-                cwd=os.path.dirname(__file__),
-            )
+            subprocess.Popen([
+                "python",
+                COPART_SCRIPT,
+                str(user_id),
+                "--lots", copart_str,
+                "--download"
+            ])
 
+        # Launch AI estimator
         if ai_lots:
             ai_str = ",".join(ai_lots)
             print(f"🤖 Launching AI estimator for lots: {ai_str}")
-            subprocess.Popen(
-                ["python", "backend/ai_repair_estimator.py", str(user_id), "--lots", ai_str],
-                cwd=os.path.dirname(__file__),
-            )
+            subprocess.Popen([
+                "python",
+                AI_SCRIPT,
+                str(user_id),
+                "--lots", ai_str
+            ])
 
-        return {"status": "success", "user_id": user_id, "ai_lots": ai_lots, "copart_lots": copart_lots}
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "ai_lots": ai_lots,
+            "copart_lots": copart_lots
+        }
 
     except Exception as e:
         print(f"❌ Trigger error: {e}")
         return {"error": str(e)}
-
 
 # --------------------------------------------------
 # ROUTER REGISTRATION

@@ -126,23 +126,23 @@ async def trigger_pipeline(payload: TriggerPayload):
             copart_str = ",".join(copart_lots)
             print(f"📦 Launching Copart downloader for lots: {copart_str}")
             subprocess.Popen([
-                "python",
-                COPART_SCRIPT,
+                "/root/car-flip-analyzer/backend/venv/bin/python",
+                "/root/car-flip-analyzer/backend/copart_download_parallel.py",
                 str(user_id),
                 "--lots", copart_str,
                 "--download"
-            ])
+            ], cwd="/root/car-flip-analyzer/backend")
 
         # Launch AI estimator
         if ai_lots:
             ai_str = ",".join(ai_lots)
             print(f"🤖 Launching AI estimator for lots: {ai_str}")
             subprocess.Popen([
-                "python",
-                AI_SCRIPT,
+                "/root/car-flip-analyzer/backend/venv/bin/python",
+                "/root/car-flip-analyzer/backend/ai_repair_estimator.py",
                 str(user_id),
                 "--lots", ai_str
-            ])
+            ], cwd="/root/car-flip-analyzer/backend")
 
         return {
             "status": "success",

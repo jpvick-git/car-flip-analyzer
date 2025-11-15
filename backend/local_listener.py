@@ -4,10 +4,15 @@ import os
 
 app = Flask(__name__)
 
+# 🔧 CONFIG
+BASE_DIR = r"C:\car-flip-analyzer\backend"
+PYTHON_PATH = os.path.join(BASE_DIR, "..", "venv", "Scripts", "python.exe")  # Adjust if needed
+COPART_SCRIPT = os.path.join(BASE_DIR, "copart_download_parallel.py")
+AI_SCRIPT = os.path.join(BASE_DIR, "ai_repair_estimator.py")
+
 @app.route("/trigger", methods=["POST"])
 def trigger():
     try:
-        # ✅ Safely parse JSON body
         data = request.get_json(force=True)
         print(f"📦 Received trigger payload: {data}")
 
@@ -15,29 +20,41 @@ def trigger():
         ai_lots = data.get("ai_lots", [])
         copart_lots = data.get("copart_lots", [])
 
-        # ✅ Validation
         if not user_id:
             return jsonify({"error": "Missing user_id"}), 400
         if not ai_lots and not copart_lots:
             return jsonify({"error": "No lot numbers provided"}), 400
 
-        # ✅ Trigger Copart downloader (new lots only)
+        # 🚗 Launch Copart downloader
         if copart_lots:
             print(f"🚗 Launching Copart downloader for lots: {copart_lots}")
-            subprocess.Popen([
-                "python", "/copart_download_parallel.py",
-                str(user_id),
-                "--lots", ",".join(map(str, copart_lots))
-            ])
+            subprocess.Popen(
+                [
+                    PYTHON_PATH,
+                    COPART_SCRIPT,
+                    str(user_id),
+                    "--lots", ",".join(map(str, copart_lots)),
+                    "--download"
+                ],
+                cwd=BASE_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
 
-        # ✅ Trigger AI estimator (missing repair_estimates)
+        # 🤖 Launch AI estimator
         if ai_lots:
             print(f"🤖 Launching AI estimator for lots: {ai_lots}")
-            subprocess.Popen([
-                "python", "ai_repair_estimator.py",
-                str(user_id),
-                "--lots", ",".join(map(str, ai_lots))
-            ])
+            subprocess.Popen(
+                [
+                    PYTHON_PATH,
+                    AI_SCRIPT,
+                    str(user_id),
+                    "--lots", ",".join(map(str, ai_lots))
+                ],
+                cwd=BASE_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
 
         return jsonify({
             "status": "success",

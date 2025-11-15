@@ -35,7 +35,7 @@ rds_engine = create_engine(RDS_CONN, pool_pre_ping=True)
 
 # OpenAI client
 client = OpenAI()
-print(f"🔑 Using OpenAI key prefix: {client.api_key[:10]}...")
+print(f"Using OpenAI key prefix: {client.api_key[:10]}...")
 print("📁 Project ID: proj_yG0FqcGEaLjCW7kutLC5nG4S")
 
 # --------------------------------------------------

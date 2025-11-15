@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "C:\car-flip-analyzer\backend\copart_download_parallel.py", line 10, in <module>
+    from sqlalchemy import create_engine, text
+ModuleNotFoundError: No module named 'sqlalchemy'

@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "C:\car-flip-analyzer\backend\ai_repair_estimator.py", line 9, in <module>
+    from sqlalchemy import create_engine, text
+ModuleNotFoundError: No module named 'sqlalchemy'

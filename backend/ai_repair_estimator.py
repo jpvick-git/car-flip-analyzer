@@ -36,7 +36,7 @@ rds_engine = create_engine(RDS_CONN, pool_pre_ping=True)
 # OpenAI client
 client = OpenAI()
 print(f"Using OpenAI key prefix: {client.api_key[:10]}...")
-print("📁 Project ID: proj_yG0FqcGEaLjCW7kutLC5nG4S")
+print("Project ID: proj_yG0FqcGEaLjCW7kutLC5nG4S")
 
 # --------------------------------------------------
 # HELPERS
@@ -131,7 +131,7 @@ Return **only valid JSON** in the following structure:
         {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
     ]
 
-    print(f"🖼️ Attaching up to {len(image_paths[:MAX_IMAGES])} images for lot {lot_number}...")
+    print(f" Attaching up to {len(image_paths[:MAX_IMAGES])} images for lot {lot_number}...")
     for img_path in image_paths[:MAX_IMAGES]:
         try:
             with open(img_path, "rb") as f:
@@ -143,7 +143,7 @@ Return **only valid JSON** in the following structure:
                 "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}
             })
         except Exception as e:
-            print(f"⚠️ Failed to attach {img_path}: {e}")
+            print(f" Failed to attach {img_path}: {e}")
 
     # Send to OpenAI
     response = client.chat.completions.create(
@@ -167,7 +167,7 @@ Return **only valid JSON** in the following structure:
     try:
         parsed = json.loads(clean)
     except json.JSONDecodeError as e:
-        print(f"⚠️ Invalid JSON for lot {lot_number}: {e}\nRaw:\n{raw}")
+        print(f" Invalid JSON for lot {lot_number}: {e}\nRaw:\n{raw}")
         parsed = {
             "repair_estimate": None,
             "repair_details": raw[:800],
@@ -195,15 +195,15 @@ def process_lot(lot, rds_engine):
             ).fetchone()
 
         if not row:
-            print(f"⚠️ No user_vehicles record found for lot {lot}")
+            print(f"No user_vehicles record found for lot {lot}")
             return False
 
         year, make, model, damage, odometer, title_code, existing_repair = row
         if existing_repair:
-            print(f"⏩ Skipping lot {lot} (already analyzed)")
+            print(f"Skipping lot {lot} (already analyzed)")
             return True
 
-        print(f"🚗 Lot {lot}: {year} {make} {model} ({damage})")
+        print(f"Lot {lot}: {year} {make} {model} ({damage})")
 
         lot_dir = os.path.join(DOWNLOAD_DIR, str(lot))
         images = [
@@ -213,7 +213,7 @@ def process_lot(lot, rds_engine):
         ][:MAX_IMAGES]
 
         if not images:
-            print(f"⚠️ No images found for lot {lot}")
+            print(f"No images found for lot {lot}")
             return False
 
         vehicle = {
@@ -250,14 +250,14 @@ def process_lot(lot, rds_engine):
             )
 
         if result.rowcount == 0:
-            print(f"⚠️ No rows updated for lot {lot}")
+            print(f"No rows updated for lot {lot}")
             return False
 
-        print(f"✅ Updated lot {lot}")
+        print(f"Updated lot {lot}")
         return True
 
     except Exception as e:
-        print(f"⚠️ Error processing lot {lot}: {e}")
+        print(f"Error processing lot {lot}: {e}")
         return False
 
 # --------------------------------------------------
@@ -268,7 +268,7 @@ def main(user_id: int):
     uploads_dir = os.path.join(os.path.dirname(BASE_DIR), "user_uploads")
 
     if not os.path.exists(uploads_dir):
-        print("❌ No user_uploads directory found.")
+        print("No user_uploads directory found.")
         return
 
     csv_files = [
@@ -278,7 +278,7 @@ def main(user_id: int):
     ]
 
     if not csv_files:
-        print("❌ No CSV files found in user_uploads.")
+        print("No CSV files found in user_uploads.")
         return
 
     email_slug = None
@@ -296,11 +296,11 @@ def main(user_id: int):
     )
 
     if not matching_csvs:
-        print(f"❌ No CSV found matching user {user_id} ({email_slug}).")
+        print(f"No CSV found matching user {user_id} ({email_slug}).")
         return
 
     csv_path = max(matching_csvs, key=os.path.getmtime)
-    print(f"📄 Using spreadsheet: {os.path.basename(csv_path)}")
+    print(f"Using spreadsheet: {os.path.basename(csv_path)}")
 
     df = pd.read_csv(csv_path)
 
@@ -311,7 +311,7 @@ def main(user_id: int):
         lot_col = next((c for c in df.columns if "lot" in c.lower()), None)
 
     lot_numbers = [extract_lot_number(x) for x in df[lot_col].dropna().astype(str).unique()]
-    print(f"📦 Found {len(lot_numbers)} lots in spreadsheet.")
+    print(f"Found {len(lot_numbers)} lots in spreadsheet.")
 
     done = failed = 0
     start_time = time.time()
@@ -319,7 +319,7 @@ def main(user_id: int):
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = []
         for lot in lot_numbers:
-            print(f"▶️ Queuing lot {lot} for AI analysis...")
+            print(f"Queuing lot {lot} for AI analysis...")
             futures.append(executor.submit(process_lot, lot, rds_engine))
             time.sleep(SLEEP_BETWEEN_LOTS)
 
@@ -330,12 +330,12 @@ def main(user_id: int):
                 else:
                     failed += 1
             except Exception as e:
-                print(f"⚠️ Thread exception: {e}")
+                print(f"Thread exception: {e}")
                 failed += 1
 
     elapsed = time.time() - start_time
-    print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
-    print(f"🎯 Completed AI analysis for user {user_id}.")
+    print(f"\nSummary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
+    print(f"Completed AI analysis for user {user_id}.")
 
 # --------------------------------------------------
 # ENTRY POINT
@@ -352,7 +352,7 @@ if __name__ == "__main__":
     LOTS = args.lots.split(",") if args.lots else []
 
     if LOTS:
-        print(f"📦 Running AI estimator for specific lots: {LOTS}")
+        print(f"Running AI estimator for specific lots: {LOTS}")
         done = failed = 0
         start_time = time.time()
 
@@ -360,7 +360,7 @@ if __name__ == "__main__":
             futures = []
             for lot in LOTS:
                 lot = lot.strip()
-                print(f"▶️ Queuing lot {lot} for AI analysis...")
+                print(f"Queuing lot {lot} for AI analysis...")
                 futures.append(executor.submit(process_lot, lot, rds_engine))
                 time.sleep(SLEEP_BETWEEN_LOTS)
 
@@ -371,15 +371,15 @@ if __name__ == "__main__":
                     else:
                         failed += 1
                 except Exception as e:
-                    print(f"⚠️ Thread exception: {e}")
+                    print(f"Thread exception: {e}")
                     failed += 1
 
         elapsed = time.time() - start_time
-        print(f"\n✅ Summary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
-        print(f"🎯 Completed AI analysis for user {USER_ID} (manual lots mode).")
+        print(f"\nSummary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
+        print(f"Completed AI analysis for user {USER_ID} (manual lots mode).")
 
     else:
-        print(f"📦 No lot list provided — falling back to CSV detection for user {USER_ID}")
+        print(f"No lot list provided — falling back to CSV detection for user {USER_ID}")
         main(USER_ID)
 
 

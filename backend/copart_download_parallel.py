@@ -12,6 +12,14 @@ from openai import OpenAI
 import argparse
 from playwright.sync_api import sync_playwright
 
+import sys
+with open("copart_debug_log.txt", "a") as f:
+    f.write("Script started\n")
+    f.flush()
+
+print("Script print reached", flush=True)
+
+
 # --------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------
@@ -104,7 +112,7 @@ def extract_zip(download_path, lot_number):
 
     with zipfile.ZipFile(download_path, "r") as zip_ref:
         zip_ref.extractall(target_dir)
-    print(f"✅ Extracted images for lot {lot_number} to {target_dir}")
+    print(f"Extracted images for lot {lot_number} to {target_dir}")
 
     # --------------------------------------------------
     # SAVE FIRST IMAGE TO DB
@@ -117,12 +125,12 @@ def extract_zip(download_path, lot_number):
         ])
 
         if not files:
-            print(f"⚠️ No images found for lot {lot_number}")
+            print(f"No images found for lot {lot_number}")
             return
 
         first_img = files[0]
         image_url = f"https://api.carflipanalyzer.com/backend/downloads/{lot_number}/{first_img}"
-        print(f"🖼️ First image detected: {image_url}")
+        print(f"First image detected: {image_url}")
 
         with rds_engine.begin() as conn:
             conn.execute(
@@ -134,10 +142,10 @@ def extract_zip(download_path, lot_number):
                 {"url": image_url, "lot": str(lot_number), "uid": int(user_id)}
             )
 
-        print(f"✅ Saved image URL to DB for lot {lot_number}")
+        print(f"Saved image URL to DB for lot {lot_number}")
 
     except Exception as e:
-        print(f"❌ Error saving image URL: {e}")
+        print(f"Error saving image URL: {e}")
 
 
 def click_next_image(page):
@@ -184,7 +192,7 @@ def find_download_all_element(page):
 # PLAYWRIGHT DOWNLOAD
 # --------------------------------------------------
 def download_copart_images(lot_number):
-    print(f"🎬 Downloading images for lot {lot_number}")
+    print(f"Downloading images for lot {lot_number}")
     lot_url = f"https://www.copart.com/lot/{lot_number}"
 
     with sync_playwright() as p:
@@ -235,10 +243,10 @@ def download_copart_images(lot_number):
             extract_zip(zip_path, lot_number)
             os.remove(zip_path)
 
-            print(f"✅ Images downloaded for lot {lot_number}")
+            print(f"Images downloaded for lot {lot_number}")
 
         except Exception as e:
-            print(f"❌ Error for lot {lot_number}: {e}")
+            print(f"Error for lot {lot_number}: {e}")
 
         finally:
             page.wait_for_timeout(5000)
@@ -267,7 +275,7 @@ def process_lots_directly(lots, uid):
                 ).fetchone()
 
                 if not row:
-                    print(f"⚠️ Lot {lot} not found; skipping.")
+                    print(f"Lot {lot} not found; skipping.")
                     continue
 
                 v = dict(row._mapping)
@@ -298,12 +306,12 @@ def process_lots_directly(lots, uid):
                     )
 
                 except Exception as e:
-                    print(f"❌ AI estimation error for lot {lot}: {e}")
+                    print(f"AI estimation error for lot {lot}: {e}")
 
                 time.sleep(SLEEP_BETWEEN_LOTS)
 
     except Exception as e:
-        print(f"❌ Fatal error: {e}")
+        print(f"Fatal error: {e}")
 
 
 # --------------------------------------------------
@@ -315,11 +323,11 @@ if __name__ == "__main__":
     lots_arg = args.lots
 
     if args.download and not lots_arg:
-        print("❌ Must specify --lots with --download")
+        print("Must specify --lots with --download")
         sys.exit(1)
 
     if lots_arg:
         lots = [l.strip() for l in lots_arg.split(",") if l.strip()]
         process_lots_directly(lots, user_id)
     else:
-        print("❌ Usage: python copart_download_parallel.py <user_id> --lots 12345 --download")
+        print("Usage: python copart_download_parallel.py <user_id> --lots 12345 --download")

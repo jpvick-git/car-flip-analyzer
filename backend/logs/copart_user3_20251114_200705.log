@@ -1,0 +1,14 @@
+Using OpenAI key prefix: sk-proj-bG...
+Traceback (most recent call last):
+  File "C:\car-flip-analyzer\backend\copart_download_parallel.py", line 323, in <module>
+    process_lots_directly(lots, user_id)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\car-flip-analyzer\backend\copart_download_parallel.py", line 253, in process_lots_directly
+    from ai_repair_estimator import analyze_vehicle
+  File "C:\car-flip-analyzer\backend\ai_repair_estimator.py", line 39, in <module>
+    print("\U0001f4c1 Project ID: proj_yG0FqcGEaLjCW7kutLC5nG4S")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jpvic\AppData\Local\Programs\Python\Python314\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4c1' in position 0: character maps to <undefined>

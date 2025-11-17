@@ -1,0 +1,58 @@
+Using OpenAI key prefix: sk-proj-bG...
+Project ID: proj_yG0FqcGEaLjCW7kutLC5nG4S
+Running AI estimator for specific lots: ['89857445', '89817755', '87382285', '87108015', '85114195', '71693915', '91850805', '91850575', '91603565', '78067093']
+Queuing lot 89857445 for AI analysis...
+Lot 89857445: 2020 HYUN SANTA FE L (MINOR DENT/SCRATCHES)
+ Attaching up to 8 images for lot 89857445...
+Queuing lot 89817755 for AI analysis...
+Lot 89817755: 2016 MERZ GLE 400 4M (MINOR DENT/SCRATCHES)
+ Attaching up to 8 images for lot 89817755...
+Queuing lot 87382285 for AI analysis...
+Lot 87382285: 2017 AUDI Q7 PREMIUM (MINOR DENT/SCRATCHES)
+ Attaching up to 8 images for lot 87382285...
+Queuing lot 87108015 for AI analysis...
+Queuing lot 85114195 for AI analysis...
+Queuing lot 71693915 for AI analysis...
+Queuing lot 91850805 for AI analysis...
+Queuing lot 91850575 for AI analysis...
+Queuing lot 91603565 for AI analysis...
+Queuing lot 78067093 for AI analysis...
+Updated lot 89857445
+Lot 87108015: 2022 TESL MODEL 3 (MINOR DENT/SCRATCHES)
+ Attaching up to 8 images for lot 87108015...
+Updated lot 87382285
+Updated lot 89817755
+Updated lot 87108015
+Error processing lot 91850805: (pyodbc.OperationalError) ('08S01', '[08S01] [Microsoft][ODBC Driver 18 for SQL Server]TCP Provider: An existing connection was forcibly closed by the remote host.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 18 for SQL Server]Communication link failure (10054)')
+[SQL: 
+                    SELECT TOP 1 year, make, model, damage_description, odometer, title_code, repair_estimate
+                    FROM user_vehicles
+                    WHERE lot_number = ?
+                ]
+[parameters: ('91850805',)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Error processing lot 85114195: (pyodbc.OperationalError) ('08S01', '[08S01] [Microsoft][ODBC Driver 18 for SQL Server]TCP Provider: An existing connection was forcibly closed by the remote host.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 18 for SQL Server]Communication link failure (10054)')
+[SQL: 
+                    SELECT TOP 1 year, make, model, damage_description, odometer, title_code, repair_estimate
+                    FROM user_vehicles
+                    WHERE lot_number = ?
+                ]
+[parameters: ('85114195',)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Error processing lot 71693915: (pyodbc.OperationalError) ('08S01', '[08S01] [Microsoft][ODBC Driver 18 for SQL Server]TCP Provider: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond.\r\n (10060) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 18 for SQL Server]Communication link failure (10060)')
+[SQL: 
+                    SELECT TOP 1 year, make, model, damage_description, odometer, title_code, repair_estimate
+                    FROM user_vehicles
+                    WHERE lot_number = ?
+                ]
+[parameters: ('71693915',)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Error processing lot 91850575: (pyodbc.OperationalError) ('08001', '[08001] [Microsoft][ODBC Driver 18 for SQL Server]SSL Provider: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond.\r\n (10060) (SQLDriverConnect); [08001] [Microsoft][ODBC Driver 18 for SQL Server]Client unable to establish connection (10060)')
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Error processing lot 91603565: (pyodbc.OperationalError) ('08001', '[08001] [Microsoft][ODBC Driver 18 for SQL Server]TCP Provider: The wait operation timed out.\r\n (258) (SQLDriverConnect); [08001] [Microsoft][ODBC Driver 18 for SQL Server]Login timeout expired (0); [08001] [Microsoft][ODBC Driver 18 for SQL Server]A network-related or instance-specific error has occurred while establishing a connection to carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com,1433. Server is not found or not accessible. Check if instance name is correct and if SQL Server is configured to allow remote connections. For more information see SQL Server Books Online. (258)')
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Error processing lot 78067093: (pyodbc.OperationalError) ('08001', '[08001] [Microsoft][ODBC Driver 18 for SQL Server]TCP Provider: Timeout error [258].  (258) (SQLDriverConnect); [08001] [Microsoft][ODBC Driver 18 for SQL Server]Login timeout expired (0); [08001] [Microsoft][ODBC Driver 18 for SQL Server]Unable to complete login process due to delay in prelogin response (258)')
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+
+Summary: 4 done | 6 failed | Elapsed 4.5 min.
+Completed AI analysis for user 3 (manual lots mode).

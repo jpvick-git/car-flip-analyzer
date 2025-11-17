@@ -1,0 +1,56 @@
+Script print reached
+Using OpenAI key prefix: sk-proj-bG...
+Project ID: proj_yG0FqcGEaLjCW7kutLC5nG4S
+Downloading images for lot 89857445
+Extracted images for lot 89857445 to C:\car-flip-analyzer\backend\downloads\89857445
+First image detected: https://raw.githubusercontent.com/jpvick-git/car-flip-analyzer/main/backend/downloads/89857445/89857445_Image_1.jpg
+Error for lot 89857445: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>
+ Attaching up to 0 images for lot 89857445...
+Downloading images for lot 89817755
+Extracted images for lot 89817755 to C:\car-flip-analyzer\backend\downloads\89817755
+First image detected: https://raw.githubusercontent.com/jpvick-git/car-flip-analyzer/main/backend/downloads/89817755/89817755_Image_1.jpg
+Error for lot 89817755: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>
+ Attaching up to 0 images for lot 89817755...
+Downloading images for lot 87382285
+Extracted images for lot 87382285 to C:\car-flip-analyzer\backend\downloads\87382285
+First image detected: https://raw.githubusercontent.com/jpvick-git/car-flip-analyzer/main/backend/downloads/87382285/87382285_Image_1.jpg
+Error for lot 87382285: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>
+ Attaching up to 0 images for lot 87382285...
+Downloading images for lot 87108015
+Extracted images for lot 87108015 to C:\car-flip-analyzer\backend\downloads\87108015
+First image detected: https://raw.githubusercontent.com/jpvick-git/car-flip-analyzer/main/backend/downloads/87108015/87108015_Image_1.jpg
+Error for lot 87108015: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>
+ Attaching up to 0 images for lot 87108015...
+Downloading images for lot 85114195
+Extracted images for lot 85114195 to C:\car-flip-analyzer\backend\downloads\85114195
+First image detected: https://raw.githubusercontent.com/jpvick-git/car-flip-analyzer/main/backend/downloads/85114195/85114195_Image_1.jpg
+Error for lot 85114195: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>
+ Attaching up to 0 images for lot 85114195...
+Downloading images for lot 71693915
+Extracted images for lot 71693915 to C:\car-flip-analyzer\backend\downloads\71693915
+First image detected: https://raw.githubusercontent.com/jpvick-git/car-flip-analyzer/main/backend/downloads/71693915/71693915_Image_1.jpg
+Error for lot 71693915: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>
+ Attaching up to 0 images for lot 71693915...
+Downloading images for lot 91850805
+Extracted images for lot 91850805 to C:\car-flip-analyzer\backend\downloads\91850805
+First image detected: https://raw.githubusercontent.com/jpvick-git/car-flip-analyzer/main/backend/downloads/91850805/91850805_Image_1.jpg
+Error for lot 91850805: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>
+ Attaching up to 0 images for lot 91850805...
+Downloading images for lot 91850575
+Extracted images for lot 91850575 to C:\car-flip-analyzer\backend\downloads\91850575
+First image detected: https://raw.githubusercontent.com/jpvick-git/car-flip-analyzer/main/backend/downloads/91850575/91850575_Image_1.jpg
+Error for lot 91850575: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>
+ Attaching up to 0 images for lot 91850575...
+Downloading images for lot 91603565
+Extracted images for lot 91603565 to C:\car-flip-analyzer\backend\downloads\91603565
+First image detected: https://raw.githubusercontent.com/jpvick-git/car-flip-analyzer/main/backend/downloads/91603565/91603565_Image_1.jpg
+Error for lot 91603565: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>
+ Attaching up to 0 images for lot 91603565...
+AI estimation error for lot 91603565: Request timed out.
+Fatal error: (pyodbc.OperationalError) ('08S01', '[08S01] [Microsoft][ODBC Driver 18 for SQL Server]TCP Provider: An existing connection was forcibly closed by the remote host.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 18 for SQL Server]Communication link failure (10054)')
+[SQL: 
+                        SELECT TOP 1 * FROM user_vehicles
+                        WHERE lot_number = ? AND user_id = ?
+                    ]
+[parameters: ('78067093', '3')]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)

@@ -1,36 +1,87 @@
+# (The rest of the imports and setup are unchanged)
 import os
+import re
+import sys
+import time
+import zipfile
+import json
 import shutil
-import datetime
-import requests
 import pandas as pd
-from fastapi import APIRouter, UploadFile, Depends, Request, HTTPException
-from fastapi.responses import JSONResponse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import create_engine, text
-from .auth import get_current_user
+from openai import OpenAI
+import argparse
+from playwright.sync_api import sync_playwright
 
-# --------------------------------------------------
+import sys
+with open("copart_debug_log.txt", "a") as f:
+    f.write("Script started\n")
+    f.flush()
+
+print("Script print reached", flush=True)
+
 # CONFIGURATION
-# --------------------------------------------------
-UPLOAD_DIR = "/root/car-flip-analyzer/user_uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DOWNLOAD_DIR = (
+    os.path.join(BASE_DIR, "downloads")
+    if "backend" in BASE_DIR.lower()
+    else os.path.join(BASE_DIR, "backend", "downloads")
+)
+UPLOADS_DIR = (
+    os.path.join(os.path.dirname(BASE_DIR), "user_uploads")
+    if "backend" in BASE_DIR.lower()
+    else os.path.join(BASE_DIR, "user_uploads")
+)
 
-LOCAL_TRIGGER_URL = "https://quinquevalent-hayley-unhackneyed.ngrok-free.dev/trigger"
-ALLOWED_IPS = {"68.186.200.184"}
+MAX_WORKERS = 3
+SLEEP_BETWEEN_LOTS = 2.0
+MAX_IMAGES = 8
 
-# AWS RDS SQL Server connection
+# RDS connection
 RDS_CONN = (
     "mssql+pyodbc://jpvick-git:Nk^+Cq4MfUNt%8q@carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com,1433/cars"
     "?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
 )
 rds_engine = create_engine(RDS_CONN, pool_pre_ping=True)
 
-router = APIRouter()
+user_id = None
 
-# --------------------------------------------------
-# HELPERS
-# --------------------------------------------------
+def parse_args():
+    parser = argparse.ArgumentParser(description="Copart Downloader & AI Estimator")
+    parser.add_argument("user_id", help="User ID running the download")
+    parser.add_argument("--lots", help="Comma-separated list of lot numbers", default=None)
+    parser.add_argument("--download", action="store_true", help="Run image download directly")
+    return parser.parse_args()
+
+COPART_SELECTORS = {
+    "next_image_buttons": [
+        "button[aria-label='Next']",
+        "button[aria-label='Next Image']",
+        "button[aria-label='Next Photo']",
+        "span.p-galleria-item-next-icon.pi.pi-chevron-right",
+        "div.p-galleria-item-next",
+    ],
+    "download_arrows": [
+        "span.lot-details-header-sprite.download-image-sprite-icon",
+        "span.download-image-sprite-icon",
+        "span[class*='download-image']",
+        "span[class*='download']",
+        "button[aria-label*='Download']",
+    ],
+    "download_all_elements": [
+        "a.p-pb-5.text-dark-gray-3.p-decor-none",
+        "a:has-text('Download all')",
+        "button.btn-reset.p-pb-5.text-dark-gray-3.p-decor-none",
+        "button:has-text('Download all')",
+        "a:text('Download all')",
+        "a:text('DOWNLOAD ALL')",
+        "button:text('Download all')",
+        "button:text('DOWNLOAD ALL')",
+    ],
+    "viewer_360": ["canvas", "iframe[src*='360']", "span:has-text('360')", "div[class*='360']"],
+}
+
 def normalize_lot(val):
-    """Normalize lot_number to clean string digits (no .0, commas, spaces)."""
     if pd.isna(val):
         return ""
     val = str(val).strip()
@@ -38,280 +89,216 @@ def normalize_lot(val):
         val = val[:-2]
     return val.replace(",", "").strip()
 
-# --------------------------------------------------
-# ROUTE: Upload and process CSV
-# --------------------------------------------------
-@router.post("/upload_file")
-async def upload_and_process_file(request: Request, file: UploadFile, user=Depends(get_current_user)):
-    """
-    Uploads a CSV, updates or inserts user_vehicles records,
-    triggers Copart for new lots, and triggers AI for any missing repair_estimates.
-    """
+def extract_zip(download_path, lot_number, lot_url):
+    target_dir = os.path.join(DOWNLOAD_DIR, str(lot_number))
+    os.makedirs(target_dir, exist_ok=True)
+
+    with zipfile.ZipFile(download_path, "r") as zip_ref:
+        zip_ref.extractall(target_dir)
+    print(f"Extracted images for lot {lot_number} to {target_dir}")
+
     try:
-        client_ip = request.client.host
-        print(f"🌐 Upload attempt from IP: {client_ip} by user {user['email']}")
+        files = sorted([
+            f for f in os.listdir(target_dir)
+            if f.lower().endswith((".jpg", ".jpeg", ".png"))
+        ])
 
-        # Restrict demo uploads from outside approved IP
-        if user["email"].lower() == "demo@123.com" and client_ip not in ALLOWED_IPS:
-            raise HTTPException(status_code=403, detail="Uploads restricted for demo users from this IP.")
+        if not files:
+            print(f"No images found for lot {lot_number}")
+            return
 
-        # --- Step 1: Save uploaded file ---
-        ext = os.path.splitext(file.filename)[1]
-        date_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_email = user["email"].replace("@", "_").replace(".", "_")
-        new_filename = f"{date_str}_{safe_email}{ext}"
-        file_path = os.path.join(UPLOAD_DIR, new_filename)
-
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        print(f"📄 Saved upload to {file_path}")
-
-    except Exception as e:
-        print(f"❌ Error saving file: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-    # --------------------------------------------------
-    # Step 2: Insert or Update Lots
-    # --------------------------------------------------
-    try:
-        df = pd.read_csv(file_path)
-        new_lots, updated_lots, cloned_lots = [], [], []
+        first_img = files[0]
+        image_url = (
+            f"https://raw.githubusercontent.com/jpvick-git/car-flip-analyzer/"
+            f"main/backend/downloads/{lot_number}/{first_img}"
+        )
+        print(f"First image detected: {image_url}")
 
         with rds_engine.begin() as conn:
-            print(f"🧾 CSV Columns Detected: {list(df.columns)}")
+            result = conn.execute(
+                text("""
+                    UPDATE user_vehicles
+                    SET image_url = :url,
+                        lot_url = :lot_url
+                    WHERE lot_number = :lot AND user_id = :uid
+                """),
+                {
+                    "url": image_url,
+                    "lot_url": lot_url,
+                    "lot": str(lot_number),
+                    "uid": int(user_id)
+                }
+            )
 
-            for _, row in df.iterrows():
-                lot_num = None
-                for col in ["lot_number", "lot_inv_num", "Lot", "Lot #", "Lot/Inv #"]:
-                    if col in df.columns:
-                        lot_num = normalize_lot(row[col])
-                        break
+        if result.rowcount == 0:
+            print(f"No DB rows updated for LOT={lot_number} USER_ID={user_id}")
+        else:
+            print(f"Saved image and lot URL to DB for lot {lot_number}")
 
-                if not lot_num:
-                    print(f"⚠️ Skipping row (no valid lot number): {row.to_dict()}")
-                    continue
+    except Exception as e:
+        print(f"Error saving image URL for lot {lot_number}: {e}")
 
-                # Already exists for current user?
-                exists_user = conn.execute(
+def click_next_image(page):
+    for sel in COPART_SELECTORS["next_image_buttons"]:
+        loc = page.locator(sel)
+        if loc.count() and loc.first.is_visible():
+            loc.first.click()
+            page.wait_for_timeout(1500)
+            return True
+    return False
+
+def is_360_image(page):
+    return any(page.locator(sel).count() > 0 for sel in COPART_SELECTORS["viewer_360"])
+
+def find_download_arrow(page):
+    for sel in COPART_SELECTORS["download_arrows"]:
+        loc = page.locator(sel)
+        if loc.count() and loc.first.is_visible():
+            return loc.first
+    return None
+
+def find_download_all_element(page):
+    for sel in COPART_SELECTORS["download_all_elements"]:
+        loc = page.locator(sel)
+        if loc.count() and loc.first.is_visible():
+            return loc.first
+
+    all_elems = page.locator("a, button")
+    count = all_elems.count()
+    for i in range(count):
+        try:
+            txt = (all_elems.nth(i).inner_text() or "").lower()
+            if "download all" in txt:
+                return all_elems.nth(i)
+        except:
+            continue
+    return None
+
+def download_copart_images(lot_number, lot_url):
+    print(f"Downloading images for lot {lot_number} from {lot_url}")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)
+        context = browser.new_context(accept_downloads=True)
+        page = context.new_page()
+
+        try:
+            page.goto(lot_url, timeout=90000)
+            page.wait_for_timeout(4000)
+
+            if is_360_image(page):
+                click_next_image(page)
+
+            arrow = None
+            for _ in range(12):
+                arrow = find_download_arrow(page)
+                if arrow:
+                    break
+                click_next_image(page)
+
+            if not arrow:
+                raise Exception("Download arrow not found")
+
+            arrow.click()
+            page.wait_for_timeout(1500)
+
+            target = None
+            for _ in range(90):
+                target = find_download_all_element(page)
+                if target:
+                    break
+                page.wait_for_timeout(500)
+
+            if not target:
+                raise Exception("'Download all' not found")
+
+            with page.expect_download(timeout=180000) as download_info:
+                target.click()
+
+            download = download_info.value
+            zip_path = os.path.join(DOWNLOAD_DIR, f"{lot_number}.zip")
+            download.save_as(zip_path)
+
+            extract_zip(zip_path, lot_number, lot_url)
+            os.remove(zip_path)
+
+            print(f"Images downloaded for lot {lot_number}")
+
+        except Exception as e:
+            print(f"Error for lot {lot_number}: {e}")
+
+        finally:
+            page.wait_for_timeout(5000)
+            context.close()
+            browser.close()
+
+def process_lots_directly(lots, uid):
+    from ai_repair_estimator import analyze_vehicle
+
+    global user_id
+    user_id = uid
+
+    try:
+        with rds_engine.begin() as conn:
+            for lot in lots:
+                row = conn.execute(
                     text("""
-                        SELECT 1 FROM user_vehicles
-                        WHERE LTRIM(RTRIM(lot_number)) = :lot
-                          AND user_id = :uid
+                        SELECT TOP 1 * FROM user_vehicles
+                        WHERE lot_number = :lot AND user_id = :uid
                     """),
-                    {"lot": lot_num, "uid": user["id"]},
+                    {"lot": lot, "uid": user_id}
                 ).fetchone()
 
-                if exists_user:
-                    # Update existing record (partial update)
+                if not row:
+                    print(f"Lot {lot} not found; skipping.")
+                    continue
+
+                v = dict(row._mapping)
+                lot_url = v.get("lot_url") or f"https://www.copart.com/lot/{lot}"
+                download_copart_images(lot, lot_url)
+
+                try:
+                    v["odometer_display"] = v.get("odometer", "Unknown")
+                    result = analyze_vehicle(v)
+
                     conn.execute(
                         text("""
                             UPDATE user_vehicles
-                            SET
-                                lot_url = COALESCE(NULLIF(:lot_url, ''), lot_url),
-                                est_retail_value = COALESCE(NULLIF(:retail, ''), est_retail_value),
-                                sale_date = COALESCE(NULLIF(:sale_date, ''), sale_date),
-                                year = COALESCE(NULLIF(:year, ''), year),
-                                make = COALESCE(NULLIF(:make, ''), make),
-                                model = COALESCE(NULLIF(:model, ''), model),
-                                engine_type = COALESCE(NULLIF(:engine_type, ''), engine_type),
-                                cylinders = COALESCE(NULLIF(:cylinders, ''), cylinders),
-                                vin = COALESCE(NULLIF(:vin, ''), vin),
-                                title_code = COALESCE(NULLIF(:title_code, ''), title_code),
-                                odometer = COALESCE(NULLIF(:odometer, ''), odometer),
-                                odometer_description = COALESCE(NULLIF(:odo_desc, ''), odometer_description),
-                                damage_description = COALESCE(NULLIF(:damage_description, ''), damage_description),
-                                current_bid = COALESCE(NULLIF(:current_bid, ''), current_bid),
-                                my_bid = COALESCE(NULLIF(:my_bid, ''), my_bid),
-                                item_number = COALESCE(NULLIF(:item_number, ''), item_number),
-                                sale_name = COALESCE(NULLIF(:sale_name, ''), sale_name),
-                                auto_grade = COALESCE(NULLIF(:auto_grade, ''), auto_grade),
-                                sale_light = COALESCE(NULLIF(:sale_light, ''), sale_light),
-                                announcements = COALESCE(NULLIF(:announcements, ''), announcements),
-                                updated_at = GETDATE()
-                            WHERE user_id = :uid AND LTRIM(RTRIM(lot_number)) = :lot
+                            SET repair_estimate = :rep_est,
+                                resale_estimate = :res_est,
+                                repair_details = :rep_det,
+                                resale_details = :res_det
+                            WHERE lot_number = :lot AND user_id = :uid
                         """),
                         {
-                            "uid": user["id"],
-                            "lot": lot_num,
-                            "lot_url": str(row.get("Lot URL", "")),
-                            "retail": str(row.get("Est. Retail value", "")),
-                            "sale_date": str(row.get("Sale date", "")),
-                            "year": str(row.get("Year", "")),
-                            "make": str(row.get("Make", "")),
-                            "model": str(row.get("Model", "")),
-                            "engine_type": str(row.get("Engine type", "")),
-                            "cylinders": str(row.get("Cylinders", "")),
-                            "vin": str(row.get("VIN", "")),
-                            "title_code": str(row.get("Title code", "")),
-                            "odometer": str(row.get("Odometer", "")),
-                            "odo_desc": str(row.get("Odometer description", "")),
-                            "damage_description": str(row.get("Damage description", "")),
-                            "current_bid": str(row.get("Current bid", "")),
-                            "my_bid": str(row.get("My bid", "")),
-                            "item_number": str(row.get("Item number", "")),
-                            "sale_name": str(row.get("Sale name", "")),
-                            "auto_grade": str(row.get("Auto grade", "")),
-                            "sale_light": str(row.get("Sale light", "")),
-                            "announcements": str(row.get("Announcements", "")),
+                            "rep_est": result.get("repair_estimate"),
+                            "res_est": result.get("resale_estimate"),
+                            "rep_det": result.get("repair_details"),
+                            "res_det": result.get("resale_details"),
+                            "lot": lot,
+                            "uid": user_id,
                         },
                     )
-                    updated_lots.append(lot_num)
-                    continue
 
-                # --- Clone if same lot exists for another user ---
-                existing = conn.execute(
-                    text("""
-                        SELECT TOP 1 * FROM user_vehicles
-                        WHERE REPLACE(LTRIM(RTRIM(lot_number)), ',', '') = :lot
-                        ORDER BY updated_at DESC
-                    """),
-                    {"lot": lot_num},
-                ).fetchone()
+                except Exception as e:
+                    print(f"AI estimation error for lot {lot}: {e}")
 
-                if existing:
-                    v = dict(existing._mapping)
-                    conn.execute(
-                        text("""
-                            INSERT INTO user_vehicles (
-                                user_id, lot_url, lot_number, est_retail_value, sale_date,
-                                year, make, model, engine_type, cylinders, vin, title_code,
-                                odometer, odometer_description, damage_description,
-                                current_bid, my_bid, item_number, sale_name,
-                                auto_grade, sale_light, announcements,
-                                repair_estimate, repair_details, resale_details, resale_estimate,
-                                created_at, updated_at, image_url
-                            )
-                            VALUES (
-                                :uid, :url, :lot, :retail, :sale_date,
-                                :year, :make, :model, :engine, :cyl, :vin, :title,
-                                :odo, :odo_desc, :damage,
-                                :curr_bid, :my_bid, :item_num, :sale_name,
-                                :auto_grade, :sale_light, :announcements,
-                                :rep_est, :rep_det, :res_det, :res_est,
-                                GETDATE(), NULL, :img
-                            )
-                        """),
-                        {
-                            "uid": user["id"],
-                            "url": v.get("lot_url"),
-                            "lot": v.get("lot_number"),
-                            "retail": v.get("est_retail_value"),
-                            "sale_date": v.get("sale_date"),
-                            "year": v.get("year"),
-                            "make": v.get("make"),
-                            "model": v.get("model"),
-                            "engine": v.get("engine_type"),
-                            "cyl": v.get("cylinders"),
-                            "vin": v.get("vin"),
-                            "title": v.get("title_code"),
-                            "odo": v.get("odometer"),
-                            "odo_desc": v.get("odometer_description"),
-                            "damage": v.get("damage_description"),
-                            "curr_bid": v.get("current_bid"),
-                            "my_bid": v.get("my_bid"),
-                            "item_num": v.get("item_number"),
-                            "sale_name": v.get("sale_name"),
-                            "auto_grade": v.get("auto_grade"),
-                            "sale_light": v.get("sale_light"),
-                            "announcements": v.get("announcements"),
-                            "rep_est": v.get("repair_estimate"),
-                            "rep_det": v.get("repair_details"),
-                            "res_det": v.get("resale_details"),
-                            "res_est": v.get("resale_estimate"),
-                            "img": v.get("image_url"),
-                        },
-                    )
-                    cloned_lots.append(lot_num)
-                    print(f"✅ Cloned lot {lot_num} → user {user['id']}")
-                else:
-                    # --- Insert new placeholder ---
-                    conn.execute(
-                        text("""
-                            INSERT INTO user_vehicles (
-                                user_id, lot_number, sale_date, year, make, model,
-                                damage_description, sale_name, created_at
-                            )
-                            VALUES (
-                                :uid, :lot, :sale_date, :year, :make, :model,
-                                :damage, :sale_name, GETDATE()
-                            )
-                        """),
-                        {
-                            "uid": user["id"],
-                            "lot": lot_num,
-                            "sale_date": str(row.get("Sale date", "")),
-                            "year": str(row.get("Year", "")),
-                            "make": str(row.get("Make", "")),
-                            "model": str(row.get("Model", "")),
-                            "damage": str(row.get("Damage description", "")),
-                            "sale_name": str(row.get("Sale name", "")),
-                        },
-                    )
-                    new_lots.append(lot_num)
-                    print(f"🆕 Inserted new lot {lot_num} for user {user['id']}")
-
-        print(f"✅ {len(cloned_lots)} cloned, {len(new_lots)} new, {len(updated_lots)} updated for user {user['id']}")
+                time.sleep(SLEEP_BETWEEN_LOTS)
 
     except Exception as e:
-        print(f"❌ Error processing file: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        print(f"Fatal error: {e}")
 
-    # --------------------------------------------------
-    # Step 3: Trigger Copart + AI
-    # --------------------------------------------------
-    try:
-        # --- Identify which lots need Copart or AI ---
-        copart_lots = new_lots  # Copart only runs for brand new records
-        ai_lots = []
+if __name__ == "__main__":
+    args = parse_args()
+    user_id = args.user_id
+    lots_arg = args.lots
 
-        with rds_engine.connect() as conn:
-            rows = conn.execute(
-                text("""
-                    SELECT lot_number
-                    FROM user_vehicles
-                    WHERE user_id = :uid
-                      AND (repair_estimate IS NULL OR repair_estimate = '')
-                """),
-                {"uid": user["id"]},
-            ).fetchall()
-            ai_lots = [str(r[0]) for r in rows]
+    if args.download and not lots_arg:
+        print("Must specify --lots with --download")
+        sys.exit(1)
 
-        print(f"🧠 {len(ai_lots)} lots need AI | 🚗 {len(copart_lots)} lots need Copart")
-
-        # --- Copart trigger (new only) ---
-        if copart_lots:
-            payload = {
-                "user_id": int(user["id"]),
-                "copart_lots": [str(x) for x in copart_lots],
-                "ai_lots": [],
-            }
-            print(f"🔗 Triggering Copart download: {payload}")
-            response = requests.post(LOCAL_TRIGGER_URL, json=payload, timeout=25)
-            if response.ok:
-                print("✅ Copart downloader triggered successfully.")
-            else:
-                print(f"⚠️ Copart trigger returned {response.status_code}: {response.text}")
-
-        # --- AI trigger (missing repair_estimate) ---
-        if ai_lots:
-            payload = {
-                "user_id": int(user["id"]),
-                "ai_lots": [str(x) for x in ai_lots],
-                "copart_lots": [],
-            }
-            print(f"🤖 Triggering AI estimator: {payload}")
-            response = requests.post(LOCAL_TRIGGER_URL, json=payload, timeout=25)
-            if response.ok:
-                print("✅ AI estimator triggered successfully.")
-            else:
-                print(f"⚠️ AI trigger returned {response.status_code}: {response.text}")
-
-        if not copart_lots and not ai_lots:
-            print("🚫 No lots require Copart or AI processing.")
-
-    except Exception as e:
-        print(f"⚠️ Error during automation trigger step: {e}")
-
-    return {"status": "success", "uploaded": file.filename}
-
+    if lots_arg:
+        lots = [l.strip() for l in lots_arg.split(",") if l.strip()]
+        process_lots_directly(lots, user_id)
+    else:
+        print("Usage: python copart_download_parallel.py <user_id> --lots 12345 --download")

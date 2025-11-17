@@ -118,9 +118,8 @@ def extract_zip(download_path, lot_number):
     # SAVE FIRST IMAGE TO DB
     # --------------------------------------------------
     try:
-        lot_folder = target_dir
         files = sorted([
-            f for f in os.listdir(lot_folder)
+            f for f in os.listdir(target_dir)
             if f.lower().endswith((".jpg", ".jpeg", ".png"))
         ])
 
@@ -129,11 +128,18 @@ def extract_zip(download_path, lot_number):
             return
 
         first_img = files[0]
-        image_url = f"https://api.carflipanalyzer.com/backend/downloads/{lot_number}/{first_img}"
+
+        # CORRECTED: use lot_number (not "lot")
+        image_url = (
+            f"https://raw.githubusercontent.com/jpvick-git/car-flip-analyzer/"
+            f"main/backend/downloads/{lot_number}/{first_img}"
+        )
+
         print(f"First image detected: {image_url}")
 
+        # Save to DB with debug logging
         with rds_engine.begin() as conn:
-            conn.execute(
+            result = conn.execute(
                 text("""
                     UPDATE user_vehicles
                     SET image_url = :url
@@ -142,10 +148,15 @@ def extract_zip(download_path, lot_number):
                 {"url": image_url, "lot": str(lot_number), "uid": int(user_id)}
             )
 
-        print(f"Saved image URL to DB for lot {lot_number}")
+        if result.rowcount == 0:
+            print(f"⚠️ No DB rows updated for LOT={lot_number} USER_ID={user_id}")
+        else:
+            print(f"✅ Saved image URL to DB for lot {lot_number}")
 
     except Exception as e:
-        print(f"Error saving image URL: {e}")
+        print(f"❌ Error saving image URL for lot {lot_number}: {e}")
+
+
 
 
 def click_next_image(page):

@@ -7,6 +7,7 @@ import zipfile
 import json
 import shutil
 import pandas as pd
+from fastapi import APIRouter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import create_engine, text
 from openai import OpenAI
@@ -302,3 +303,6 @@ if __name__ == "__main__":
         process_lots_directly(lots, user_id)
     else:
         print("Usage: python copart_download_parallel.py <user_id> --lots 12345 --download")
+        
+    # Define router at bottom of file
+    router = APIRouter()

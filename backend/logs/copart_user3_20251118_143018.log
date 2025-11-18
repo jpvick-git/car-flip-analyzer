@@ -1,0 +1,15 @@
+Script print reached
+Using OpenAI key prefix: sk-proj-bG...
+Project ID: proj_yG0FqcGEaLjCW7kutLC5nG4S
+Downloading images for lot 89857445
+Extracted images for lot 89857445 to C:\car-flip-analyzer\backend\downloads\89857445
+First image detected: https://api.carflipanalyzer.com/backend/downloads/89857445/89857445_Image_1.jpg
+Saved image URL to DB for lot 89857445
+Images downloaded for lot 89857445
+ Attaching up to 0 images for lot 89857445...
+Downloading images for lot 89817755
+Extracted images for lot 89817755 to C:\car-flip-analyzer\backend\downloads\89817755
+First image detected: https://api.carflipanalyzer.com/backend/downloads/89817755/89817755_Image_1.jpg
+Saved image URL to DB for lot 89817755
+Images downloaded for lot 89817755
+ Attaching up to 0 images for lot 89817755...

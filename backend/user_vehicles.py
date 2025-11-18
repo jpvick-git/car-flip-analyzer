@@ -5,7 +5,7 @@ import pandas as pd
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlalchemy import text
 
-# ✅ Correct import for package mode
+# Correct import for package mode
 from .db import get_engine
 
 # Your existing auth import:
@@ -95,6 +95,8 @@ def get_vehicles(db=Depends(get_db), current_user: dict = Depends(get_current_us
                 "resale_estimate": row.resale_estimate,
                 "repair_details": row.repair_details,
                 "resale_details": row.resale_details,
+                
+                "image_url": row.image_url,
 
                 # Convert single URL into list to match frontend
                 "images": [row.image_url] if row.image_url else []
@@ -216,11 +218,11 @@ def add_vehicle(payload: dict, db=Depends(get_db), current_user: dict = Depends(
             INSERT INTO user_vehicles
             (user_id, lot_number, lot_url, year, make, model, damage_description, odometer,
              title_code, repair_estimate, resale_estimate, repair_details, resale_details,
-             tax_amount, fees_amount, image_paths)
+             tax_amount, fees_amount, image_url)
             VALUES
             (:user_id, :lot_number, :lot_url, :year, :make, :model, :damage_description,
              :odometer, :title_code, :repair_estimate, :resale_estimate, :repair_details,
-             :resale_details, :tax_amount, :fees_amount, :image_paths);
+             :resale_details, :tax_amount, :fees_amount, :image_url);
         """)
 
         db.execute(query, {
@@ -239,7 +241,7 @@ def add_vehicle(payload: dict, db=Depends(get_db), current_user: dict = Depends(
             "resale_details": payload.get("resale_details", ""),
             "tax_amount": payload.get("tax_amount", ""),
             "fees_amount": payload.get("fees_amount", ""),
-            "image_paths": json.dumps(images),
+            "image_url": json.dumps(images),
         })
 
         db.commit()

@@ -289,6 +289,9 @@ def process_lots_directly(lots, uid):
     except Exception as e:
         print(f"Fatal error: {e}")
 
+# Define router at bottom of file
+router = APIRouter()
+    
 if __name__ == "__main__":
     args = parse_args()
     user_id = args.user_id

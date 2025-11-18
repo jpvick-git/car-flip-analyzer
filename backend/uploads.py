@@ -14,7 +14,7 @@ router = APIRouter()
 UPLOAD_DIR = "/root/car-flip-analyzer/user_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-LOCAL_TRIGGER_URL = "https://YOUR-NGROK-URL.ngrok-free.dev/trigger"
+LOCAL_TRIGGER_URL = "https://quinquevalent-hayley-unhackneyed.ngrok-free.dev/trigger"
 
 RDS_CONN = (
     "mssql+pyodbc://jpvick-git:Nk^+Cq4MfUNt%8q@carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com,1433/cars"

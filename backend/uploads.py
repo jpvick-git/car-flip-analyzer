@@ -113,7 +113,10 @@ async def upload_and_process_file(
                 ).fetchone()
 
                 if exists_user:
-                    # update existing record
+                    # Normalize lot_url safely to avoid 'nan' or whitespace issues
+                    raw_lot_url = row.get("Lot URL", "")
+                    lot_url = str(raw_lot_url).strip() if pd.notna(raw_lot_url) else ""
+
                     conn.execute(
                         text("""
                             UPDATE user_vehicles
@@ -144,7 +147,7 @@ async def upload_and_process_file(
                         {
                             "uid": user["id"],
                             "lot": lot_num,
-                            "lot_url": str(row.get("Lot URL", "")),
+                            "lot_url": lot_url,
                             "retail": str(row.get("Est. Retail value", "")),
                             "sale_date": str(row.get("Sale date", "")),
                             "year": str(row.get("Year", "")),
@@ -168,6 +171,7 @@ async def upload_and_process_file(
                     )
                     updated_lots.append(lot_num)
                     continue
+
 
                 # clone if another user has the lot
                 existing = conn.execute(

@@ -115,7 +115,7 @@ def extract_zip(download_path, lot_number):
     print(f"Extracted images for lot {lot_number} to {target_dir}")
 
     # --------------------------------------------------
-    # SAVE FIRST IMAGE TO DB
+    # SAVE FIRST IMAGE TO DB (CORRECTED FOR UBUNTU)
     # --------------------------------------------------
     try:
         files = sorted([
@@ -129,34 +129,38 @@ def extract_zip(download_path, lot_number):
 
         first_img = files[0]
 
-        # CORRECTED: use lot_number (not "lot")
+        # ⬇⬇⬇ FIXED — use your Ubuntu FastAPI static mount ⬇⬇⬇
         image_url = (
-            f"https://raw.githubusercontent.com/jpvick-git/car-flip-analyzer/"
-            f"main/backend/downloads/{lot_number}/{first_img}"
+            f"https://api.carflipanalyzer.com/backend/downloads/{lot_number}/{first_img}"
         )
+        # ⬆⬆⬆ THIS IS THE CORRECT URL ⬆⬆⬆
 
         print(f"First image detected: {image_url}")
+        lot_url = f"https://www.copart.com/lot/{lot_number}"
 
-        # Save to DB with debug logging
         with rds_engine.begin() as conn:
             result = conn.execute(
                 text("""
                     UPDATE user_vehicles
-                    SET image_url = :url
+                    SET image_url = :url,
+                        lot_url   = :lot_url
                     WHERE lot_number = :lot AND user_id = :uid
                 """),
-                {"url": image_url, "lot": str(lot_number), "uid": int(user_id)}
+                {
+                    "url": image_url,
+                    "lot_url": lot_url,
+                    "lot": str(lot_number),
+                    "uid": int(user_id)
+                }
             )
 
         if result.rowcount == 0:
-            print(f"⚠️ No DB rows updated for LOT={lot_number} USER_ID={user_id}")
+            print(f"No DB rows updated for LOT={lot_number} USER_ID={user_id}")
         else:
-            print(f"✅ Saved image URL to DB for lot {lot_number}")
+            print(f"Saved image URL to DB for lot {lot_number}")
 
     except Exception as e:
-        print(f"❌ Error saving image URL for lot {lot_number}: {e}")
-
-
+        print(f"Error saving image URL for lot {lot_number}: {e}")
 
 
 def click_next_image(page):

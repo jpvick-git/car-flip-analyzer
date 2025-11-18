@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import requests
 from fastapi import APIRouter, UploadFile, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine, text
@@ -7,25 +8,41 @@ from .auth import get_current_user
 
 router = APIRouter()
 
-# Setup
+# -----------------------------------------------------------
+# CONFIG
+# -----------------------------------------------------------
 UPLOAD_DIR = "/root/car-flip-analyzer/user_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# RDS connection
+LOCAL_TRIGGER_URL = "https://YOUR-NGROK-URL.ngrok-free.dev/trigger"
+
 RDS_CONN = (
     "mssql+pyodbc://jpvick-git:Nk^+Cq4MfUNt%8q@carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com,1433/cars"
     "?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
 )
 rds_engine = create_engine(RDS_CONN, pool_pre_ping=True)
 
-# Utility
+
+# -----------------------------------------------------------
+# HELPERS
+# -----------------------------------------------------------
 def normalize_lot(val):
-    if pd.isna(val): return ""
+    if pd.isna(val):
+        return ""
     val = str(val).strip()
-    if val.endswith(".0"): val = val[:-2]
+    if val.endswith(".0"):
+        val = val[:-2]
     return val.replace(",", "").strip()
 
-# Upload route
+
+def getval(row, col):
+    val = row.get(col, "")
+    return str(val).strip() if pd.notna(val) else ""
+
+
+# -----------------------------------------------------------
+# ROUTE: UPLOAD CSV + INSERT/UPDATE LOTS + TRIGGER DOWNLOAD
+# -----------------------------------------------------------
 @router.post("/upload_file")
 async def upload_file(
     request: Request,
@@ -33,63 +50,68 @@ async def upload_file(
     user=Depends(get_current_user),
 ):
     try:
-        # Save uploaded file
+        # ------------------------------------------------------------------
+        # SAVE UPLOADED CSV
+        # ------------------------------------------------------------------
         file_path = os.path.join(UPLOAD_DIR, file.filename)
         with open(file_path, "wb") as f:
             f.write(await file.read())
-        print(f"Saved CSV to: {file_path}")
+
+        print(f"Saved CSV upload to: {file_path}")
 
         df = pd.read_csv(file_path)
         print("CSV Columns:", list(df.columns))
 
+        # ------------------------------------------------------------------
+        # PROCESS CSV ROWS: INSERT OR UPDATE VEHICLES
+        # ------------------------------------------------------------------
         with rds_engine.begin() as conn:
             for _, row in df.iterrows():
+
                 lot_number = normalize_lot(row.get("Lot/Inv #", ""))
                 if not lot_number:
-                    print("Skipping row without Lot Number")
+                    print("Skipping row with missing lot number:", row)
                     continue
 
-                # Check if user already has this lot
+                # Check if record already exists for user
                 exists = conn.execute(
                     text("""
                         SELECT 1 FROM user_vehicles
-                        WHERE user_id = :uid AND LTRIM(RTRIM(lot_number)) = :lot
+                        WHERE user_id = :uid
+                          AND LTRIM(RTRIM(lot_number)) = :lot
                     """),
                     {"uid": user["id"], "lot": lot_number},
                 ).fetchone()
 
-                # Normalize fields
-                def getval(col): 
-                    val = row.get(col, "")
-                    return str(val).strip() if pd.notna(val) else ""
-
                 values = {
                     "user_id": user["id"],
-                    "lot_url": getval("Lot URL"),
                     "lot_number": lot_number,
-                    "est_retail_value": getval("Est. Retail value"),
-                    "sale_date": getval("Sale date"),
-                    "year": getval("Year"),
-                    "make": getval("Make"),
-                    "model": getval("Model"),
-                    "engine_type": getval("Engine type"),
-                    "cylinders": getval("Cylinders"),
-                    "vin": getval("VIN"),
-                    "title_code": getval("Title code"),
-                    "odometer": getval("Odometer"),
-                    "odometer_description": getval("Odometer description"),
-                    "damage_description": getval("Damage description"),
-                    "current_bid": getval("Current bid"),
-                    "my_bid": getval("My bid"),
-                    "item_number": getval("Item number"),
-                    "sale_name": getval("Sale name"),
-                    "auto_grade": getval("Auto grade"),
-                    "sale_light": getval("Sale light"),
-                    "announcements": getval("Announcements"),
+                    "lot_url": getval(row, "Lot URL"),
+                    "est_retail_value": getval(row, "Est. Retail value"),
+                    "sale_date": getval(row, "Sale date"),
+                    "year": getval(row, "Year"),
+                    "make": getval(row, "Make"),
+                    "model": getval(row, "Model"),
+                    "engine_type": getval(row, "Engine type"),
+                    "cylinders": getval(row, "Cylinders"),
+                    "vin": getval(row, "VIN"),
+                    "title_code": getval(row, "Title code"),
+                    "odometer": getval(row, "Odometer"),
+                    "odometer_description": getval(row, "Odometer description"),
+                    "damage_description": getval(row, "Damage description"),
+                    "current_bid": getval(row, "Current bid"),
+                    "my_bid": getval(row, "My bid"),
+                    "item_number": getval(row, "Item number"),
+                    "sale_name": getval(row, "Sale name"),
+                    "auto_grade": getval(row, "Auto grade"),
+                    "sale_light": getval(row, "Sale light"),
+                    "announcements": getval(row, "Announcements"),
                 }
 
+                # ----------------------------------------------------------
+                # UPDATE EXISTING
+                # ----------------------------------------------------------
                 if exists:
-                    # Update existing row
                     conn.execute(
                         text("""
                             UPDATE user_vehicles
@@ -115,13 +137,17 @@ async def upload_file(
                                 sale_light = :sale_light,
                                 announcements = :announcements,
                                 updated_at = GETDATE()
-                            WHERE user_id = :user_id AND LTRIM(RTRIM(lot_number)) = :lot_number
+                            WHERE user_id = :user_id
+                              AND LTRIM(RTRIM(lot_number)) = :lot_number
                         """),
                         values
                     )
                     print(f"Updated lot {lot_number} for user {user['id']}")
+
+                # ----------------------------------------------------------
+                # INSERT NEW RECORD
+                # ----------------------------------------------------------
                 else:
-                    # Insert new row
                     conn.execute(
                         text("""
                             INSERT INTO user_vehicles (
@@ -145,6 +171,40 @@ async def upload_file(
                     )
                     print(f"Inserted lot {lot_number} for user {user['id']}")
 
+        # ------------------------------------------------------------------
+        # AFTER PROCESSING ALL LOTS → TRIGGER COPART IMAGE DOWNLOAD
+        # ------------------------------------------------------------------
+        try:
+            with rds_engine.connect() as conn:
+                result = conn.execute(
+                    text("""
+                        SELECT lot_number
+                        FROM user_vehicles
+                        WHERE user_id = :uid
+                          AND image_url IS NULL
+                    """),
+                    {"uid": user["id"]}
+                )
+                lots_to_download = [str(row[0]) for row in result]
+
+            print("Lots needing images:", lots_to_download)
+
+            if lots_to_download:
+                print("Sending trigger payload to:", LOCAL_TRIGGER_URL)
+                resp = requests.post(
+                    LOCAL_TRIGGER_URL,
+                    json={
+                        "user_id": user["id"],
+                        "copart_lots": lots_to_download,
+                        "ai_lots": []
+                    }
+                )
+                print("Trigger response:", resp.status_code, resp.text)
+
+        except Exception as e:
+            print("Downloader trigger failed:", e)
+
+        # ------------------------------------------------------------------
         return {"status": "success", "rows": len(df)}
 
     except Exception as e:

@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Wrench, DollarSign } from "lucide-react";
+import DamageTrainingModal from "./DamageTrainingModal";
+
 
 const Dashboard = () => {
   const [cars, setCars] = useState([]);
   const [selectedCar, setSelectedCar] = useState(null);
+  const [showTrainingModal, setShowTrainingModal] = useState(false);
   const [tempMargin, setTempMargin] = useState(15); // Default margin used ONLY inside modal
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -315,21 +318,35 @@ const Dashboard = () => {
                   <p><span className="font-semibold">Profit:</span> ${live.profit.toLocaleString()}</p>
                   <p><span className="font-semibold">Margin:</span> {live.margin_actual}%</p>
 				  <hr className="my-3 border-gray-300" />
+				  <button
+					  className="w-full mt-3 bg-blue-600 text-white py-2 rounded-md"
+					  onClick={() => setShowTrainingModal(true)}
+					>
+					  Train Damage Model
+					</button>
                 </div>
 
-                {/* DETAILS */}
-                <p className="mt-4">
-                  <span className="font-medium">Repair Details:</span>{" "}
-                  {activeCar.repair_details || "N/A"}
-                </p>
+				{/* DETAILS */}
+				<p className="mt-4">
+				  <span className="font-medium">Repair Details:</span>{" "}
+				  {activeCar.repair_details || "N/A"}
+				</p>
 
-                <p className="mt-1">
-                  <span className="font-medium">Resale Details:</span>{" "}
-                  {activeCar.resale_details || "N/A"}
-                </p>
+				<p className="mt-1">
+				  <span className="font-medium">Resale Details:</span>{" "}
+				  {activeCar.resale_details || "N/A"}
+				</p>
 
-                {/* COPART LINK */}
-                {activeCar.lot_url && (
+				{/* TRAIN BUTTON */}
+				<button
+				  className="w-full mt-4 bg-blue-600 text-white py-2 rounded-md"
+				  onClick={() => setShowTrainingModal(true)}
+				>
+				  Train Damage Model
+				</button>
+
+				{/* COPART LINK */}
+				{activeCar.lot_url && (
                   <a
                     href={activeCar.lot_url}
                     target="_blank"
@@ -344,6 +361,13 @@ const Dashboard = () => {
           </div>
         );
       })()}
+	  {showTrainingModal && selectedCar && (
+		  <DamageTrainingModal
+			car={selectedCar}
+			onClose={() => setShowTrainingModal(false)}
+		  />
+		)}
+
     </main>
   );
 };

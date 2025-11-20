@@ -11,24 +11,25 @@ import subprocess
 import os
 import time
 
+# Training routes
+from training_routes import router_training
+
 # --------------------------------------------------
 # ENV + APP CONFIG
 # --------------------------------------------------
 load_dotenv()
 app = FastAPI(title="Car Flip Analyzer API", version="0.1.0")
 
+# --------------------------------------------------
+# CORS
+# --------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        # Production
         "https://www.carflipanalyzer.com",
         "https://carflipanalyzer.com",
-
-        # Vercel deployments
         "https://car-flip-analyzer-git-main-jpvick-gits-projects.vercel.app",
         "https://carflipanalyzer-git-main-jpvick-gits-projects.vercel.app",
-
-        # Local dev
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ],
@@ -43,28 +44,25 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 
-
 print(f"📂 Serving static images from: {DOWNLOAD_DIR}")
 
-# ✅ Serve static images
+# Serve static images
 app.mount("/backend/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
 
 def get_first_image(lot_id: str):
-    """Return the first found image for a given lot."""
     lot_id = str(lot_id).split(".")[0].strip()
     lot_folder = os.path.join(DOWNLOAD_DIR, lot_id)
+
     if not os.path.exists(lot_folder):
         return None
 
-    # Prefer _Image_1.*
     for ext in (".jpg", ".jpeg", ".png"):
         candidate = f"{lot_id}_Image_1{ext}"
         path = os.path.join(lot_folder, candidate)
         if os.path.exists(path):
             return f"https://api.carflipanalyzer.com/backend/downloads/{lot_id}/{candidate}"
 
-    # Fallback: first image in folder
     for file in sorted(os.listdir(lot_folder)):
         if file.lower().endswith((".jpg", ".jpeg", ".png")):
             return f"https://api.carflipanalyzer.com/backend/downloads/{lot_id}/{file}"
@@ -89,7 +87,6 @@ def root():
 
 @app.get("/test_db")
 def test_db():
-    """Quick database connection test."""
     try:
         with engine.connect() as conn:
             row = conn.execute(text("SELECT DB_NAME(), SUSER_NAME();")).fetchone()
@@ -105,7 +102,8 @@ class TriggerPayload(BaseModel):
     user_id: int
     ai_lots: list[str] = []
     copart_lots: list[str] = []
-    
+
+
 @app.post("/trigger")
 async def trigger_pipeline(payload: TriggerPayload):
     user_id = payload.user_id
@@ -117,43 +115,33 @@ async def trigger_pipeline(payload: TriggerPayload):
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-    COPART_SCRIPT = os.path.join(BASE_DIR, "copart_download_parallel.py")
-    AI_SCRIPT = os.path.join(BASE_DIR, "ai_repair_estimator.py")
-
     try:
-        # Launch Copart downloader
+        # Copart downloader
         if copart_lots:
             copart_str = ",".join(copart_lots)
-            print(f"📦 Launching Copart downloader for lots: {copart_str}")
             subprocess.Popen([
                 "/root/car-flip-analyzer/backend/venv/bin/python",
                 "/root/car-flip-analyzer/backend/copart_download_parallel.py",
                 str(user_id),
                 "--lots", copart_str,
                 "--download"
-            ], cwd="/root/car-flip-analyzer/backend")
+            ])
 
-        # Launch AI estimator
+        # AI estimator
         if ai_lots:
             ai_str = ",".join(ai_lots)
-            print(f"🤖 Launching AI estimator for lots: {ai_str}")
             subprocess.Popen([
                 "/root/car-flip-analyzer/backend/venv/bin/python",
                 "/root/car-flip-analyzer/backend/ai_repair_estimator.py",
                 str(user_id),
                 "--lots", ai_str
-            ], cwd="/root/car-flip-analyzer/backend")
+            ])
 
-        return {
-            "status": "success",
-            "user_id": user_id,
-            "ai_lots": ai_lots,
-            "copart_lots": copart_lots
-        }
+        return {"status": "success"}
 
     except Exception as e:
-        print(f"❌ Trigger error: {e}")
         return {"error": str(e)}
+
 
 # --------------------------------------------------
 # ROUTER REGISTRATION
@@ -162,6 +150,8 @@ from .uploads import router as uploads_router
 from .user_vehicles import router as vehicles_router
 from .auth import router as auth_router
 
+# REGISTER ALL ROUTERS HERE EXACTLY ONE TIME
+app.include_router(router_training)
 app.include_router(uploads_router)
 app.include_router(vehicles_router)
 app.include_router(auth_router)
@@ -173,4 +163,3 @@ app.include_router(auth_router)
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend.backend_api:app", host="0.0.0.0", port=8000)
-

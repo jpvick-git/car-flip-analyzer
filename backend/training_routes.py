@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from damage_embeddings import save_damage_label
+from .damage_embeddings import save_damage_label
 
 router_training = APIRouter()
 

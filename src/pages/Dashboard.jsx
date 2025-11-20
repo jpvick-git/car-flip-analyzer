@@ -318,12 +318,6 @@ const Dashboard = () => {
                   <p><span className="font-semibold">Profit:</span> ${live.profit.toLocaleString()}</p>
                   <p><span className="font-semibold">Margin:</span> {live.margin_actual}%</p>
 				  <hr className="my-3 border-gray-300" />
-				  <button
-					  className="w-full mt-3 bg-blue-600 text-white py-2 rounded-md"
-					  onClick={() => setShowTrainingModal(true)}
-					>
-					  Train Damage Model
-					</button>
                 </div>
 
 				{/* DETAILS */}

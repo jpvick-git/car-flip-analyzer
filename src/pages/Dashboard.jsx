@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Wrench, DollarSign } from "lucide-react";
-import DamageTrainingModal from "./DamageTrainingModal";
+import DamageTrainingModal from "../components/DamageTrainingModal";
 
 
 const Dashboard = () => {

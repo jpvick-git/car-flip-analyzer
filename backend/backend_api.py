@@ -12,7 +12,7 @@ import os
 import time
 
 # Training routes
-from training_routes import router_training
+from .training_routes import router_training
 
 # --------------------------------------------------
 # ENV + APP CONFIG

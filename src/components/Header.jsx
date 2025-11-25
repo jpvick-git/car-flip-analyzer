@@ -1,50 +1,77 @@
-import React, { useState } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Menu, X } from "lucide-react";
 
-export default function App() {
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showCSVModal, setShowCSVModal] = useState(false);
+export default function Header({ onAddVehicle, onUploadCSV, logout }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [userIP, setUserIP] = useState("");
+  const [isAllowed, setIsAllowed] = useState(false);
 
-  const logout = () => {
-    localStorage.removeItem("token");
-    window.location.href = "/login";
-  };
+  const allowedIP = "68.186.200.184";
 
-  const isLoggedIn = !!localStorage.getItem("token");
+  useEffect(() => {
+    fetch("https://api.ipify.org?format=json")
+      .then((res) => res.json())
+      .then((data) => {
+        setUserIP(data.ip);
+        setIsAllowed(data.ip === allowedIP);
+      });
+  }, []);
 
   return (
-    <Router>
-      {/* Header Always Visible When Logged In */}
-      {isLoggedIn && (
-        <Header
-          onAddVehicle={() => setShowAddModal(true)}
-          onUploadCSV={() => setShowCSVModal(true)}
-          logout={logout}
-        />
-      )}
-
-      {/* Main Content */}
-      <div className="bg-white min-h-screen pt-4">
-        <Routes>
-          <Route path="/login" element={<Login />} />
-
-          <Route
-            path="/"
-            element={
-              isLoggedIn ? (
-                <Dashboard
-                  showAddModal={showAddModal}
-                  setShowAddModal={setShowAddModal}
-                  showCSVModal={showCSVModal}
-                  setShowCSVModal={setShowCSVModal}
-                />
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
-        </Routes>
+    <header className="flex items-center justify-between px-4 py-3 bg-white shadow">
+      {/* Logo + Title */}
+      <div className="flex items-center gap-3">
+        <img src="/logo.png" alt="logo" className="h-10 w-auto" />
+        <span className="text-xl font-semibold text-gray-900">
+          Car Flip Analyzer
+        </span>
       </div>
-    </Router>
+
+      {/* Hamburger Button */}
+      <button onClick={() => setMenuOpen(!menuOpen)}>
+        {menuOpen ? <X size={28} /> : <Menu size={28} />}
+      </button>
+
+      {/* Slide-out Drawer */}
+      {menuOpen && (
+        <div className="absolute right-0 top-16 bg-white w-64 shadow-xl p-4 z-50 rounded-l-lg border">
+          <div className="flex flex-col space-y-4">
+
+            {/* Upload CSV */}
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                onUploadCSV();
+              }}
+              className="text-left w-full px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 transition"
+            >
+              Upload CSV
+            </button>
+
+            {/* Add Vehicle */}
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                onAddVehicle();
+              }}
+              className="text-left w-full px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 transition"
+            >
+              Add Vehicle
+            </button>
+
+            {/* Logout */}
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                logout();
+              }}
+              className="text-left w-full px-3 py-2 mt-6 rounded bg-red-500 text-white hover:bg-red-600 transition"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      )}
+    </header>
   );
 }

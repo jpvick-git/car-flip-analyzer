@@ -41,7 +41,7 @@ app.add_middleware(
 # IMAGE CONFIGURATION
 # --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
+DOWNLOAD_DIR = "/root/car-flip-analyzer/backend/downloads"
 
 print(f"📂 Serving static images from: {DOWNLOAD_DIR}")
 

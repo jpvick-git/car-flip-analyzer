@@ -66,26 +66,28 @@ function ManualVehicleModal({ API, close, reload }) {
     loadModels();
   }, [form.make, API]);
 
-  // -----------------------------
-  // LOAD TRIMS WHEN YEAR + MAKE + MODEL CHOSEN
-  // -----------------------------
-  useEffect(() => {
-    if (!form.year || !form.make || !form.model) return;
+// LOAD TRIMS (CARQUERY — reliable)
+useEffect(() => {
+  if (!form.year || !form.make || !form.model) return;
 
-    const loadTrims = async () => {
-      try {
-        const res = await axios.get(
-          `${API}/nhtsa/trims?make=${form.make}&model=${form.model}&year=${form.year}`
-        );
-        setTrims(res.data.trims || []);
-        setForm((prev) => ({ ...prev, trim: "" }));
-      } catch (err) {
-        console.error("Failed to load trims:", err);
-      }
-    };
+  const loadTrims = async () => {
+    try {
+      const makeLower = form.make.toLowerCase();
+      const modelLower = form.model.toLowerCase();
 
-    loadTrims();
-  }, [form.year, form.make, form.model, API]);
+      const res = await axios.get(
+        `${API}/carquery/trims?make=${makeLower}&model=${modelLower}&year=${form.year}`
+      );
+
+      setTrims(res.data.trims || []);
+      setForm((prev) => ({ ...prev, trim: "" }));
+    } catch (err) {
+      console.error("Failed to load trims:", err);
+    }
+  };
+
+  loadTrims();
+}, [form.year, form.make, form.model, API]);
 
   // -----------------------------
   // SUBMIT

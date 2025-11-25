@@ -51,6 +51,9 @@ def get_car_models(make: str):
 
 @router.get("/carquery/trims")
 def get_car_trims(make: str, model: str, year: int):
+    make = make.lower()
+    model = model.lower()
+
     url = f"https://www.carqueryapi.com/api/0.3/?cmd=getTrims&make={make}&model={model}&year={year}"
     r = requests.get(url, headers=HEADERS, timeout=10)
 
@@ -62,3 +65,4 @@ def get_car_trims(make: str, model: str, year: int):
     )
 
     return {"trims": trim_names}
+

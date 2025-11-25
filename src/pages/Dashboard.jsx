@@ -8,7 +8,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showManualModal, setShowManualModal] = useState(false);
 
-  const API = process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com";
+  const API =
+    process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com";
 
   // ---------------------------------------------------------
   // LOAD VEHICLES
@@ -22,7 +23,7 @@ export default function Dashboard() {
         });
         setCars(res.data || []);
       } catch (err) {
-        console.error(err);
+        console.error("Failed to load vehicles:", err);
       } finally {
         setLoading(false);
       }
@@ -32,7 +33,6 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 max-w-5xl mx-auto">
-
       {/* ---------------------------------------------- */}
       {/* HEADER + BUTTON */}
       {/* ---------------------------------------------- */}
@@ -71,7 +71,6 @@ export default function Dashboard() {
           reload={() => window.location.reload()}
         />
       )}
-
     </div>
   );
 }
@@ -85,22 +84,21 @@ function ManualVehicleModal({ API, close, reload }) {
     year: "",
     make: "",
     model: "",
-    trim: "",
     mileage: "",
     damage_description: "",
-    title_status: "",
-    asking_price: "",
+    title_code: "",
     location: "",
     listing_url: "",
-    description: "",
-    vin: "",
   });
 
   const [images, setImages] = useState([]);
 
   // Update form fields
   const update = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value,
+    });
 
   // Handle image selection
   const handleImageFiles = (e) => {
@@ -115,10 +113,17 @@ function ManualVehicleModal({ API, close, reload }) {
     try {
       const fd = new FormData();
 
-      Object.entries(form).forEach(([key, value]) =>
-        fd.append(key, value)
-      );
+      // Append form fields (backend expects these names)
+      fd.append("year", form.year);
+      fd.append("make", form.make);
+      fd.append("model", form.model);
+      fd.append("mileage", form.mileage);
+      fd.append("damage_description", form.damage_description);
+      fd.append("title_code", form.title_code);
+      fd.append("location", form.location); // sale_name
+      fd.append("listing_url", form.listing_url); // lot_url
 
+      // Append all images
       images.forEach((img) => fd.append("files", img));
 
       await axios.post(`${API}/add_manual_vehicle`, fd, {
@@ -131,33 +136,29 @@ function ManualVehicleModal({ API, close, reload }) {
       close();
       reload(); // refresh dashboard
     } catch (err) {
-      console.error("Upload failed:", err);
-      alert("Failed to add vehicle.");
+      console.error("Manual upload failed:", err);
+      alert("Failed to add manual vehicle.");
     }
   };
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center z-50 p-4">
       <div className="bg-white rounded-xl p-5 w-full max-w-md max-h-[90vh] overflow-y-auto">
-
         <h2 className="text-lg font-bold mb-4">Add Manual Vehicle</h2>
 
         {/* ---------------------------------------------- */}
         {/* FORM FIELDS */}
         {/* ---------------------------------------------- */}
 
-        {[
+        {[ 
           ["year", "Year"],
           ["make", "Make"],
           ["model", "Model"],
-          ["trim", "Trim"],
           ["mileage", "Mileage"],
           ["damage_description", "Damage Description"],
-          ["title_status", "Title Status"],
-          ["asking_price", "Asking Price"],
+          ["title_code", "Title Code"],
           ["location", "Location"],
-          ["listing_url", "Listing URL"],
-          ["vin", "VIN (optional)"],
+          ["listing_url", "Listing URL (optional)"],
         ].map(([name, label]) => (
           <input
             key={name}
@@ -168,14 +169,6 @@ function ManualVehicleModal({ API, close, reload }) {
             className="w-full border rounded-lg p-2 mb-3"
           />
         ))}
-
-        <textarea
-          name="description"
-          placeholder="Description (optional)"
-          value={form.description}
-          onChange={update}
-          className="w-full border rounded-lg p-2 mb-3"
-        />
 
         {/* ---------------------------------------------- */}
         {/* IMAGE UPLOAD */}

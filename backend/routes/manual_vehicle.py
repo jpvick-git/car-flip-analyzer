@@ -3,9 +3,9 @@ from fastapi.responses import JSONResponse
 import os
 import shutil
 from sqlalchemy import text
-from backend.database import engine
-from backend.auth_utils import get_current_user
-from backend.ai_estimator import estimate_repair_cost, estimate_resale_value
+from ..database import engine
+from ..auth_utils import get_current_user
+from ..ai_estimator import estimate_repair_cost, estimate_resale_value
 
 router = APIRouter()
 

@@ -3,7 +3,7 @@ import axios from "axios";
 import { Wrench, DollarSign } from "lucide-react";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-// MANUAL VEHICLE MODAL — UPDATED WITH YEAR / MAKE / MODEL / TRIM DROPDOWNS
+// MANUAL VEHICLE MODAL — CARQUERY API VERSION (CLEAN MAKES, MODELS, TRIMS)
 ///////////////////////////////////////////////////////////////////////////////////////////
 function ManualVehicleModal({ API, close, reload }) {
   const [form, setForm] = useState({
@@ -27,29 +27,37 @@ function ManualVehicleModal({ API, close, reload }) {
   // Years 1980–2026
   const years = Array.from({ length: 2026 - 1980 + 1 }, (_, i) => 1980 + i);
 
-  // Generic update
   const update = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleImageFiles = (e) =>
     setImages([...images, ...Array.from(e.target.files)]);
 
   // -------------------------------------------------------
-  // LOAD MAKES ON MODAL OPEN
+  // LOAD MAKES (CARQUERY) ON MODAL OPEN
   // -------------------------------------------------------
   useEffect(() => {
     const fetchMakes = async () => {
       try {
         const res = await axios.get(
-          "https://vpic.nhtsa.dot.gov/api/vehicles/GetAllMakes?format=json"
+          "https://www.carqueryapi.com/api/0.3/?cmd=getMakes"
         );
-        const sorted = res.data.Results.sort((a, b) =>
-          a.Make_Name.localeCompare(b.Make_Name)
+
+        let makeList = res.data.Makes || [];
+
+        // Clean: Only include real automotive makes
+        makeList = makeList.filter((m) => m.make_is_common == "1");
+
+        // Sort A → Z
+        makeList.sort((a, b) =>
+          a.make_display.localeCompare(b.make_display)
         );
-        setMakes(sorted);
+
+        setMakes(makeList);
       } catch (err) {
-        console.error("Failed to load makes", err);
+        console.error("Failed to load automotive makes:", err);
       }
     };
+
     fetchMakes();
   }, []);
 
@@ -61,21 +69,25 @@ function ManualVehicleModal({ API, close, reload }) {
 
     const fetchModels = async () => {
       try {
-        const res = await axios.get(
-          `https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMake/${form.make}?format=json`
+        const url = `https://www.carqueryapi.com/api/0.3/?cmd=getModels&make=${form.make}`;
+        const res = await axios.get(url);
+
+        let modelList = res.data.Models || [];
+
+        // Sort A → Z
+        modelList.sort((a, b) =>
+          a.model_name.localeCompare(b.model_name)
         );
-        const sorted = res.data.Results.sort((a, b) =>
-          a.Model_Name.localeCompare(b.Model_Name)
-        );
-        setModels(sorted);
+
+        setModels(modelList);
+        setForm((prev) => ({ ...prev, model: "", trim: "" }));
+        setTrims([]);
       } catch (err) {
-        console.error("Failed to load models", err);
+        console.error("Failed to load models:", err);
       }
     };
 
     fetchModels();
-    setForm((prev) => ({ ...prev, model: "", trim: "" }));
-    setTrims([]);
   }, [form.make]);
 
   // -------------------------------------------------------
@@ -84,31 +96,26 @@ function ManualVehicleModal({ API, close, reload }) {
   useEffect(() => {
     if (!form.year || !form.make || !form.model) return;
 
-    const fetchTrims = async () => {
+    const loadTrims = async () => {
       try {
-        const res = await axios.get(
-          `https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMakeYear/make/${form.make}/modelyear/${form.year}?format=json`
-        );
+        const url = `https://www.carqueryapi.com/api/0.3/?cmd=getTrims&make=${form.make}&model=${form.model}&year=${form.year}`;
+        const res = await axios.get(url);
 
-        // Filter variants for selected model
-        const variants = res.data.Results.filter(
-          (v) =>
-            v.Model_Name.toLowerCase() === form.model.toLowerCase()
-        );
+        let trimsList = res.data.Trims || [];
 
-        // Extract trims (may require splitting)
-        const trimList = variants
-          .map((v) => v.Trim || "")
+        // Extract trim names (CarQuery uses model_trim)
+        const names = trimsList
+          .map((t) => t.model_trim)
           .filter((t) => t && t.trim() !== "");
 
-        setTrims([...new Set(trimList)]);
+        setTrims([...new Set(names)]); // unique
+        setForm((prev) => ({ ...prev, trim: "" }));
       } catch (err) {
-        console.error("Failed to load trims", err);
+        console.error("Failed to load trims:", err);
       }
     };
 
-    fetchTrims();
-    setForm((prev) => ({ ...prev, trim: "" }));
+    loadTrims();
   }, [form.year, form.make, form.model]);
 
   // -------------------------------------------------------
@@ -138,6 +145,7 @@ function ManualVehicleModal({ API, close, reload }) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl text-black">
+
         <h2 className="text-xl font-semibold mb-4 text-black">Add Vehicle</h2>
 
         {/* YEAR */}
@@ -149,9 +157,7 @@ function ManualVehicleModal({ API, close, reload }) {
         >
           <option value="">Select Year</option>
           {years.map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
+            <option key={y} value={y}>{y}</option>
           ))}
         </select>
 
@@ -164,8 +170,8 @@ function ManualVehicleModal({ API, close, reload }) {
         >
           <option value="">Select Make</option>
           {makes.map((m) => (
-            <option key={m.Make_ID} value={m.Make_Name}>
-              {m.Make_Name}
+            <option key={m.make_id} value={m.make_name}>
+              {m.make_display}
             </option>
           ))}
         </select>
@@ -180,8 +186,8 @@ function ManualVehicleModal({ API, close, reload }) {
         >
           <option value="">Select Model</option>
           {models.map((m) => (
-            <option key={m.Model_ID} value={m.Model_Name}>
-              {m.Model_Name}
+            <option key={m.model_id} value={m.model_name}>
+              {m.model_name}
             </option>
           ))}
         </select>
@@ -202,7 +208,7 @@ function ManualVehicleModal({ API, close, reload }) {
           ))}
         </select>
 
-        {/* OTHER FIELDS */}
+        {/* OTHER INPUTS */}
         {[
           ["mileage", "Mileage"],
           ["damage_description", "Damage"],

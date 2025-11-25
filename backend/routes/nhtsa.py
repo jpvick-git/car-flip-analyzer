@@ -5,7 +5,7 @@ router = APIRouter()
 
 NHTSA_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles"
 
-# Only real passenger car brands
+# Real consumer-facing car brands (clean names)
 VALID_CAR_MAKES = {
     "ACURA", "ALFA ROMEO", "ASTON MARTIN",
     "AUDI", "BENTLEY", "BMW", "BUICK", "CADILLAC",
@@ -21,26 +21,33 @@ VALID_CAR_MAKES = {
     "VOLKSWAGEN", "VOLVO"
 }
 
+# --------------------------------------------------------
+# GET MAKES  (clean consumer names only)
+# --------------------------------------------------------
 @router.get("/nhtsa/makes")
 def get_filtered_makes():
-    url = f"{NHTSA_BASE}/getallmanufacturers?format=json"
+    # USE CORRECT ENDPOINT
+    url = f"{NHTSA_BASE}/getallmakes?format=json"
     r = requests.get(url, timeout=20)
-
     data = r.json().get("Results", [])
+
     filtered = []
 
     for item in data:
-        name = (item.get("Mfr_CommonName") or item.get("Mfr_Name") or "").upper()
-        name = name.replace(",", "").strip()
+        name = item.get("Make_Name", "").upper().strip()
 
-        # return ONLY valid real automotive makes
+        # Return ONLY valid consumer-facing makes
         if name in VALID_CAR_MAKES:
             filtered.append(name)
 
     filtered = sorted(list(set(filtered)))
+
     return {"makes": filtered}
 
 
+# --------------------------------------------------------
+# GET MODELS  (this part was correct)
+# --------------------------------------------------------
 @router.get("/nhtsa/models")
 def get_models(make: str):
     url = f"{NHTSA_BASE}/getmodelsformake/{make}?format=json"
@@ -49,15 +56,22 @@ def get_models(make: str):
 
     models = sorted({
         x.get("Model_Name")
-        for x in results if x.get("Model_Name")
+        for x in results
+        if x.get("Model_Name")
     })
 
     return {"models": models}
 
 
+# --------------------------------------------------------
+# GET TRIMS  (this part was correct)
+# --------------------------------------------------------
 @router.get("/nhtsa/trims")
 def get_trims(make: str, model: str, year: int):
-    url = f"{NHTSA_BASE}/GetVehiclesForMakeModelYear/make/{make}/model/{model}/modelyear/{year}?format=json"
+    url = (
+        f"{NHTSA_BASE}/GetVehiclesForMakeModelYear/"
+        f"make/{make}/model/{model}/modelyear/{year}?format=json"
+    )
     r = requests.get(url, timeout=20)
     results = r.json().get("Results", [])
 

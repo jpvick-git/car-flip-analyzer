@@ -21,7 +21,6 @@ function ManualVehicleModal({ API, close, reload }) {
   const [makes, setMakes] = useState([]);
   const [models, setModels] = useState([]);
   const [trims, setTrims] = useState([]);
-
   const [images, setImages] = useState([]);
 
   // -----------------------------
@@ -32,7 +31,7 @@ function ManualVehicleModal({ API, close, reload }) {
       const jsonStr = data.substring(data.indexOf("{"), data.lastIndexOf("}") + 1);
       return JSON.parse(jsonStr);
     } catch (err) {
-      console.error("CarQuery parsing error:", err, data);
+      console.error("CarQuery parsing error:", err);
       return {};
     }
   };
@@ -46,7 +45,7 @@ function ManualVehicleModal({ API, close, reload }) {
     setImages([...images, ...Array.from(e.target.files)]);
 
   // -----------------------------
-  // LOAD MAKES (COMMON AUTOMOTIVE ONLY)
+  // LOAD MAKES
   // -----------------------------
   useEffect(() => {
     const fetchMakes = async () => {
@@ -58,9 +57,10 @@ function ManualVehicleModal({ API, close, reload }) {
         const parsed = parseCarQuery(res.data);
         let list = parsed.Makes || [];
 
-        // only common automotive makers
-        list = list.filter((m) => m.make_is_common === "1");
+        // FIXED: make_is_common is a NUMBER
+        list = list.filter((m) => m.make_is_common === 1);
 
+        // Sort by display name
         list.sort((a, b) => a.make_display.localeCompare(b.make_display));
 
         setMakes(list);
@@ -89,7 +89,7 @@ function ManualVehicleModal({ API, close, reload }) {
         list.sort((a, b) => a.model_name.localeCompare(b.model_name));
 
         setModels(list);
-        setTrims([]); // clear trims
+        setTrims([]);
         setForm((prev) => ({ ...prev, model: "", trim: "" }));
       } catch (err) {
         console.error("Failed to load models:", err);
@@ -113,12 +113,11 @@ function ManualVehicleModal({ API, close, reload }) {
         const parsed = parseCarQuery(res.data);
         let list = parsed.Trims || [];
 
-        // extract trim names
         const trimNames = list
           .map((t) => t.model_trim)
           .filter((t) => t && t.trim() !== "");
 
-        setTrims([...new Set(trimNames)]); // unique list
+        setTrims([...new Set(trimNames)]);
         setForm((prev) => ({ ...prev, trim: "" }));
       } catch (err) {
         console.error("Failed to load trims:", err);
@@ -153,7 +152,7 @@ function ManualVehicleModal({ API, close, reload }) {
   };
 
   // -----------------------------
-  // RENDER (UNCHANGED UI)
+  // RENDER (NO UI CHANGES)
   // -----------------------------
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
@@ -169,7 +168,9 @@ function ManualVehicleModal({ API, close, reload }) {
         >
           <option value="">Select Year</option>
           {years.map((y) => (
-            <option key={y} value={y}>{y}</option>
+            <option key={y} value={y}>
+              {y}
+            </option>
           ))}
         </select>
 
@@ -182,7 +183,7 @@ function ManualVehicleModal({ API, close, reload }) {
         >
           <option value="">Select Make</option>
           {makes.map((m) => (
-            <option key={m.make_id} value={m.make_name}>
+            <option key={m.make_id} value={m.make_id}>
               {m.make_display}
             </option>
           ))}
@@ -214,11 +215,13 @@ function ManualVehicleModal({ API, close, reload }) {
         >
           <option value="">Select Trim</option>
           {trims.map((t, i) => (
-            <option key={i} value={t}>{t}</option>
+            <option key={i} value={t}>
+              {t}
+            </option>
           ))}
         </select>
 
-        {/* OTHER INPUTS */}
+        {/* OTHER FIELDS */}
         {[
           ["mileage", "Mileage"],
           ["damage_description", "Damage"],
@@ -236,7 +239,7 @@ function ManualVehicleModal({ API, close, reload }) {
           />
         ))}
 
-        {/* IMAGES */}
+        {/* PHOTOS */}
         <label className="font-medium text-black">Photos</label>
         <input
           type="file"
@@ -262,10 +265,7 @@ function ManualVehicleModal({ API, close, reload }) {
           <button className="px-4 py-2 bg-gray-300 rounded-lg text-black" onClick={close}>
             Cancel
           </button>
-          <button
-            className="px-4 py-2 bg-green-600 text-white rounded-lg"
-            onClick={submit}
-          >
+          <button className="px-4 py-2 bg-green-600 text-white rounded-lg" onClick={submit}>
             Save
           </button>
         </div>

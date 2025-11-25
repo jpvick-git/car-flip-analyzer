@@ -3,7 +3,7 @@ import axios from "axios";
 import { Wrench, DollarSign } from "lucide-react";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-// MANUAL VEHICLE MODAL — BACKEND CARQUERY VERSION (NO UI CHANGES)
+// MANUAL VEHICLE MODAL — NHTSA VERSION (NO UI CHANGES)
 ///////////////////////////////////////////////////////////////////////////////////////////
 function ManualVehicleModal({ API, close, reload }) {
   const [form, setForm] = useState({
@@ -27,14 +27,17 @@ function ManualVehicleModal({ API, close, reload }) {
   const years = Array.from({ length: 2026 - 1980 + 1 }, (_, i) => 1980 + i);
 
   const update = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
   const handleImageFiles = (e) =>
     setImages([...images, ...Array.from(e.target.files)]);
 
-  // LOAD MAKES
+  // -----------------------------
+  // LOAD MAKES (NHTSA)
+  // -----------------------------
   useEffect(() => {
     const loadMakes = async () => {
       try {
-        const res = await axios.get(`${API}/carquery/makes`);
+        const res = await axios.get(`${API}/nhtsa/makes`);
         setMakes(res.data.makes || []);
       } catch (err) {
         console.error("Failed to load makes:", err);
@@ -43,12 +46,15 @@ function ManualVehicleModal({ API, close, reload }) {
     loadMakes();
   }, [API]);
 
+  // -----------------------------
   // LOAD MODELS WHEN MAKE CHANGES
+  // -----------------------------
   useEffect(() => {
     if (!form.make) return;
+
     const loadModels = async () => {
       try {
-        const res = await axios.get(`${API}/carquery/models?make=${form.make}`);
+        const res = await axios.get(`${API}/nhtsa/models?make=${form.make}`);
         setModels(res.data.models || []);
         setTrims([]);
         setForm((prev) => ({ ...prev, model: "", trim: "" }));
@@ -56,16 +62,20 @@ function ManualVehicleModal({ API, close, reload }) {
         console.error("Failed to load models:", err);
       }
     };
+
     loadModels();
   }, [form.make, API]);
 
-  // LOAD TRIMS
+  // -----------------------------
+  // LOAD TRIMS WHEN YEAR + MAKE + MODEL CHOSEN
+  // -----------------------------
   useEffect(() => {
     if (!form.year || !form.make || !form.model) return;
+
     const loadTrims = async () => {
       try {
         const res = await axios.get(
-          `${API}/carquery/trims?make=${form.make}&model=${form.model}&year=${form.year}`
+          `${API}/nhtsa/trims?make=${form.make}&model=${form.model}&year=${form.year}`
         );
         setTrims(res.data.trims || []);
         setForm((prev) => ({ ...prev, trim: "" }));
@@ -73,10 +83,13 @@ function ManualVehicleModal({ API, close, reload }) {
         console.error("Failed to load trims:", err);
       }
     };
+
     loadTrims();
   }, [form.year, form.make, form.model, API]);
 
+  // -----------------------------
   // SUBMIT
+  // -----------------------------
   const submit = async () => {
     try {
       const fd = new FormData();
@@ -98,6 +111,9 @@ function ManualVehicleModal({ API, close, reload }) {
     }
   };
 
+  // -----------------------------
+  // RENDER (NO UI CHANGES)
+  // -----------------------------
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl text-black">
@@ -125,8 +141,8 @@ function ManualVehicleModal({ API, close, reload }) {
         >
           <option value="">Select Make</option>
           {makes.map((m) => (
-            <option key={m.make_id} value={m.make_id}>
-              {m.make_display}
+            <option key={m} value={m}>
+              {m}
             </option>
           ))}
         </select>
@@ -141,8 +157,8 @@ function ManualVehicleModal({ API, close, reload }) {
         >
           <option value="">Select Model</option>
           {models.map((m) => (
-            <option key={m.model_id} value={m.model_name}>
-              {m.model_name}
+            <option key={m} value={m}>
+              {m}
             </option>
           ))}
         </select>
@@ -157,7 +173,9 @@ function ManualVehicleModal({ API, close, reload }) {
         >
           <option value="">Select Trim</option>
           {trims.map((t, i) => (
-            <option key={i} value={t}>{t}</option>
+            <option key={i} value={t}>
+              {t}
+            </option>
           ))}
         </select>
 
@@ -179,6 +197,7 @@ function ManualVehicleModal({ API, close, reload }) {
           />
         ))}
 
+        {/* PHOTOS */}
         <label className="font-medium text-black">Photos</label>
         <input
           type="file"
@@ -215,6 +234,7 @@ function ManualVehicleModal({ API, close, reload }) {
     </div>
   );
 }
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 // MAIN DASHBOARD

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import CarCard from "../components/CarCard"; // FIXED PATH
+import CarCard from "../components/CarCard"; 
+import Header from "../components/Header";
+
 
 export default function Dashboard({ openCSVModal }) {
   const [cars, setCars] = useState([]);

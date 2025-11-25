@@ -229,3 +229,4 @@ function ManualVehicleModal({ API, close, reload }) {
     </div>
   );
 }
+export default Dashboard;

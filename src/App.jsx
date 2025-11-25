@@ -13,33 +13,34 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Header from "./components/Header";
 
-// -----------------------------------------------
-// ProtectedRoute wrapper
-// -----------------------------------------------
+// ProtectedRoute
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
   if (!token) return <Navigate to="/login" replace />;
   return children;
 }
 
-// -----------------------------------------------
-// Layout wrapper (Header + Routes)
-// -----------------------------------------------
+// Layout wrapper
 function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // 🔥 Add Vehicle Modal Controller
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  // 🔥 CSV Upload Controller
+  const [showCSVModal, setShowCSVModal] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
 
   const hideHeader = location.pathname === "/login";
 
-  // --- Logout handler ---
+  // Logout handler
   const logout = () => {
     localStorage.removeItem("token");
     navigate("/login");
   };
 
-  // --- Upload handler ---
+  // CSV upload function
   const uploadUserFile = async () => {
     if (!uploadFile) {
       alert("Please select a CSV file first!");
@@ -54,29 +55,30 @@ function Layout() {
         `${process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com"}/upload_file`,
         {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
           body: formData,
         }
       );
 
       if (response.ok) {
-        alert("✅ File uploaded successfully!");
+        alert("File uploaded successfully!");
         setUploadFile(null);
       } else {
-        alert("❌ Upload failed. Check your file and try again.");
+        alert("Upload failed.");
       }
     } catch (err) {
-      console.error("Upload error:", err);
-      alert("⚠️ Error uploading file. Please try again.");
+      console.error(err);
+      alert("Error uploading file.");
     }
   };
 
   return (
     <>
+      {/* Header appears ONLY when logged in */}
       {!hideHeader && (
         <Header
+          onAddVehicle={() => setShowAddModal(true)}
+          onUploadCSV={() => setShowCSVModal(true)}
           uploadFile={uploadFile}
           setUploadFile={setUploadFile}
           uploadUserFile={uploadUserFile}
@@ -85,15 +87,20 @@ function Layout() {
       )}
 
       <Routes>
-        {/* Login */}
+        {/* LOGIN */}
         <Route path="/login" element={<Login />} />
 
-        {/* Dashboard (Protected) */}
+        {/* DASHBOARD */}
         <Route
           path="/"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <Dashboard
+                showAddModal={showAddModal}
+                setShowAddModal={setShowAddModal}
+                showCSVModal={showCSVModal}
+                setShowCSVModal={setShowCSVModal}
+              />
             </ProtectedRoute>
           }
         />
@@ -105,9 +112,7 @@ function Layout() {
   );
 }
 
-// -----------------------------------------------
-// Main App
-// -----------------------------------------------
+// Main app root
 export default function App() {
   return (
     <Router>

@@ -3,13 +3,14 @@ import axios from "axios";
 import { Wrench, DollarSign } from "lucide-react";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-// MANUAL VEHICLE MODAL
+// MANUAL VEHICLE MODAL — UPDATED WITH YEAR / MAKE / MODEL / TRIM DROPDOWNS
 ///////////////////////////////////////////////////////////////////////////////////////////
 function ManualVehicleModal({ API, close, reload }) {
   const [form, setForm] = useState({
     year: "",
     make: "",
     model: "",
+    trim: "",
     mileage: "",
     damage_description: "",
     title_code: "",
@@ -17,11 +18,102 @@ function ManualVehicleModal({ API, close, reload }) {
     listing_url: "",
   });
 
+  const [makes, setMakes] = useState([]);
+  const [models, setModels] = useState([]);
+  const [trims, setTrims] = useState([]);
+
   const [images, setImages] = useState([]);
 
-  const update = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-  const handleImageFiles = (e) => setImages([...images, ...Array.from(e.target.files)]);
+  // Years 1980–2026
+  const years = Array.from({ length: 2026 - 1980 + 1 }, (_, i) => 1980 + i);
 
+  // Generic update
+  const update = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const handleImageFiles = (e) =>
+    setImages([...images, ...Array.from(e.target.files)]);
+
+  // -------------------------------------------------------
+  // LOAD MAKES ON MODAL OPEN
+  // -------------------------------------------------------
+  useEffect(() => {
+    const fetchMakes = async () => {
+      try {
+        const res = await axios.get(
+          "https://vpic.nhtsa.dot.gov/api/vehicles/GetAllMakes?format=json"
+        );
+        const sorted = res.data.Results.sort((a, b) =>
+          a.Make_Name.localeCompare(b.Make_Name)
+        );
+        setMakes(sorted);
+      } catch (err) {
+        console.error("Failed to load makes", err);
+      }
+    };
+    fetchMakes();
+  }, []);
+
+  // -------------------------------------------------------
+  // LOAD MODELS WHEN MAKE CHANGES
+  // -------------------------------------------------------
+  useEffect(() => {
+    if (!form.make) return;
+
+    const fetchModels = async () => {
+      try {
+        const res = await axios.get(
+          `https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMake/${form.make}?format=json`
+        );
+        const sorted = res.data.Results.sort((a, b) =>
+          a.Model_Name.localeCompare(b.Model_Name)
+        );
+        setModels(sorted);
+      } catch (err) {
+        console.error("Failed to load models", err);
+      }
+    };
+
+    fetchModels();
+    setForm((prev) => ({ ...prev, model: "", trim: "" }));
+    setTrims([]);
+  }, [form.make]);
+
+  // -------------------------------------------------------
+  // LOAD TRIMS WHEN YEAR + MAKE + MODEL SELECTED
+  // -------------------------------------------------------
+  useEffect(() => {
+    if (!form.year || !form.make || !form.model) return;
+
+    const fetchTrims = async () => {
+      try {
+        const res = await axios.get(
+          `https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMakeYear/make/${form.make}/modelyear/${form.year}?format=json`
+        );
+
+        // Filter variants for selected model
+        const variants = res.data.Results.filter(
+          (v) =>
+            v.Model_Name.toLowerCase() === form.model.toLowerCase()
+        );
+
+        // Extract trims (may require splitting)
+        const trimList = variants
+          .map((v) => v.Trim || "")
+          .filter((t) => t && t.trim() !== "");
+
+        setTrims([...new Set(trimList)]);
+      } catch (err) {
+        console.error("Failed to load trims", err);
+      }
+    };
+
+    fetchTrims();
+    setForm((prev) => ({ ...prev, trim: "" }));
+  }, [form.year, form.make, form.model]);
+
+  // -------------------------------------------------------
+  // SUBMIT
+  // -------------------------------------------------------
   const submit = async () => {
     try {
       const fd = new FormData();
@@ -48,10 +140,70 @@ function ManualVehicleModal({ API, close, reload }) {
       <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl text-black">
         <h2 className="text-xl font-semibold mb-4 text-black">Add Vehicle</h2>
 
+        {/* YEAR */}
+        <select
+          name="year"
+          value={form.year}
+          onChange={update}
+          className="w-full border rounded-lg p-2 mb-3 text-black"
+        >
+          <option value="">Select Year</option>
+          {years.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+
+        {/* MAKE */}
+        <select
+          name="make"
+          value={form.make}
+          onChange={update}
+          className="w-full border rounded-lg p-2 mb-3 text-black"
+        >
+          <option value="">Select Make</option>
+          {makes.map((m) => (
+            <option key={m.Make_ID} value={m.Make_Name}>
+              {m.Make_Name}
+            </option>
+          ))}
+        </select>
+
+        {/* MODEL */}
+        <select
+          name="model"
+          value={form.model}
+          onChange={update}
+          className="w-full border rounded-lg p-2 mb-3 text-black"
+          disabled={!models.length}
+        >
+          <option value="">Select Model</option>
+          {models.map((m) => (
+            <option key={m.Model_ID} value={m.Model_Name}>
+              {m.Model_Name}
+            </option>
+          ))}
+        </select>
+
+        {/* TRIM */}
+        <select
+          name="trim"
+          value={form.trim}
+          onChange={update}
+          className="w-full border rounded-lg p-2 mb-3 text-black"
+          disabled={!trims.length}
+        >
+          <option value="">Select Trim</option>
+          {trims.map((t, i) => (
+            <option key={i} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+
+        {/* OTHER FIELDS */}
         {[
-          ["year", "Year"],
-          ["make", "Make"],
-          ["model", "Model"],
           ["mileage", "Mileage"],
           ["damage_description", "Damage"],
           ["title_code", "Title Code"],
@@ -68,6 +220,7 @@ function ManualVehicleModal({ API, close, reload }) {
           />
         ))}
 
+        {/* IMAGES */}
         <label className="font-medium text-black">Photos</label>
         <input
           type="file"
@@ -104,6 +257,7 @@ function ManualVehicleModal({ API, close, reload }) {
     </div>
   );
 }
+
 ///////////////////////////////////////////////////////////////////////////////////////////
 // MAIN DASHBOARD
 ///////////////////////////////////////////////////////////////////////////////////////////

@@ -1,136 +1,40 @@
+# backend/user_vehicles.py
+
 import os
-import json
 import shutil
-import pandas as pd
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy import text
-
-# Correct import for package mode
-from .db import get_engine
-
-# Your existing auth import:
+from .db import get_db
 from .auth import get_current_user
-
-# Provide get_db so Depends(get_db) keeps working
-def get_db():
-    engine = get_engine()
-    conn = engine.connect()
-    try:
-        yield conn
-    finally:
-        conn.close()
+from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
-# ----------------------------------------------------
-# PATHS
-# ----------------------------------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DOWNLOAD_DIR = (
-    os.path.join(BASE_DIR, "downloads")
-    if "backend" in BASE_DIR.lower()
-    else os.path.join(BASE_DIR, "backend", "downloads")
-)
-
-UPLOADS_DIR = (
-    os.path.join(os.path.dirname(BASE_DIR), "user_uploads")
-    if "backend" in BASE_DIR.lower()
-    else os.path.join(BASE_DIR, "user_uploads")
-)
-
-os.makedirs(UPLOADS_DIR, exist_ok=True)
+# Correct downloads directory
+DOWNLOAD_DIR = "/root/car-flip-analyzer/backend/downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# ----------------------------------------------------
-# HELPERS
-# ----------------------------------------------------
-def safe_get(row, col, default=""):
-    return row[col] if col in row and pd.notna(row[col]) else default
 
-
-# ----------------------------------------------------
-# GET VEHICLES (NOW RETURNS TAX/TITLE BASED ON USER STATE)
-# ----------------------------------------------------
+# --------------------------------------------------------------
+# GET ALL VEHICLES FOR USER (Dashboard)
+# --------------------------------------------------------------
 @router.get("/get_vehicles")
 def get_vehicles(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     try:
+        user_id = current_user["id"]
 
-        # Pull vehicles + user's state_code
         query = text("""
-            SELECT
-                uv.id,
-                uv.user_id,
-                uv.lot_number,
-                uv.lot_url,
-                uv.year,
-                uv.make,
-                uv.model,
-                uv.damage_description,
-                uv.odometer,
-                uv.title_code,
-                uv.repair_estimate,
-                uv.resale_estimate,
-                uv.repair_details,
-                uv.resale_details,
-                uv.image_url,
-                uv.sale_name,
-                uv.sale_date,
-                u.state_code
-            FROM user_vehicles uv
-            JOIN users u ON uv.user_id = u.id
-            WHERE uv.user_id = :user_id
-            ORDER BY uv.id DESC;
+            SELECT *
+            FROM user_vehicles
+            WHERE user_id = :uid
+            ORDER BY id DESC
         """)
 
-        rows = db.execute(query, {"user_id": current_user["id"]}).fetchall()
-
-        # No vehicles yet
-        if not rows:
-            return []
-
-        user_state = rows[0].state_code or None
-
-        # Lookup tax/title fees for user's state
-        if user_state:
-            tax_query = text("""
-                SELECT avg_tax_rate, title_fee
-                FROM tax_title_fees
-                WHERE state_code = :state
-            """)
-            tax_row = db.execute(tax_query, {"state": user_state}).fetchone()
-
-            avg_tax_rate = float(tax_row.avg_tax_rate) if tax_row and tax_row.avg_tax_rate is not None else 0
-            title_fee = float(tax_row.title_fee) if tax_row and tax_row.title_fee is not None else 0
-        else:
-            avg_tax_rate = 0
-            title_fee = 0
+        rows = db.execute(query, {"uid": user_id}).fetchall()
 
         vehicles = []
-
         for row in rows:
-            vehicles.append({
-                "id": row.id,
-                "user_id": row.user_id,
-                "lot_number": row.lot_number,
-                "lot_url": row.lot_url,
-                "year": row.year,
-                "make": row.make,
-                "model": row.model,
-                "damage_description": row.damage_description,
-                "odometer": row.odometer,
-                "title_code": row.title_code,
-                "repair_estimate": row.repair_estimate,
-                "resale_estimate": row.resale_estimate,
-                "repair_details": row.repair_details,
-                "resale_details": row.resale_details,
-                "image_url": row.image_url,
-                "images": [row.image_url] if row.image_url else [],
-                "sale_name": row.sale_name,
-                "sale_date": row.sale_date,
-                "state_code": row.state_code,
-                "avg_tax_rate": avg_tax_rate,
-                "title_fee": title_fee,
-            })
+            vehicles.append({key: getattr(row, key) for key in row.keys()})
 
         return vehicles
 
@@ -138,164 +42,170 @@ def get_vehicles(db=Depends(get_db), current_user: dict = Depends(get_current_us
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ----------------------------------------------------
-# UPLOAD CSV FOR USER
-# ----------------------------------------------------
+# --------------------------------------------------------------
+# UPLOAD FILES (Your original Copart CSV upload route)
+# --------------------------------------------------------------
 @router.post("/upload_user_file")
-async def upload_user_file(
-    file: UploadFile = File(...),
+async def upload_user_file(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    try:
+        upload_dir = "/root/car-flip-analyzer/user_uploads"
+        os.makedirs(upload_dir, exist_ok=True)
+
+        file_path = os.path.join(upload_dir, file.filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        return {"status": "success", "filename": file.filename}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --------------------------------------------------------------
+# ADD MANUAL VEHICLE (Marketplace, Private Seller, etc.)
+# --------------------------------------------------------------
+@router.post("/add_manual_vehicle")
+async def add_manual_vehicle(
+    year: int = None,
+    make: str = None,
+    model: str = None,
+    mileage: int = None,
+    damage_description: str = None,
+    title_code: str = None,
+    listing_url: str = None,
+    location: str = None,
+    files: list[UploadFile] = File(None),
     db=Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+
     try:
-        if not file.filename.endswith((".csv", ".xlsx")):
-            raise HTTPException(status_code=400, detail="Only CSV or XLSX allowed.")
+        user_id = current_user["id"]
 
-        save_path = os.path.join(UPLOADS_DIR, file.filename)
-        with open(save_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        df = pd.read_csv(save_path) if file.filename.endswith(".csv") else pd.read_excel(save_path)
-        inserted = 0
-
-        for _, row in df.iterrows():
-            lot_number = safe_get(row, "lot_number", "")
-            lot_url = safe_get(row, "lot_url", "")
-
-            year = safe_get(row, "year", "")
-            make = safe_get(row, "make", "")
-            model = safe_get(row, "model", "")
-
-            damage = safe_get(row, "damage_description", "")
-            odometer = safe_get(row, "odometer", "")
-            title_code = safe_get(row, "title_code", "")
-
-            repair_est = safe_get(row, "repair_estimate", "")
-            resale_est = safe_get(row, "resale_estimate", "")
-            repair_details = safe_get(row, "repair_details", "")
-            resale_details = safe_get(row, "resale_details", "")
-
-            img_dir = os.path.join(DOWNLOAD_DIR, str(lot_number))
-            images = []
-
-            if os.path.isdir(img_dir):
-                for filename in sorted(os.listdir(img_dir)):
-                    if filename.lower().endswith((".jpg", ".jpeg", ".png")):
-                        images.append(os.path.join(img_dir, filename))
-
-            query = text("""
-                INSERT INTO user_vehicles
-                (user_id, lot_number, lot_url, year, make, model,
-                 damage_description, odometer, title_code,
-                 repair_estimate, resale_estimate, repair_details, resale_details, image_url)
-                VALUES
-                (:user_id, :lot_number, :lot_url, :year, :make, :model,
-                 :damage_description, :odometer, :title_code,
-                 :repair_estimate, :resale_estimate, :repair_details, :resale_details, :image_url);
-            """)
-
-            db.execute(query, {
-                "user_id": current_user["id"],
-                "lot_number": lot_number,
-                "lot_url": lot_url,
-                "year": year,
-                "make": make,
-                "model": model,
-                "damage_description": damage,
-                "odometer": odometer,
-                "title_code": title_code,
-                "repair_estimate": repair_est,
-                "resale_estimate": resale_est,
-                "repair_details": repair_details,
-                "resale_details": resale_details,
-                "image_url": "",
-            })
-
-            db.commit()
-            inserted += 1
-
-        return {"status": "success", "inserted_rows": inserted}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ----------------------------------------------------
-# ADD SINGLE VEHICLE (Manual Entry)
-# ----------------------------------------------------
-@router.post("/add_vehicle")
-def add_vehicle(payload: dict, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
-    try:
-        lot_number = payload.get("lot_number")
-        if not lot_number:
-            raise HTTPException(status_code=400, detail="lot_number required.")
-
-        img_dir = os.path.join(DOWNLOAD_DIR, str(lot_number))
-        images = []
-
-        if os.path.isdir(img_dir):
-            for filename in sorted(os.listdir(img_dir)):
-                if filename.lower().endswith((".jpg", ".jpeg", ".png")):
-                    images.append(os.path.join(img_dir, filename))
-
-        query = text("""
-            INSERT INTO user_vehicles
-            (user_id, lot_number, lot_url, year, make, model, damage_description, odometer,
-             title_code, repair_estimate, resale_estimate, repair_details, resale_details,
-             tax_amount, fees_amount, image_url)
-            VALUES
-            (:user_id, :lot_number, :lot_url, :year, :make, :model, :damage_description,
-             :odometer, :title_code, :repair_estimate, :resale_estimate, :repair_details,
-             :resale_details, :tax_amount, :fees_amount, :image_url);
+        # ----------------------------------------------------------
+        # Generate userId-numeric_sequence lot number
+        # ----------------------------------------------------------
+        seq_query = text("""
+            SELECT lot_number
+            FROM user_vehicles
+            WHERE user_id = :uid AND lot_number LIKE :pattern
+            ORDER BY id DESC
         """)
 
-        db.execute(query, {
-            "user_id": current_user["id"],
-            "lot_number": payload.get("lot_number"),
-            "lot_url": payload.get("lot_url", ""),
-            "year": payload.get("year", ""),
-            "make": payload.get("make", ""),
-            "model": payload.get("model", ""),
-            "damage_description": payload.get("damage_description", ""),
-            "odometer": payload.get("odometer", ""),
-            "title_code": payload.get("title_code", ""),
-            "repair_estimate": payload.get("repair_estimate", ""),
-            "resale_estimate": payload.get("resale_estimate", ""),
-            "repair_details": payload.get("repair_details", ""),
-            "resale_details": payload.get("resale_details", ""),
-            "tax_amount": payload.get("tax_amount", ""),
-            "fees_amount": payload.get("fees_amount", ""),
-            "image_url": json.dumps(images),
-        })
+        rows = db.execute(seq_query, {
+            "uid": user_id,
+            "pattern": f"{user_id}-%"
+        }).fetchall()
+
+        if rows:
+            try:
+                last_lot = rows[0].lot_number
+                last_seq = int(last_lot.split("-")[1])
+            except:
+                last_seq = 0
+        else:
+            last_seq = 0
+
+        new_seq = last_seq + 1
+        lot_number = f"{user_id}-{new_seq:05d}"
+
+        # ----------------------------------------------------------
+        # Save uploaded images
+        # ----------------------------------------------------------
+        save_folder = os.path.join(DOWNLOAD_DIR, lot_number)
+        os.makedirs(save_folder, exist_ok=True)
+
+        first_image_url = None
+
+        if files:
+            for idx, file in enumerate(files, start=1):
+                ext = os.path.splitext(file.filename)[-1] or ".jpg"
+                filename = f"{lot_number}_Image_{idx}{ext}"
+                save_path = os.path.join(save_folder, filename)
+
+                with open(save_path, "wb") as buffer:
+                    shutil.copyfileobj(file.file, buffer)
+
+                img_url = f"https://api.carflipanalyzer.com/backend/downloads/{lot_number}/{filename}"
+
+                if first_image_url is None:
+                    first_image_url = img_url
+
+        if not first_image_url:
+            first_image_url = ""
+
+        # ----------------------------------------------------------
+        # Get AI Repair & Resale Estimates
+        # ----------------------------------------------------------
+        from .ai_estimator import estimate_repair_cost, estimate_resale_value
+
+        repair_est = await estimate_repair_cost(first_image_url)
+        resale_est = await estimate_resale_value(year, make, model, mileage)
+
+        # ----------------------------------------------------------
+        # Insert into database (user_vehicles)
+        # ----------------------------------------------------------
+        insert_query = text("""
+            INSERT INTO user_vehicles
+            (user_id, lot_number, lot_url, year, make, model,
+             damage_description, odometer, title_code, sale_name, sale_date,
+             repair_estimate, resale_estimate, image_url)
+            OUTPUT INSERTED.id
+            VALUES
+            (:user_id, :lot_number, :lot_url, :year, :make, :model,
+             :damage_description, :odometer, :title_code, :sale_name, NULL,
+             :repair_estimate, :resale_estimate, :image_url)
+        """)
+
+        new_id = db.execute(insert_query, {
+            "user_id": user_id,
+            "lot_number": lot_number,
+            "lot_url": listing_url or "",
+            "year": year,
+            "make": make,
+            "model": model,
+            "damage_description": damage_description or "",
+            "odometer": mileage or "",
+            "title_code": title_code or "",
+            "sale_name": location or "Manual",
+            "repair_estimate": repair_est,
+            "resale_estimate": resale_est,
+            "image_url": first_image_url,
+        }).scalar()
 
         db.commit()
 
-        return {"status": "success"}
+        # ----------------------------------------------------------
+        # Return the created record
+        # ----------------------------------------------------------
+        return {
+            "status": "success",
+            "id": new_id,
+            "lot_number": lot_number,
+            "image_url": first_image_url,
+            "repair_estimate": repair_est,
+            "resale_estimate": resale_est,
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ----------------------------------------------------
+# --------------------------------------------------------------
 # DELETE VEHICLE
-# ----------------------------------------------------
+# --------------------------------------------------------------
 @router.delete("/delete_vehicle/{vehicle_id}")
 def delete_vehicle(vehicle_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     try:
-        query = text("""
+        user_id = current_user["id"]
+
+        delete_query = text("""
             DELETE FROM user_vehicles
-            WHERE id = :vehicle_id AND user_id = :user_id;
+            WHERE id = :id AND user_id = :uid
         """)
 
-        result = db.execute(query, {
-            "vehicle_id": vehicle_id,
-            "user_id": current_user["id"],
-        })
-
+        db.execute(delete_query, {"id": vehicle_id, "uid": user_id})
         db.commit()
-
-        if result.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Vehicle not found.")
 
         return {"status": "deleted"}
 

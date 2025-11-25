@@ -2,12 +2,120 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Wrench, DollarSign } from "lucide-react";
 
-const Dashboard = () => {
+///////////////////////////////////////////////////////////////////////////////////////////
+// MANUAL VEHICLE MODAL
+///////////////////////////////////////////////////////////////////////////////////////////
+function ManualVehicleModal({ API, close, reload }) {
+  const [form, setForm] = useState({
+    year: "",
+    make: "",
+    model: "",
+    mileage: "",
+    damage_description: "",
+    title_code: "",
+    location: "",
+    listing_url: "",
+  });
+
+  const [images, setImages] = useState([]);
+
+  const update = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleImageFiles = (e) => setImages([...images, ...Array.from(e.target.files)]);
+
+  const submit = async () => {
+    try {
+      const fd = new FormData();
+      Object.keys(form).forEach((k) => fd.append(k, form[k]));
+      images.forEach((img) => fd.append("files", img));
+
+      await axios.post(`${API}/add_manual_vehicle`, fd, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      close();
+      reload();
+    } catch (err) {
+      console.error("Manual upload failed:", err);
+      alert("Failed to add vehicle.");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+        <h2 className="text-xl font-semibold mb-4">Add Vehicle</h2>
+
+        {[
+          ["year", "Year"],
+          ["make", "Make"],
+          ["model", "Model"],
+          ["mileage", "Mileage"],
+          ["damage_description", "Damage"],
+          ["title_code", "Title Code"],
+          ["location", "Location"],
+          ["listing_url", "Listing URL (optional)"],
+        ].map(([key, label]) => (
+          <input
+            key={key}
+            name={key}
+            value={form[key]}
+            onChange={update}
+            placeholder={label}
+            className="w-full border rounded-lg p-2 mb-3"
+          />
+        ))}
+
+        <label className="font-medium text-gray-700">Photos</label>
+        <input
+          type="file"
+          multiple
+          accept="image/*"
+          onChange={handleImageFiles}
+          className="w-full border p-2 rounded mb-3"
+        />
+
+        {images.length > 0 && (
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {images.map((img, i) => (
+              <img
+                key={i}
+                src={URL.createObjectURL(img)}
+                className="w-full h-20 object-cover rounded"
+              />
+            ))}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button className="px-4 py-2 bg-gray-300 rounded-lg" onClick={close}>
+            Cancel
+          </button>
+          <button
+            className="px-4 py-2 bg-green-600 text-white rounded-lg"
+            onClick={submit}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// MAIN DASHBOARD
+///////////////////////////////////////////////////////////////////////////////////////////
+const Dashboard = ({ showAddModal, setShowAddModal }) => {
   const [cars, setCars] = useState([]);
   const [selectedCar, setSelectedCar] = useState(null);
   const [tempMargin, setTempMargin] = useState(15);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const API = process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com";
 
   const calculateCarWithMargin = (car, marginInput) => {
     const resale = Number(car.resale_estimate || 0);
@@ -41,16 +149,16 @@ const Dashboard = () => {
     };
   };
 
+  ////////////////////////////////////////////////////////////////////////////
+  // FETCH VEHICLES
+  ////////////////////////////////////////////////////////////////////////////
   useEffect(() => {
     const fetchCars = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(
-          `${process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com"}/get_vehicles`,
-          {
-            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-          }
-        );
+        const response = await axios.get(`${API}/get_vehicles`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
 
         let vehicles = [];
         const data = response.data;
@@ -71,6 +179,9 @@ const Dashboard = () => {
     fetchCars();
   }, []);
 
+  ////////////////////////////////////////////////////////////////////////////
+  // UPDATE VALUE
+  ////////////////////////////////////////////////////////////////////////////
   const updateCarValue = (id, field, value) => {
     setCars((prev) =>
       prev.map((car) => {
@@ -79,6 +190,10 @@ const Dashboard = () => {
       })
     );
   };
+
+  ////////////////////////////////////////////////////////////////////////////
+  // RENDER
+  ////////////////////////////////////////////////////////////////////////////
 
   if (loading)
     return (
@@ -97,6 +212,16 @@ const Dashboard = () => {
   return (
     <main className="p-6 bg-gray-50 min-h-screen">
 
+      {/* ⭐⭐⭐ SHOW ADD VEHICLE MODAL ⭐⭐⭐ */}
+      {showAddModal && (
+        <ManualVehicleModal
+          API={API}
+          close={() => setShowAddModal(false)}
+          reload={() => window.location.reload()}
+        />
+      )}
+
+      {/* CAR GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {cars.map((car) => (
           <div
@@ -133,6 +258,7 @@ const Dashboard = () => {
                   : "N/A"}
               </p>
 
+              {/* Repair + Resale Inputs */}
               <div className="flex items-center justify-between pt-2 border-t border-gray-200">
                 <div className="flex items-center space-x-1 text-gray-700">
                   <Wrench size={16} />
@@ -185,6 +311,7 @@ const Dashboard = () => {
         ))}
       </div>
 
+      {/* VIEW DETAILS MODAL */}
       {selectedCar && (() => {
         const activeCar = cars.find((c) => c.id === selectedCar.id) || selectedCar;
         const live = calculateCarWithMargin(activeCar, tempMargin);
@@ -305,7 +432,6 @@ const Dashboard = () => {
           </div>
         );
       })()}
-
     </main>
   );
 };

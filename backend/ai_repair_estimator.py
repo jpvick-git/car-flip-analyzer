@@ -8,7 +8,6 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import create_engine, text
 from openai import OpenAI
-from damage_similarity import get_similar_damage_cases
 
 # --------------------------------------------------
 # CONFIGURATION
@@ -261,27 +260,6 @@ def process_lot(lot, rds_engine):
         print(f"Error processing lot {lot}: {e}")
         return False
 
-# ------------------------------------------
-# FORMAT RETRIEVAL RESULTS AS JSON FOR GPT
-# ------------------------------------------
-def get_retrieval_examples_json(damage_description):
-    """
-    Returns up to 5 similar past examples in clean JSON format.
-    These will be fed into GPT to improve accuracy.
-    """
-    similar = get_similar_damage_cases(damage_description, top_n=5)
-
-    examples = []
-    for score, row in similar:
-        examples.append({
-            "damage_main": row.damage_main,
-            "damage_severity": row.damage_severity,
-            "repair_cost_range": row.repair_cost_range,
-            "damage_notes": row.damage_notes,
-            "similarity_score": float(score)
-        })
-
-    return examples
 # --------------------------------------------------
 # MAIN BATCH EXECUTION
 # --------------------------------------------------

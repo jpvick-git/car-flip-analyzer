@@ -5,7 +5,7 @@ router = APIRouter()
 
 NHTSA_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles"
 
-# These are the vehicle types we keep (cars/SUVs/light trucks)
+# Only real passenger car brands
 VALID_CAR_MAKES = {
     "ACURA", "ALFA ROMEO", "ASTON MARTIN",
     "AUDI", "BENTLEY", "BMW", "BUICK", "CADILLAC",
@@ -20,6 +20,7 @@ VALID_CAR_MAKES = {
     "SCION", "SUBARU", "TESLA", "TOYOTA",
     "VOLKSWAGEN", "VOLVO"
 }
+
 @router.get("/nhtsa/makes")
 def get_filtered_makes():
     url = f"{NHTSA_BASE}/getallmanufacturers?format=json"
@@ -29,29 +30,14 @@ def get_filtered_makes():
     filtered = []
 
     for item in data:
-        make = item.get("Mfr_CommonName") or item.get("Mfr_Name")
-        vehicle_types = item.get("VehicleTypes", [])
+        name = (item.get("Mfr_CommonName") or item.get("Mfr_Name") or "").upper()
+        name = name.replace(",", "").strip()
 
-        if not make:
-            continue
+        # return ONLY valid real automotive makes
+        if name in VALID_CAR_MAKES:
+            filtered.append(name)
 
-        keep = False
-        for vt in vehicle_types:
-            vt_name = (vt.get("Name") or "").upper()
-            if vt_name in ALLOWED_TYPES:
-                keep = True
-                break
-
-        if keep:
-            filtered.append({
-                "make": make.upper().replace(",", ""),  # Clean names
-            })
-
-    # Remove duplicates and sort
-    filtered = sorted(
-        list({m["make"] for m in filtered})
-    )
-
+    filtered = sorted(list(set(filtered)))
     return {"makes": filtered}
 
 

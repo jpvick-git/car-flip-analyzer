@@ -73,6 +73,8 @@ def get_vehicles(db=Depends(get_db), current_user: dict = Depends(get_current_us
                 uv.repair_details,
                 uv.resale_details,
                 uv.image_url,
+                uv.sale_name,
+                uv.sale_date,
                 u.state_code
             FROM user_vehicles uv
             JOIN users u ON uv.user_id = u.id
@@ -123,8 +125,8 @@ def get_vehicles(db=Depends(get_db), current_user: dict = Depends(get_current_us
                 "resale_details": row.resale_details,
                 "image_url": row.image_url,
                 "images": [row.image_url] if row.image_url else [],
-
-                # NEW — Added state & taxes
+                "sale_name": row.sale_name,
+                "sale_date": row.sale_date,
                 "state_code": row.state_code,
                 "avg_tax_rate": avg_tax_rate,
                 "title_fee": title_fee,

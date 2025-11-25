@@ -37,8 +37,7 @@ def get_vehicles(current_user: dict = Depends(get_current_user)):
 
         vehicles = []
         for row in rows:
-            vehicles.append({key: getattr(row, key) for key in row.keys()})
-
+            vehicles.append(dict(row._mapping))
         return vehicles
 
     except Exception as e:

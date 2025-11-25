@@ -4,7 +4,7 @@ import os
 import shutil
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy import text
-from .db import get_db
+from .db import get_engine
 from .auth import get_current_user
 from fastapi.responses import JSONResponse
 
@@ -19,7 +19,7 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 # GET ALL VEHICLES FOR USER (Dashboard)
 # --------------------------------------------------------------
 @router.get("/get_vehicles")
-def get_vehicles(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+def get_vehicles(db=Depends(get_engine), current_user: dict = Depends(get_current_user)):
     try:
         user_id = current_user["id"]
 
@@ -75,7 +75,7 @@ async def add_manual_vehicle(
     listing_url: str = None,
     location: str = None,
     files: list[UploadFile] = File(None),
-    db=Depends(get_db),
+    db=Depends(get_engine),
     current_user: dict = Depends(get_current_user),
 ):
 
@@ -195,7 +195,7 @@ async def add_manual_vehicle(
 # DELETE VEHICLE
 # --------------------------------------------------------------
 @router.delete("/delete_vehicle/{vehicle_id}")
-def delete_vehicle(vehicle_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+def delete_vehicle(vehicle_id: int, db=Depends(get_engine), current_user: dict = Depends(get_current_user)):
     try:
         user_id = current_user["id"]
 

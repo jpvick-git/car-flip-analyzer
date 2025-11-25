@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import CarCard from "../components/CarCard"; 
-import Header from "../components/Header";
-
+import CarCard from "../components/CarCard"; // FIXED PATH
 
 export default function Dashboard({ openCSVModal }) {
   const [cars, setCars] = useState([]);
@@ -34,17 +32,6 @@ export default function Dashboard({ openCSVModal }) {
 
   return (
     <div className="p-4 max-w-5xl mx-auto">
-
-      {/* Inject callbacks into Header */}
-      <Header
-        onAddVehicle={() => setShowAddModal(true)}
-        onUploadCSV={openCSVModal}
-        uploadUserFile={null}
-        logout={() => {
-          localStorage.removeItem("token");
-          window.location.href = "/login";
-        }}
-      />
 
       {/* --------------------------------- */}
       {/* Vehicle Grid */}

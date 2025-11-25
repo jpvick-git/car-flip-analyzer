@@ -3,10 +3,11 @@ import { Wrench, DollarSign } from "lucide-react";
 export default function CarCard({
   car,
   setSelectedCar,
-  onUpdateValues, // <-- parent will pass this
+  onUpdateValues,
 }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
+      
       {/* Image Section */}
       <div className="relative">
         <img
@@ -14,8 +15,6 @@ export default function CarCard({
           alt={`${car.make} ${car.model}`}
           className="w-full h-56 object-cover"
         />
-
-        {/* Damage Badge */}
         <div className="absolute top-3 left-3 bg-blue-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
           {car.damage_description || "Unknown Damage"}
         </div>
@@ -40,7 +39,7 @@ export default function CarCard({
             : "N/A"}
         </p>
 
-        {/* Repair & Resale Row */}
+        {/* Repair & Resale Inputs */}
         <div className="flex items-center justify-between pt-2 border-t border-gray-100">
 
           {/* Repair */}
@@ -78,6 +77,14 @@ export default function CarCard({
           </div>
         </div>
 
+        {/* Max Bid Row */}
+        <div className="flex items-center space-x-1 mt-3 text-gray-800">
+          <span className="font-semibold text-sm">Max Bid:</span>
+          <span className="text-sm">
+            ${car.max_bid?.toLocaleString() || 0}
+          </span>
+        </div>
+
         {/* Footer Buttons */}
         <div className="flex justify-between items-center pt-3">
           <button
@@ -99,6 +106,7 @@ export default function CarCard({
           )}
         </div>
       </div>
+
     </div>
   );
 }

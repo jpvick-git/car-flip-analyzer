@@ -11,8 +11,7 @@ import subprocess
 import os
 import time
 
-# Training routes
-from .training_routes import router_training
+
 
 # --------------------------------------------------
 # ENV + APP CONFIG
@@ -151,7 +150,6 @@ from .user_vehicles import router as vehicles_router
 from .auth import router as auth_router
 
 # REGISTER ALL ROUTERS HERE EXACTLY ONE TIME
-app.include_router(router_training)
 app.include_router(uploads_router)
 app.include_router(vehicles_router)
 app.include_router(auth_router)

@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
+engine = get_engine()
+
 # Correct downloads directory
 DOWNLOAD_DIR = "/root/car-flip-analyzer/backend/downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)

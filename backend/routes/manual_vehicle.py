@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 import os
 import shutil
 from sqlalchemy import text
-from ..database import engine
+from ..db import engine
 from ..auth_utils import get_current_user
 from ..ai_estimator import estimate_repair_cost, estimate_resale_value
 

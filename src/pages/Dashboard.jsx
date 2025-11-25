@@ -45,8 +45,8 @@ function ManualVehicleModal({ API, close, reload }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-        <h2 className="text-xl font-semibold mb-4">Add Vehicle</h2>
+      <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl text-black">
+        <h2 className="text-xl font-semibold mb-4 text-black">Add Vehicle</h2>
 
         {[
           ["year", "Year"],
@@ -64,17 +64,17 @@ function ManualVehicleModal({ API, close, reload }) {
             value={form[key]}
             onChange={update}
             placeholder={label}
-            className="w-full border rounded-lg p-2 mb-3"
+            className="w-full border rounded-lg p-2 mb-3 text-black"
           />
         ))}
 
-        <label className="font-medium text-gray-700">Photos</label>
+        <label className="font-medium text-black">Photos</label>
         <input
           type="file"
           multiple
           accept="image/*"
           onChange={handleImageFiles}
-          className="w-full border p-2 rounded mb-3"
+          className="w-full border p-2 rounded mb-3 text-black"
         />
 
         {images.length > 0 && (
@@ -90,7 +90,7 @@ function ManualVehicleModal({ API, close, reload }) {
         )}
 
         <div className="flex justify-end gap-2">
-          <button className="px-4 py-2 bg-gray-300 rounded-lg" onClick={close}>
+          <button className="px-4 py-2 bg-gray-300 rounded-lg text-black" onClick={close}>
             Cancel
           </button>
           <button
@@ -104,7 +104,6 @@ function ManualVehicleModal({ API, close, reload }) {
     </div>
   );
 }
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 // MAIN DASHBOARD
 ///////////////////////////////////////////////////////////////////////////////////////////

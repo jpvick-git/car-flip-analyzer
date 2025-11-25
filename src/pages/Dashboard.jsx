@@ -51,7 +51,7 @@ function ManualVehicleModal({ API, close, reload }) {
     const fetchMakes = async () => {
       try {
         const res = await axios.get(
-          "https://www.carqueryapi.com/api/0.3/?cmd=getMakes"
+          "https://www.carqueryapi.com/api/0.3/?callback=?&cmd=getMakes"
         );
 
         const parsed = parseCarQuery(res.data);
@@ -80,7 +80,8 @@ function ManualVehicleModal({ API, close, reload }) {
 
     const fetchModels = async () => {
       try {
-        const url = `https://www.carqueryapi.com/api/0.3/?cmd=getModels&make=${form.make}`;
+        const url = `https://www.carqueryapi.com/api/0.3/?callback=?&cmd=getModels&make=${form.make}`
+;
         const res = await axios.get(url);
 
         const parsed = parseCarQuery(res.data);
@@ -107,7 +108,7 @@ function ManualVehicleModal({ API, close, reload }) {
 
     const fetchTrims = async () => {
       try {
-        const url = `https://www.carqueryapi.com/api/0.3/?cmd=getTrims&make=${form.make}&model=${form.model}&year=${form.year}`;
+        const url = `https://www.carqueryapi.com/api/0.3/?callback=?&cmd=getTrims&make=${form.make}&model=${form.model}&year=${form.year}`;
         const res = await axios.get(url);
 
         const parsed = parseCarQuery(res.data);

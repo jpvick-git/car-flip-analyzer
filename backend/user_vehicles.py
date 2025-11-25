@@ -19,18 +19,19 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 # GET ALL VEHICLES FOR USER (Dashboard)
 # --------------------------------------------------------------
 @router.get("/get_vehicles")
-def get_vehicles(db=Depends(get_engine), current_user: dict = Depends(get_current_user)):
+def get_vehicles(current_user: dict = Depends(get_current_user)):
     try:
         user_id = current_user["id"]
 
-        query = text("""
-            SELECT *
-            FROM user_vehicles
-            WHERE user_id = :uid
-            ORDER BY id DESC
-        """)
+        with engine.connect() as conn:
+            query = text("""
+                SELECT *
+                FROM user_vehicles
+                WHERE user_id = :uid
+                ORDER BY id DESC
+            """)
 
-        rows = db.execute(query, {"uid": user_id}).fetchall()
+            rows = conn.execute(query, {"uid": user_id}).fetchall()
 
         vehicles = []
         for row in rows:
@@ -39,8 +40,8 @@ def get_vehicles(db=Depends(get_engine), current_user: dict = Depends(get_curren
         return vehicles
 
     except Exception as e:
+        print("❌ ERROR get_vehicles:", e)
         raise HTTPException(status_code=500, detail=str(e))
-
 
 # --------------------------------------------------------------
 # UPLOAD FILES (Your original Copart CSV upload route)

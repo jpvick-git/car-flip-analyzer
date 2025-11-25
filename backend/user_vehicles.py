@@ -214,4 +214,88 @@ async def upload_user_file(
 
         return {"status": "success", "inserted_rows": inserted}
 
-    excep
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ----------------------------------------------------
+# ADD SINGLE VEHICLE (Manual Entry)
+# ----------------------------------------------------
+@router.post("/add_vehicle")
+def add_vehicle(payload: dict, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    try:
+        lot_number = payload.get("lot_number")
+        if not lot_number:
+            raise HTTPException(status_code=400, detail="lot_number required.")
+
+        img_dir = os.path.join(DOWNLOAD_DIR, str(lot_number))
+        images = []
+
+        if os.path.isdir(img_dir):
+            for filename in sorted(os.listdir(img_dir)):
+                if filename.lower().endswith((".jpg", ".jpeg", ".png")):
+                    images.append(os.path.join(img_dir, filename))
+
+        query = text("""
+            INSERT INTO user_vehicles
+            (user_id, lot_number, lot_url, year, make, model, damage_description, odometer,
+             title_code, repair_estimate, resale_estimate, repair_details, resale_details,
+             tax_amount, fees_amount, image_url)
+            VALUES
+            (:user_id, :lot_number, :lot_url, :year, :make, :model, :damage_description,
+             :odometer, :title_code, :repair_estimate, :resale_estimate, :repair_details,
+             :resale_details, :tax_amount, :fees_amount, :image_url);
+        """)
+
+        db.execute(query, {
+            "user_id": current_user["id"],
+            "lot_number": payload.get("lot_number"),
+            "lot_url": payload.get("lot_url", ""),
+            "year": payload.get("year", ""),
+            "make": payload.get("make", ""),
+            "model": payload.get("model", ""),
+            "damage_description": payload.get("damage_description", ""),
+            "odometer": payload.get("odometer", ""),
+            "title_code": payload.get("title_code", ""),
+            "repair_estimate": payload.get("repair_estimate", ""),
+            "resale_estimate": payload.get("resale_estimate", ""),
+            "repair_details": payload.get("repair_details", ""),
+            "resale_details": payload.get("resale_details", ""),
+            "tax_amount": payload.get("tax_amount", ""),
+            "fees_amount": payload.get("fees_amount", ""),
+            "image_url": json.dumps(images),
+        })
+
+        db.commit()
+
+        return {"status": "success"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ----------------------------------------------------
+# DELETE VEHICLE
+# ----------------------------------------------------
+@router.delete("/delete_vehicle/{vehicle_id}")
+def delete_vehicle(vehicle_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    try:
+        query = text("""
+            DELETE FROM user_vehicles
+            WHERE id = :vehicle_id AND user_id = :user_id;
+        """)
+
+        result = db.execute(query, {
+            "vehicle_id": vehicle_id,
+            "user_id": current_user["id"],
+        })
+
+        db.commit()
+
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Vehicle not found.")
+
+        return {"status": "deleted"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

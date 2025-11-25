@@ -28,8 +28,12 @@ export default function Header({ onAddVehicle, onUploadCSV, logout }) {
       </div>
 
       {/* Hamburger Button */}
-      <button onClick={() => setMenuOpen(!menuOpen)}>
-        {menuOpen ? <X size={28} /> : <Menu size={28} />}
+      <button onClick={() => setMenuOpen(!menuOpen)} className="p-1">
+        {menuOpen ? (
+          <X size={28} color="black" />
+        ) : (
+          <Menu size={28} color="black" />
+        )}
       </button>
 
       {/* Slide-out Drawer */}

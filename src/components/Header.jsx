@@ -37,45 +37,49 @@ export default function Header({ onAddVehicle, onUploadCSV, logout }) {
       </button>
 
       {/* Slide-out Drawer */}
-      {menuOpen && (
-        <div className="absolute right-0 top-16 bg-white w-64 shadow-xl p-4 z-50 rounded-l-lg border">
-          <div className="flex flex-col space-y-4">
+		{menuOpen && (
+		  <div className="absolute right-4 top-16 w-64 bg-white border border-gray-200 rounded-md shadow-sm z-50">
+			<div className="flex flex-col py-2">
 
-            {/* Upload CSV */}
-            <button
-              onClick={() => {
-                setMenuOpen(false);
-                onUploadCSV();
-              }}
-              className="text-left w-full px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 transition"
-            >
-              Upload CSV
-            </button>
+			  {/* Upload CSV */}
+			  <button
+				onClick={() => {
+				  setMenuOpen(false);
+				  onUploadCSV();
+				}}
+				className="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-gray-100"
+			  >
+				Upload CSV
+			  </button>
 
-            {/* Add Vehicle */}
-            <button
-              onClick={() => {
-                setMenuOpen(false);
-                onAddVehicle();
-              }}
-              className="text-left w-full px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 transition"
-            >
-              Add Vehicle
-            </button>
+			  {/* Add Vehicle */}
+			  <button
+				onClick={() => {
+				  setMenuOpen(false);
+				  onAddVehicle();
+				}}
+				className="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-gray-100"
+			  >
+				Add Vehicle
+			  </button>
 
-            {/* Logout */}
-            <button
-              onClick={() => {
-                setMenuOpen(false);
-                logout();
-              }}
-              className="text-left w-full px-3 py-2 mt-6 rounded bg-red-500 text-white hover:bg-red-600 transition"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      )}
+			  {/* Divider */}
+			  <div className="border-t my-1"></div>
+
+			  {/* Logout */}
+			  <button
+				onClick={() => {
+				  setMenuOpen(false);
+				  logout();
+				}}
+				className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+			  >
+				Logout
+			  </button>
+			</div>
+		  </div>
+		)}
+
     </header>
   );
 }

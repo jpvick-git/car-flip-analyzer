@@ -3,7 +3,7 @@ import axios from "axios";
 import { Wrench, DollarSign } from "lucide-react";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-// MANUAL VEHICLE MODAL — CARQUERY API VERSION (CLEAN MAKES, MODELS, TRIMS)
+// MANUAL VEHICLE MODAL — FIXED CARQUERY VERSION (NO UI CHANGES)
 ///////////////////////////////////////////////////////////////////////////////////////////
 function ManualVehicleModal({ API, close, reload }) {
   const [form, setForm] = useState({
@@ -24,7 +24,20 @@ function ManualVehicleModal({ API, close, reload }) {
 
   const [images, setImages] = useState([]);
 
-  // Years 1980–2026
+  // -----------------------------
+  // PARSE CARQUERY JSON-P
+  // -----------------------------
+  const parseCarQuery = (data) => {
+    try {
+      const jsonStr = data.substring(data.indexOf("{"), data.lastIndexOf("}") + 1);
+      return JSON.parse(jsonStr);
+    } catch (err) {
+      console.error("CarQuery parsing error:", err, data);
+      return {};
+    }
+  };
+
+  // Years
   const years = Array.from({ length: 2026 - 1980 + 1 }, (_, i) => 1980 + i);
 
   const update = (e) => setForm({ ...form, [e.target.name]: e.target.value });
@@ -32,9 +45,9 @@ function ManualVehicleModal({ API, close, reload }) {
   const handleImageFiles = (e) =>
     setImages([...images, ...Array.from(e.target.files)]);
 
-  // -------------------------------------------------------
-  // LOAD MAKES (CARQUERY) ON MODAL OPEN
-  // -------------------------------------------------------
+  // -----------------------------
+  // LOAD MAKES (COMMON AUTOMOTIVE ONLY)
+  // -----------------------------
   useEffect(() => {
     const fetchMakes = async () => {
       try {
@@ -42,28 +55,26 @@ function ManualVehicleModal({ API, close, reload }) {
           "https://www.carqueryapi.com/api/0.3/?cmd=getMakes"
         );
 
-        let makeList = res.data.Makes || [];
+        const parsed = parseCarQuery(res.data);
+        let list = parsed.Makes || [];
 
-        // Clean: Only include real automotive makes
-        makeList = makeList.filter((m) => m.make_is_common == "1");
+        // only common automotive makers
+        list = list.filter((m) => m.make_is_common === "1");
 
-        // Sort A → Z
-        makeList.sort((a, b) =>
-          a.make_display.localeCompare(b.make_display)
-        );
+        list.sort((a, b) => a.make_display.localeCompare(b.make_display));
 
-        setMakes(makeList);
+        setMakes(list);
       } catch (err) {
-        console.error("Failed to load automotive makes:", err);
+        console.error("Failed to load makes:", err);
       }
     };
 
     fetchMakes();
   }, []);
 
-  // -------------------------------------------------------
-  // LOAD MODELS WHEN MAKE CHANGES
-  // -------------------------------------------------------
+  // -----------------------------
+  // LOAD MODELS WHEN MAKE SELECTED
+  // -----------------------------
   useEffect(() => {
     if (!form.make) return;
 
@@ -72,16 +83,14 @@ function ManualVehicleModal({ API, close, reload }) {
         const url = `https://www.carqueryapi.com/api/0.3/?cmd=getModels&make=${form.make}`;
         const res = await axios.get(url);
 
-        let modelList = res.data.Models || [];
+        const parsed = parseCarQuery(res.data);
+        let list = parsed.Models || [];
 
-        // Sort A → Z
-        modelList.sort((a, b) =>
-          a.model_name.localeCompare(b.model_name)
-        );
+        list.sort((a, b) => a.model_name.localeCompare(b.model_name));
 
-        setModels(modelList);
+        setModels(list);
+        setTrims([]); // clear trims
         setForm((prev) => ({ ...prev, model: "", trim: "" }));
-        setTrims([]);
       } catch (err) {
         console.error("Failed to load models:", err);
       }
@@ -90,37 +99,38 @@ function ManualVehicleModal({ API, close, reload }) {
     fetchModels();
   }, [form.make]);
 
-  // -------------------------------------------------------
+  // -----------------------------
   // LOAD TRIMS WHEN YEAR + MAKE + MODEL SELECTED
-  // -------------------------------------------------------
+  // -----------------------------
   useEffect(() => {
     if (!form.year || !form.make || !form.model) return;
 
-    const loadTrims = async () => {
+    const fetchTrims = async () => {
       try {
         const url = `https://www.carqueryapi.com/api/0.3/?cmd=getTrims&make=${form.make}&model=${form.model}&year=${form.year}`;
         const res = await axios.get(url);
 
-        let trimsList = res.data.Trims || [];
+        const parsed = parseCarQuery(res.data);
+        let list = parsed.Trims || [];
 
-        // Extract trim names (CarQuery uses model_trim)
-        const names = trimsList
+        // extract trim names
+        const trimNames = list
           .map((t) => t.model_trim)
           .filter((t) => t && t.trim() !== "");
 
-        setTrims([...new Set(names)]); // unique
+        setTrims([...new Set(trimNames)]); // unique list
         setForm((prev) => ({ ...prev, trim: "" }));
       } catch (err) {
         console.error("Failed to load trims:", err);
       }
     };
 
-    loadTrims();
+    fetchTrims();
   }, [form.year, form.make, form.model]);
 
-  // -------------------------------------------------------
+  // -----------------------------
   // SUBMIT
-  // -------------------------------------------------------
+  // -----------------------------
   const submit = async () => {
     try {
       const fd = new FormData();
@@ -142,10 +152,12 @@ function ManualVehicleModal({ API, close, reload }) {
     }
   };
 
+  // -----------------------------
+  // RENDER (UNCHANGED UI)
+  // -----------------------------
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl text-black">
-
         <h2 className="text-xl font-semibold mb-4 text-black">Add Vehicle</h2>
 
         {/* YEAR */}
@@ -181,8 +193,8 @@ function ManualVehicleModal({ API, close, reload }) {
           name="model"
           value={form.model}
           onChange={update}
-          className="w-full border rounded-lg p-2 mb-3 text-black"
           disabled={!models.length}
+          className="w-full border rounded-lg p-2 mb-3 text-black"
         >
           <option value="">Select Model</option>
           {models.map((m) => (
@@ -197,14 +209,12 @@ function ManualVehicleModal({ API, close, reload }) {
           name="trim"
           value={form.trim}
           onChange={update}
-          className="w-full border rounded-lg p-2 mb-3 text-black"
           disabled={!trims.length}
+          className="w-full border rounded-lg p-2 mb-3 text-black"
         >
           <option value="">Select Trim</option>
           {trims.map((t, i) => (
-            <option key={i} value={t}>
-              {t}
-            </option>
+            <option key={i} value={t}>{t}</option>
           ))}
         </select>
 

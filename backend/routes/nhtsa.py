@@ -6,18 +6,20 @@ router = APIRouter()
 NHTSA_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles"
 
 # These are the vehicle types we keep (cars/SUVs/light trucks)
-ALLOWED_TYPES = {
-    "PASSENGER CAR",
-    "MULTIPURPOSE PASSENGER VEHICLE",
-    "SPORT UTILITY VEHICLE",
-    "TRUCK",
-    "PICKUP",
-    "STATION WAGON",
-    "VAN",
-    "MINIVAN",
-    "LIGHT TRUCK"
+VALID_CAR_MAKES = {
+    "ACURA", "ALFA ROMEO", "ASTON MARTIN",
+    "AUDI", "BENTLEY", "BMW", "BUICK", "CADILLAC",
+    "CHEVROLET", "CHRYSLER", "DODGE", "FERRARI",
+    "FIAT", "FORD", "GENESIS", "GMC", "HONDA",
+    "HYUNDAI", "INFINITI", "JAGUAR", "JEEP",
+    "KIA", "LAMBORGHINI", "LAND ROVER", "LEXUS",
+    "LINCOLN", "LOTUS", "LUCID", "MASERATI",
+    "MAZDA", "MCLAREN", "MERCEDES-BENZ", "MINI",
+    "MITSUBISHI", "NISSAN", "POLESTAR", "PORSCHE",
+    "RAM", "RIVIAN", "ROLLS-ROYCE", "SAAB",
+    "SCION", "SUBARU", "TESLA", "TOYOTA",
+    "VOLKSWAGEN", "VOLVO"
 }
-
 @router.get("/nhtsa/makes")
 def get_filtered_makes():
     url = f"{NHTSA_BASE}/getallmanufacturers?format=json"

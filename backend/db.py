@@ -1,4 +1,3 @@
-# db.py
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 import os
@@ -13,8 +12,8 @@ print(f"🌐 Connecting to database: {DATABASE_URL}")
 
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,
-    connect_args={"TrustServerCertificate": "yes"},
+    pool_pre_ping=True
+    # ❌ REMOVE connect_args entirely for PostgreSQL!
 )
 
 def get_engine():

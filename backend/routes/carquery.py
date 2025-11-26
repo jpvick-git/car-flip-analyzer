@@ -74,16 +74,16 @@ def get_trims(make: str, year: int | None = None, model: str | None = None, mode
         clean_name = clean(raw_name)
 
         if clean_name.lower() == cleaned_input:
-            normalized_model = clean_name
+            normalized_model = clean_name.title()
             break
 
         # partial match fallback ("equinox" matches "Equinox AWD" etc.)
         if cleaned_input in clean_name.lower():
-            normalized_model = clean_name
+            normalized_model = clean_name.title()
             # don't break yet: prefer exact match if found later
 
     # fallback: what user sent
-    normalized_model = normalized_model or clean(input_model)
+    normalized_model = (normalized_model or clean(input_model)).title()
 
     # -------------------------------------------
     # STEP 3 — ALWAYS fetch trims without year first

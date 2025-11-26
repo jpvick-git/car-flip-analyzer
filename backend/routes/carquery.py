@@ -88,6 +88,7 @@ def get_trims(make: str, year: int, model: str | None = None, model_name: str | 
         f"&make={make}"
         f"&model={normalized_model}"
         f"&year={year}"
+        f"&sold_in_us=1"
         f"&callback="
     )
 
@@ -99,12 +100,13 @@ def get_trims(make: str, year: int, model: str | None = None, model_name: str | 
     # 2️⃣ IF NO TRIMS → fall back to no-year
     # ---------------------------------------
     if not trims_raw:
-        url_no_year = (
-            f"{CARQUERY}?cmd=getTrims"
-            f"&make={make}"
-            f"&model={normalized_model}"
-            f"&callback="
-        )
+    url_no_year = (
+        f"{CARQUERY}?cmd=getTrims"
+        f"&make={make}"
+        f"&model={normalized_model}"
+        f"&sold_in_us=1"
+        f"&callback="
+    )
         r2 = requests.get(url_no_year, timeout=20)
         data2 = extract_json(r2.text)
         trims_raw = data2.get("Trims", [])

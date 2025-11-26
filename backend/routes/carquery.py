@@ -45,11 +45,16 @@ def get_models(make: str):
 
 
 @router.get("/carquery/trims")
-def get_trims(make: str, model_name: str, year: int):
+def get_trims(make: str, year: int, model: str | None = None, model_name: str | None = None):
+    # Accept either model_name or model
+    effective_model = model_name or model
+    if not effective_model:
+        return {"error": "No model provided"}
+
     url = (
         f"{CARQUERY}?cmd=getTrims"
         f"&make={make}"
-        f"&model={model_name}"
+        f"&model={effective_model}"
         f"&year={year}"
         f"&sold_in_us=1"
         f"&callback="
@@ -63,7 +68,7 @@ def get_trims(make: str, model_name: str, year: int):
     trims = sorted({
         t.get("model_trim")
         for t in trims_raw
-        if t.get("model_trim") not in ["", None]
+        if t.get("model_trim")
     })
 
     return {"trims": trims}

@@ -1,82 +1,44 @@
-from fastapi import APIRouter
-import requests
 import json
+import requests
+from fastapi import APIRouter
 
 router = APIRouter()
 
 CARQUERY_BASE = "https://www.carqueryapi.com/api/0.3/"
 
 
-# ---------------------------------------------------------
-# 1. MAKES
-# ---------------------------------------------------------
-@router.get("/carquery/makes")
-def get_makes():
+def safe_load_json(possible_json):
     """
-    Returns all U.S.-sold consumer makes using CarQuery.
+    CarQuery wraps JSON inside a string.
+    This function safely parses it and never throws.
     """
-    url = f"{CARQUERY_BASE}?cmd=getMakes&sold_in_us=1"
+    if not possible_json:
+        return []
 
-    r = requests.get(url, timeout=15)
-    raw = r.json()
+    if isinstance(possible_json, list):
+        return possible_json
 
-    # CarQuery wraps JSON inside a string
-    json_str = raw.get("Makes", "[]")
-    makes_raw = json.loads(json_str)
+    if not isinstance(possible_json, str):
+        return []
 
-    makes = sorted({
-        m.get("make_display")
-        for m in makes_raw
-        if m.get("make_display")
-    })
+    possible_json = possible_json.strip()
 
-    return {"makes": makes}
+    if not possible_json or possible_json in ["null", "None"]:
+        return []
 
-
-# ---------------------------------------------------------
-# 2. MODELS
-# ---------------------------------------------------------
-@router.get("/carquery/models")
-def get_models(make: str):
-    """
-    Returns all models for a given make.
-    CarQuery requires lowercase + sold_in_us flag.
-    """
-    make = make.lower()
-
-    url = (
-        f"{CARQUERY_BASE}?cmd=getModels"
-        f"&make={make}"
-        "&sold_in_us=1"
-    )
-
-    r = requests.get(url, timeout=15)
-    raw = r.json()
-
-    json_str = raw.get("Models", "[]")
-    models_raw = json.loads(json_str)
-
-    models = sorted({
-        m.get("model_name")
-        for m in models_raw
-        if m.get("model_name")
-    })
-
-    return {"models": models}
+    try:
+        return json.loads(possible_json)
+    except Exception:
+        return []
 
 
-# ---------------------------------------------------------
-# 3. TRIMS (THIS IS THE IMPORTANT ONE)
-# ---------------------------------------------------------
 @router.get("/carquery/trims")
 def get_trims(make: str, model: str, year: int):
     """
-    Returns all trims for a given make/model/year.
-    CarQuery trims endpoint ONLY works correctly with:
-    - lowercase make + model
-    - sold_in_us flag
-    - empty parameters for body & keywords
+    Safe, CarQuery-proof trims loader.
+    Always returns {"trims": [...]} — never 500.
     """
+
     make = make.lower()
     model = model.lower()
 
@@ -90,13 +52,17 @@ def get_trims(make: str, model: str, year: int):
         "&keywords="
     )
 
-    r = requests.get(url, timeout=15)
-    raw = r.json()
+    try:
+        r = requests.get(url, timeout=15)
+        raw = r.json()
+    except Exception:
+        return {"trims": []}
 
-    # Trim list is also returned inside a JSON string
-    json_str = raw.get("Trims", "[]")
-    trims_raw = json.loads(json_str)
+    trims_json_str = raw.get("Trims", "[]")
 
+    trims_raw = safe_load_json(trims_json_str)
+
+    # Extract trim names
     trims = sorted({
         t.get("model_trim")
         for t in trims_raw

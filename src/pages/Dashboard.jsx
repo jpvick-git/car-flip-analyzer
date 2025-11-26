@@ -42,17 +42,18 @@ function ManualVehicleModal({ API, close, reload }) {
   // ---------------------------
   // LOAD YEARS
   // ---------------------------
-  useEffect(() => {
-    const loadYears = async () => {
-      try {
-        const res = await axios.get(`${API}/specs/years`);
-        setYears(res.data || []);
-      } catch (err) {
-        console.error("Failed to load years:", err);
-      }
-    };
-    loadYears();
-  }, [API]);
+	useEffect(() => {
+	  const loadYears = async () => {
+		try {
+		  const res = await axios.get(`${API}/api/specs/years`);
+		  setYears(res.data || []);
+		} catch (err) {
+		  console.error("Failed to load years:", err);
+		}
+	  };
+	  loadYears();
+	}, [API]);
+
 
   // ---------------------------
   // LOAD MAKES WHEN YEAR CHANGES
@@ -62,7 +63,7 @@ function ManualVehicleModal({ API, close, reload }) {
 
     const loadMakes = async () => {
       try {
-        const res = await axios.get(`${API}/specs/makes/${form.year}`);
+        const res = await axios.get(`${API}/api/specs/makes/${form.year}`);
         setMakes(res.data || []);
         setModels([]);
         setTrims([]);
@@ -83,9 +84,7 @@ function ManualVehicleModal({ API, close, reload }) {
 
     const loadModels = async () => {
       try {
-        const res = await axios.get(
-          `${API}/specs/models/${form.year}/${form.make}`
-        );
+        const res = await axios.get(`${API}/api/specs/models/${form.year}/${form.make}`);
         setModels(res.data || []);
         setTrims([]);
         setForm((prev) => ({ ...prev, model: "", trim: "" }));
@@ -105,9 +104,7 @@ function ManualVehicleModal({ API, close, reload }) {
 
     const loadTrims = async () => {
       try {
-        const res = await axios.get(
-          `${API}/specs/trims/${form.year}/${form.make}/${form.model}`
-        );
+        const res = await axios.get(`${API}/api/specs/trims/${form.year}/${form.make}/${form.model}`);
         setTrims(res.data || []);
       } catch (err) {
         console.error("Failed to load trims:", err);

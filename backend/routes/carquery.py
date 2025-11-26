@@ -34,39 +34,28 @@ def safe_load_json(possible_json):
 
 @router.get("/carquery/trims")
 def get_trims(make: str, model: str, year: int):
-    """
-    Safe, CarQuery-proof trims loader.
-    Always returns {"trims": [...]} — never 500.
-    """
-
-    make = make.lower()
-    model = model.lower()
+    import requests
 
     url = (
-        f"{CARQUERY_BASE}?cmd=getTrims"
-        f"&make={make}"
-        f"&model={model}"
-        f"&year={year}"
-        "&sold_in_us=1"
-        "&body="
-        "&keywords="
+        "https://www.carqueryapi.com/api/0.3/"
+        f"?cmd=getTrims&make={make.lower()}&model={model.lower()}&year={year}&sold_in_us=1"
     )
 
     try:
-        r = requests.get(url, timeout=15)
-        raw = r.json()
-    except Exception:
+        r = requests.get(url, timeout=12)
+        data = r.json()   # <-- PURE JSON, not JSONP
+    except Exception as e:
+        print("CarQuery trim error:", e)
         return {"trims": []}
 
-    trims_json_str = raw.get("Trims", "[]")
-
-    trims_raw = safe_load_json(trims_json_str)
+    trims_raw = data.get("Trims") or []
 
     # Extract trim names
     trims = sorted({
         t.get("model_trim")
         for t in trims_raw
-        if t.get("model_trim") and t.get("model_trim").strip() not in ["", "0"]
+        if t.get("model_trim")
+           and t.get("model_trim").strip() not in ["", "0"]
     })
 
     return {"trims": trims}

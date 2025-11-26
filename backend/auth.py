@@ -103,7 +103,7 @@ def register(
                     username, email, password_hash, created_at,
                     name, street, city, state_code, zip_code, phone
                 ) VALUES (
-                    :u, :e, :p, GETDATE(),
+                    :u, :e, :p, NOW(),
                     :name, :street, :city, :state_code, :zip_code, :phone
                 )
             """),

@@ -45,14 +45,14 @@ def get_models(make: str):
 
 
 @router.get("/carquery/trims")
-def get_trims(make: str, model: str, year: int):
+def get_trims(make: str, model_name: str, year: int):
     url = (
         f"{CARQUERY}?cmd=getTrims"
         f"&make={make}"
-        f"&model={model}"
+        f"&model={model_name}"
         f"&year={year}"
         f"&sold_in_us=1"
-        f"&callback="    # ← forces clean JSON, no JSON-P
+        f"&callback="
     )
 
     r = requests.get(url, timeout=20)
@@ -67,3 +67,4 @@ def get_trims(make: str, model: str, year: int):
     })
 
     return {"trims": trims}
+

@@ -51,52 +51,27 @@ def get_car_models(make: str):
 
 @router.get("/carquery/trims")
 def get_trims(make: str, model: str, year: int):
-    import requests
-    import urllib.parse
-    import json
-
-    # FIX 1: CarQuery requires lowercase
-    make_clean = make.strip().lower()
-    model_clean = model.strip().lower()
-    year_clean = int(year)
+    make = make.lower()
+    model = model.lower()
 
     url = (
         "https://www.carqueryapi.com/api/0.3/"
-        f"?callback=?&cmd=getTrims"
-        f"&make={urllib.parse.quote(make_clean)}"
-        f"&model={urllib.parse.quote(model_clean)}"
-        f"&year={year_clean}"
+        f"?cmd=getTrims&make={make}&model={model}&year={year}"
+        "&sold_in_us=1&body=&keywords="
     )
 
-    try:
-        r = requests.get(url, timeout=10)
-        raw = r.text.strip()
+    r = requests.get(url)
+    raw = r.json()
 
-        # FIX 2: If nothing valid returned → safe empty response
-        if not raw or "{" not in raw or "}" not in raw:
-            return {"trims": []}
+    # CarQuery wraps JSON inside a string for this endpoint
+    json_str = raw.get("Trims", "[]")
+    trims_list = json.loads(json_str)
 
-        # Extract JSON between first "{" and last "}"
-        json_str = raw[raw.find("{"): raw.rfind("}") + 1].strip()
+    trims = sorted({
+        t.get("model_trim")
+        for t in trims_list
+        if t.get("model_trim") and t.get("model_trim").strip() not in ["", "0"]
+    })
 
-        if not json_str:
-            return {"trims": []}
-
-        try:
-            data = json.loads(json_str)
-        except:
-            return {"trims": []}
-
-        # FIX 3: Extract valid trims
-        trims = [
-            t.get("model_trim")
-            for t in data.get("Trims", [])
-            if t.get("model_trim") and t.get("model_trim").strip()
-        ]
-
-        return {"trims": sorted(set(trims))}
-
-    except Exception:
-        return {"trims": []}
-
+    return {"trims": trims}
 

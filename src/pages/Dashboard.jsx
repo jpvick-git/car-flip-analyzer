@@ -3,7 +3,7 @@ import axios from "axios";
 import { Wrench, DollarSign } from "lucide-react";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-// MANUAL VEHICLE MODAL — NHTSA VERSION (NO UI CHANGES)
+// MANUAL VEHICLE MODAL (CARQUERY + SIX PHOTOS)
 ///////////////////////////////////////////////////////////////////////////////////////////
 function ManualVehicleModal({ API, close, reload }) {
   const [form, setForm] = useState({
@@ -13,31 +13,35 @@ function ManualVehicleModal({ API, close, reload }) {
     trim: "",
     mileage: "",
     damage_description: "",
-    title_code: "",
+    title_status: "",
+    asking_price: "",
     location: "",
     listing_url: "",
+    description: "",
+    vin: "",
   });
 
   const [makes, setMakes] = useState([]);
   const [models, setModels] = useState([]);
   const [trims, setTrims] = useState([]);
-  const [images, setImages] = useState([]);
 
-  // Years 1980–2026
+  // Six image states
+  const [front, setFront] = useState(null);
+  const [driver, setDriver] = useState(null);
+  const [passenger, setPassenger] = useState(null);
+  const [rear, setRear] = useState(null);
+  const [interior, setInterior] = useState(null);
+  const [dash, setDash] = useState(null);
+
   const years = Array.from({ length: 2026 - 1980 + 1 }, (_, i) => 1980 + i);
 
   const update = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handleImageFiles = (e) =>
-    setImages([...images, ...Array.from(e.target.files)]);
-
-  // -----------------------------
-  // LOAD MAKES (NHTSA)
-  // -----------------------------
+  // LOAD MAKES
   useEffect(() => {
     const loadMakes = async () => {
       try {
-        const res = await axios.get(`${API}/nhtsa/makes`);
+        const res = await axios.get(`${API}/carquery/makes`);
         setMakes(res.data.makes || []);
       } catch (err) {
         console.error("Failed to load makes:", err);
@@ -46,15 +50,12 @@ function ManualVehicleModal({ API, close, reload }) {
     loadMakes();
   }, [API]);
 
-  // -----------------------------
-  // LOAD MODELS WHEN MAKE CHANGES
-  // -----------------------------
+  // LOAD MODELS
   useEffect(() => {
     if (!form.make) return;
-
     const loadModels = async () => {
       try {
-        const res = await axios.get(`${API}/nhtsa/models?make=${form.make}`);
+        const res = await axios.get(`${API}/carquery/models?make=${form.make}`);
         setModels(res.data.models || []);
         setTrims([]);
         setForm((prev) => ({ ...prev, model: "", trim: "" }));
@@ -62,41 +63,38 @@ function ManualVehicleModal({ API, close, reload }) {
         console.error("Failed to load models:", err);
       }
     };
-
     loadModels();
   }, [form.make, API]);
 
-// LOAD TRIMS (CARQUERY — reliable)
-useEffect(() => {
-  if (!form.year || !form.make || !form.model) return;
+  // LOAD TRIMS
+  useEffect(() => {
+    if (!form.year || !form.make || !form.model) return;
+    const loadTrims = async () => {
+      try {
+        const res = await axios.get(
+          `${API}/carquery/trims?make=${form.make}&model=${form.model}&year=${form.year}`
+        );
+        setTrims(res.data.trims || []);
+        setForm((prev) => ({ ...prev, trim: "" }));
+      } catch (err) {
+        console.error("Failed to load trims:", err);
+      }
+    };
+    loadTrims();
+  }, [form.year, form.make, form.model, API]);
 
-  const loadTrims = async () => {
-    try {
-      const makeLower = form.make.toLowerCase();
-      const modelLower = form.model.toLowerCase();
-
-      const res = await axios.get(
-        `${API}/carquery/trims?make=${makeLower}&model=${modelLower}&year=${form.year}`
-      );
-
-      setTrims(res.data.trims || []);
-      setForm((prev) => ({ ...prev, trim: "" }));
-    } catch (err) {
-      console.error("Failed to load trims:", err);
-    }
-  };
-
-  loadTrims();
-}, [form.year, form.make, form.model, API]);
-
-  // -----------------------------
   // SUBMIT
-  // -----------------------------
   const submit = async () => {
     try {
       const fd = new FormData();
       Object.keys(form).forEach((k) => fd.append(k, form[k]));
-      images.forEach((img) => fd.append("files", img));
+
+      if (front) fd.append("front_image", front);
+      if (driver) fd.append("driver_image", driver);
+      if (passenger) fd.append("passenger_image", passenger);
+      if (rear) fd.append("rear_image", rear);
+      if (interior) fd.append("interior_image", interior);
+      if (dash) fd.append("dash_image", dash);
 
       await axios.post(`${API}/add_manual_vehicle`, fd, {
         headers: {
@@ -113,9 +111,6 @@ useEffect(() => {
     }
   };
 
-  // -----------------------------
-  // RENDER (NO UI CHANGES)
-  // -----------------------------
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl text-black">
@@ -130,7 +125,9 @@ useEffect(() => {
         >
           <option value="">Select Year</option>
           {years.map((y) => (
-            <option key={y} value={y}>{y}</option>
+            <option key={y} value={y}>
+              {y}
+            </option>
           ))}
         </select>
 
@@ -185,9 +182,12 @@ useEffect(() => {
         {[
           ["mileage", "Mileage"],
           ["damage_description", "Damage"],
-          ["title_code", "Title Code"],
+          ["title_status", "Title Status"],
+          ["asking_price", "Asking Price"],
           ["location", "Location"],
           ["listing_url", "Listing URL (optional)"],
+          ["description", "Description"],
+          ["vin", "VIN"],
         ].map(([key, label]) => (
           <input
             key={key}
@@ -199,30 +199,71 @@ useEffect(() => {
           />
         ))}
 
-        {/* PHOTOS */}
-        <label className="font-medium text-black">Photos</label>
-        <input
-          type="file"
-          multiple
-          accept="image/*"
-          onChange={handleImageFiles}
-          className="w-full border p-2 rounded mb-3 text-black"
-        />
+        {/* IMAGE INPUTS */}
+        <label className="font-medium mt-2">Photos</label>
 
-        {images.length > 0 && (
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            {images.map((img, i) => (
-              <img
-                key={i}
-                src={URL.createObjectURL(img)}
-                className="w-full h-20 object-cover rounded"
-              />
-            ))}
+        <div className="space-y-2 mt-2 text-black">
+          <div>
+            <label>Front</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setFront(e.target.files[0])}
+              className="w-full border p-2 rounded"
+            />
           </div>
-        )}
+          <div>
+            <label>Driver Side</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setDriver(e.target.files[0])}
+              className="w-full border p-2 rounded"
+            />
+          </div>
+          <div>
+            <label>Passenger Side</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setPassenger(e.target.files[0])}
+              className="w-full border p-2 rounded"
+            />
+          </div>
+          <div>
+            <label>Rear</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setRear(e.target.files[0])}
+              className="w-full border p-2 rounded"
+            />
+          </div>
+          <div>
+            <label>Interior</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setInterior(e.target.files[0])}
+              className="w-full border p-2 rounded"
+            />
+          </div>
+          <div>
+            <label>Dash</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setDash(e.target.files[0])}
+              className="w-full border p-2 rounded"
+            />
+          </div>
+        </div>
 
-        <div className="flex justify-end gap-2">
-          <button className="px-4 py-2 bg-gray-300 rounded-lg text-black" onClick={close}>
+        <div className="flex justify-end gap-2 mt-4">
+          <button
+            className="px-4 py-2 bg-gray-300 rounded-lg text-black"
+            onClick={close}
+          >
             Cancel
           </button>
           <button
@@ -237,9 +278,8 @@ useEffect(() => {
   );
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////////////////
-// MAIN DASHBOARD
+// DASHBOARD — SHOW COPART + MANUAL VEHICLES TOGETHER
 ///////////////////////////////////////////////////////////////////////////////////////////
 const Dashboard = ({ showAddModal, setShowAddModal }) => {
   const [cars, setCars] = useState([]);
@@ -248,11 +288,13 @@ const Dashboard = ({ showAddModal, setShowAddModal }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const API = process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com";
+  const API =
+    process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com";
 
+  // UNIFIED MAX-BID CALC
   const calculateCarWithMargin = (car, marginInput) => {
-    const resale = Number(car.resale_estimate || 0);
-    const repair = Number(car.repair_estimate || 0);
+    const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
+    const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
     const taxRate = Number(car.avg_tax_rate || 0);
     const titleFee = Number(car.title_fee || 0);
 
@@ -277,30 +319,37 @@ const Dashboard = ({ showAddModal, setShowAddModal }) => {
       total_cost: Math.round(totalCost),
       profit: Math.round(profit),
       margin_actual: Number(marginActual.toFixed(1)),
-      repair,
-      resale,
     };
   };
 
-  // LOAD VEHICLES
+  // FETCH VEHICLES (MERGE COPART + MANUAL)
   useEffect(() => {
     const fetchCars = async () => {
       try {
         setLoading(true);
+
         const response = await axios.get(`${API}/get_vehicles`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         });
 
         let vehicles = [];
-        const data = response.data;
 
-        if (Array.isArray(data)) vehicles = data;
-        else if (data && Array.isArray(data.vehicles)) vehicles = data.vehicles;
+        // Supports both old and new formats
+        if (Array.isArray(response.data)) vehicles = response.data;
+        else if (Array.isArray(response.data.vehicles))
+          vehicles = response.data.vehicles;
 
-        vehicles = vehicles.map((car) => calculateCarWithMargin(car, 15));
+        // REPLACE manual front image
+        vehicles = vehicles.map((car) => {
+          if (car.image_urls && car.image_urls.length > 0) {
+            car.image_url = car.image_urls[0]; // FRONT IMAGE
+          }
+          return calculateCarWithMargin(car, 15);
+        });
+
         setCars(vehicles);
       } catch (err) {
-        console.error(err);
+        console.error("Failed to load vehicles:", err);
         setError("Failed to load vehicles");
       } finally {
         setLoading(false);
@@ -312,10 +361,11 @@ const Dashboard = ({ showAddModal, setShowAddModal }) => {
 
   const updateCarValue = (id, field, value) => {
     setCars((prev) =>
-      prev.map((car) => {
-        if (car.id !== id) return car;
-        return calculateCarWithMargin({ ...car, [field]: value }, tempMargin);
-      })
+      prev.map((car) =>
+        car.id === id
+          ? calculateCarWithMargin({ ...car, [field]: value }, tempMargin)
+          : car
+      )
     );
   };
 
@@ -333,10 +383,11 @@ const Dashboard = ({ showAddModal, setShowAddModal }) => {
       </div>
     );
 
+  // ------------------------------------------------------------------------------------
+  // RENDER GRID + MODAL
+  // ------------------------------------------------------------------------------------
   return (
     <main className="p-6 bg-gray-50 min-h-screen">
-
-      {/* ADD VEHICLE MODAL */}
       {showAddModal && (
         <ManualVehicleModal
           API={API}
@@ -354,7 +405,10 @@ const Dashboard = ({ showAddModal, setShowAddModal }) => {
           >
             <div className="relative">
               <img
-                src={car.image_url || "https://placehold.co/400x250?text=No+Image"}
+                src={
+                  car.image_url ||
+                  "https://placehold.co/400x250?text=No+Image"
+                }
                 alt="Vehicle"
                 className="w-full h-56 object-cover"
               />
@@ -368,8 +422,12 @@ const Dashboard = ({ showAddModal, setShowAddModal }) => {
                 {car.year} {car.make} {car.model}
               </h2>
 
-              <p className="text-sm text-gray-500">Lot #: {car.lot_number}</p>
-              <p className="text-sm text-gray-500">Location: {car.sale_name || "N/A"}</p>
+              <p className="text-sm text-gray-500">
+                Lot #: {car.lot_number || "Manual"}
+              </p>
+              <p className="text-sm text-gray-500">
+                Location: {car.sale_name || car.location || "N/A"}
+              </p>
 
               <p className="text-sm text-gray-500">
                 Sale Date:{" "}
@@ -382,7 +440,7 @@ const Dashboard = ({ showAddModal, setShowAddModal }) => {
                   : "N/A"}
               </p>
 
-              {/* Repair + Resale Inputs */}
+              {/* Repair & Resale */}
               <div className="flex items-center justify-between pt-2 border-t border-gray-200">
                 <div className="flex items-center space-x-1 text-gray-700">
                   <Wrench size={16} />
@@ -390,9 +448,13 @@ const Dashboard = ({ showAddModal, setShowAddModal }) => {
                   <span>$</span>
                   <input
                     type="number"
-                    value={car.repair_estimate}
+                    value={car.repair_estimate || car.ai_repair_estimate || 0}
                     onChange={(e) =>
-                      updateCarValue(car.id, "repair_estimate", Number(e.target.value))
+                      updateCarValue(
+                        car.id,
+                        "repair_estimate",
+                        Number(e.target.value)
+                      )
                     }
                     className="w-20 border border-gray-300 rounded px-2 py-1 text-sm"
                   />
@@ -404,9 +466,13 @@ const Dashboard = ({ showAddModal, setShowAddModal }) => {
                   <span>$</span>
                   <input
                     type="number"
-                    value={car.resale_estimate}
+                    value={car.resale_estimate || car.ai_resale_estimate || 0}
                     onChange={(e) =>
-                      updateCarValue(car.id, "resale_estimate", Number(e.target.value))
+                      updateCarValue(
+                        car.id,
+                        "resale_estimate",
+                        Number(e.target.value)
+                      )
                     }
                     className="w-20 border border-gray-300 rounded px-2 py-1 text-sm"
                   />
@@ -434,123 +500,162 @@ const Dashboard = ({ showAddModal, setShowAddModal }) => {
         ))}
       </div>
 
-      {/* VIEW DETAILS MODAL */}
-      {selectedCar && (() => {
-        const activeCar = cars.find((c) => c.id === selectedCar.id) || selectedCar;
-        const live = calculateCarWithMargin(activeCar, tempMargin);
+      {/* DETAILS MODAL */}
+      {selectedCar &&
+        (() => {
+          const activeCar =
+            cars.find((c) => c.id === selectedCar.id) || selectedCar;
+          const live = calculateCarWithMargin(activeCar, tempMargin);
 
-        return (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 overflow-y-auto">
-            <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 relative">
-              <button
-                onClick={() => setSelectedCar(null)}
-                className="absolute top-3 right-3 text-gray-500 hover:text-gray-800 text-xl"
-              >
-                ✕
-              </button>
+          return (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 overflow-y-auto">
+              <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 relative">
+                <button
+                  onClick={() => setSelectedCar(null)}
+                  className="absolute top-3 right-3 text-gray-500 hover:text-gray-800 text-xl"
+                >
+                  ✕
+                </button>
 
-              <h2 className="text-xl font-semibold mb-4 text-gray-800">
-                {activeCar.year} {activeCar.make} {activeCar.model}
-              </h2>
+                <h2 className="text-xl font-semibold mb-4 text-gray-800">
+                  {activeCar.year} {activeCar.make} {activeCar.model}
+                </h2>
 
-              <div className="space-y-2 text-sm text-gray-700">
-                <p><span className="font-medium">Lot Number:</span> {activeCar.lot_number}</p>
-                <p><span className="font-medium">Sale Date:</span> {activeCar.sale_date || "N/A"}</p>
-                <p><span className="font-medium">Damage:</span> {activeCar.damage_description || "Unknown"}</p>
-                <p><span className="font-medium">Odometer:</span> {activeCar.odometer || "N/A"}</p>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p>
+                    <span className="font-medium">Lot Number:</span>{" "}
+                    {activeCar.lot_number || "Manual"}
+                  </p>
+                  <p>
+                    <span className="font-medium">Location:</span>{" "}
+                    {activeCar.sale_name || activeCar.location || "N/A"}
+                  </p>
 
-                <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-300">
-                  <div className="flex items-center space-x-1">
-                    <Wrench size={16} />
-                    <span>Repair:</span>
-                    <span>$</span>
-                    <input
-                      type="number"
-                      value={activeCar.repair_estimate}
-                      onChange={(e) =>
-                        updateCarValue(activeCar.id, "repair_estimate", Number(e.target.value))
-                      }
-                      className="w-24 border border-gray-300 rounded px-2 py-1"
-                    />
+                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-300">
+                    <div className="flex items-center space-x-1">
+                      <Wrench size={16} />
+                      <span>Repair:</span>
+                      <span>$</span>
+                      <input
+                        type="number"
+                        value={
+                          activeCar.repair_estimate ||
+                          activeCar.ai_repair_estimate ||
+                          0
+                        }
+                        onChange={(e) =>
+                          updateCarValue(
+                            activeCar.id,
+                            "repair_estimate",
+                            Number(e.target.value)
+                          )
+                        }
+                        className="w-24 border border-gray-300 rounded px-2 py-1"
+                      />
+                    </div>
+
+                    <div className="flex items-center space-x-1">
+                      <DollarSign size={16} />
+                      <span>Resale:</span>
+                      <span>$</span>
+                      <input
+                        type="number"
+                        value={
+                          activeCar.resale_estimate ||
+                          activeCar.ai_resale_estimate ||
+                          0
+                        }
+                        onChange={(e) =>
+                          updateCarValue(
+                            activeCar.id,
+                            "resale_estimate",
+                            Number(e.target.value)
+                          )
+                        }
+                        className="w-24 border border-gray-300 rounded px-2 py-1"
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex items-center space-x-1">
-                    <DollarSign size={16} />
-                    <span>Resale:</span>
-                    <span>$</span>
+                  {/* MARGIN */}
+                  <div className="flex items-center space-x-2 mt-4">
+                    <span className="font-medium">Desired Margin:</span>
                     <input
                       type="number"
-                      value={activeCar.resale_estimate}
-                      onChange={(e) =>
-                        updateCarValue(activeCar.id, "resale_estimate", Number(e.target.value))
-                      }
-                      className="w-24 border border-gray-300 rounded px-2 py-1"
+                      value={tempMargin}
+                      onChange={(e) => {
+                        let val = Number(e.target.value);
+                        if (isNaN(val)) val = 0;
+                        if (val < 0) val = 0;
+                        if (val > 90) val = 90;
+                        setTempMargin(val);
+                      }}
+                      className="w-20 border border-gray-300 rounded px-2 py-1"
                     />
+                    <span>%</span>
                   </div>
+
+                  {/* MAX BID */}
+                  <div className="mt-4 text-gray-900 text-base font-bold">
+                    Max Bid: ${live.max_bid.toLocaleString()}
+                  </div>
+
+                  {/* COST BREAKDOWN */}
+                  <div className="mt-3 text-sm text-gray-800">
+                    <hr className="my-2" />
+                    <p>
+                      Buyer Fee (7.5%): ${live.buyer_fee.toLocaleString()}
+                    </p>
+                    <p>
+                      Tax ({Number(activeCar.avg_tax_rate).toFixed(1)}%): $
+                      {live.tax_amount_calc.toLocaleString()}
+                    </p>
+                    <p>
+                      Title Fee: $
+                      {Number(activeCar.title_fee || 0).toLocaleString()}
+                    </p>
+                    <p>
+                      Repairs: ${Number(live.repair).toLocaleString()}
+                    </p>
+
+                    <hr className="my-2" />
+
+                    <p>
+                      <span className="font-semibold">Total Cost:</span> $
+                      {live.total_cost.toLocaleString()}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Profit:</span> $
+                      {live.profit.toLocaleString()}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Margin:</span>{" "}
+                      {live.margin_actual}%
+                    </p>
+
+                    <hr className="my-3 border-gray-300" />
+                  </div>
+
+                  <p className="mt-4">
+                    <span className="font-medium">Description:</span>{" "}
+                    {activeCar.description || "N/A"}
+                  </p>
+
+                  {activeCar.listing_url && (
+                    <a
+                      href={activeCar.listing_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 inline-block text-blue-600 hover:underline text-sm"
+                    >
+                      Open Listing →
+                    </a>
+                  )}
                 </div>
-
-                <div className="flex items-center space-x-2 mt-4">
-                  <span className="font-medium">Desired Margin:</span>
-                  <input
-                    type="number"
-                    value={tempMargin}
-                    onChange={(e) => {
-                      let val = Number(e.target.value);
-                      if (isNaN(val)) val = 0;
-                      if (val < 0) val = 0;
-                      if (val > 90) val = 90;
-                      setTempMargin(val);
-                    }}
-                    className="w-20 border border-gray-300 rounded px-2 py-1"
-                  />
-                  <span>%</span>
-                </div>
-
-                <div className="mt-4 text-gray-900 text-base font-bold">
-                  Max Bid: ${live.max_bid.toLocaleString()}
-                </div>
-
-                <div className="mt-3 text-sm text-gray-800">
-                  <hr className="my-2" />
-                  <p>Buyer Fee (7.5%): ${live.buyer_fee.toLocaleString()}</p>
-                  <p>Tax ({Number(activeCar.avg_tax_rate).toFixed(1)}%): ${live.tax_amount_calc.toLocaleString()}</p>
-                  <p>Title Fee: ${Number(activeCar.title_fee || 0).toLocaleString()}</p>
-                  <p>Repairs: ${Number(live.repair).toLocaleString()}</p>
-
-                  <hr className="my-2" />
-
-                  <p><span className="font-semibold">Total Cost:</span> ${live.total_cost.toLocaleString()}</p>
-                  <p><span className="font-semibold">Profit:</span> ${live.profit.toLocaleString()}</p>
-                  <p><span className="font-semibold">Margin:</span> {live.margin_actual}%</p>
-
-                  <hr className="my-3 border-gray-300" />
-                </div>
-
-                <p className="mt-4">
-                  <span className="font-medium">Repair Details:</span>{" "}
-                  {activeCar.repair_details || "N/A"}
-                </p>
-
-                <p className="mt-1">
-                  <span className="font-medium">Resale Details:</span>{" "}
-                  {activeCar.resale_details || "N/A"}
-                </p>
-
-                {activeCar.lot_url && (
-                  <a
-                    href={activeCar.lot_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-4 inline-block text-blue-600 hover:underline text-sm"
-                  >
-                    Open in Copart →
-                  </a>
-                )}
               </div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
     </main>
   );
 };

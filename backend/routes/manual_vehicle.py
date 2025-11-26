@@ -1,7 +1,8 @@
-from fastapi import APIRouter, File, UploadFile, Form, Depends, HTTPException
+from fastapi import APIRouter, File, UploadFile, Form, Depends
 from fastapi.responses import JSONResponse
 import os
 import shutil
+import traceback
 from sqlalchemy import text
 
 from ..db import get_engine
@@ -10,12 +11,9 @@ engine = get_engine()
 from ..auth import get_current_user
 from ..ai_estimator import estimate_repair_cost, estimate_resale_value
 
-import traceback
-import logging
-
 router = APIRouter()
 
-# Save in same downloads folder as Copart images
+# Folder where images are stored
 MANUAL_UPLOAD_DIR = "/root/car-flip-analyzer/backend/downloads"
 
 
@@ -34,7 +32,6 @@ async def add_manual_vehicle(
     description: str = Form(""),
     vin: str = Form(""),
 
-    # Six optional images
     front_image: UploadFile = File(None),
     driver_image: UploadFile = File(None),
     passenger_image: UploadFile = File(None),
@@ -44,27 +41,26 @@ async def add_manual_vehicle(
 
     user=Depends(get_current_user),
 ):
-    """
-    Add a manually-entered vehicle including uploading up to 6 images,
-    generating AI estimates, and storing max bid + tax/title fees.
-    """
+
+    print("➡️ ENTERED /add_manual_vehicle ENDPOINT", flush=True)
 
     try:
         user_id = user["id"]
 
-        # ----------------------------------------------------
-        # 1. Insert base record
-        # ----------------------------------------------------
+        # ---------------------------------------------
+        # 1. INSERT BASE VEHICLE RECORD
+        # ---------------------------------------------
         with engine.begin() as conn:
-            result = conn.execute(
+            new_id = conn.execute(
                 text("""
                     INSERT INTO user_manual_vehicles (
-                        user_id, year, make, model, trim, mileage, damage_description,
-                        title_status, asking_price, location, listing_url, description, vin
+                        user_id, year, make, model, trim, mileage,
+                        damage_description, title_status, asking_price,
+                        location, listing_url, description, vin
                     )
                     VALUES (
-                        :uid, :yr, :mk, :md, :tm, :mi, :dg,
-                        :ts, :ap, :lc, :url, :ds, :vin
+                        :uid, :yr, :mk, :md, :tm, :mi,
+                        :dg, :ts, :ap, :lc, :url, :ds, :vin
                     )
                     RETURNING id;
                 """),
@@ -83,16 +79,13 @@ async def add_manual_vehicle(
                     "ds": description,
                     "vin": vin,
                 }
-            )
+            ).scalar()
 
-            new_id_row = result.fetchone()
-            if not new_id_row:
-                raise Exception("Insert returned no ID")
-            new_id = new_id_row[0]
+        print(f"✔️ Inserted manual vehicle ID {new_id}", flush=True)
 
-        # ----------------------------------------------------
-        # 2. Save uploaded images
-        # ----------------------------------------------------
+        # ---------------------------------------------
+        # 2. SAVE IMAGES
+        # ---------------------------------------------
         folder = os.path.join(MANUAL_UPLOAD_DIR, str(new_id))
         os.makedirs(folder, exist_ok=True)
 
@@ -102,7 +95,7 @@ async def add_manual_vehicle(
             ("passenger_image", passenger_image),
             ("rear_image", rear_image),
             ("interior_image", interior_image),
-            ("dash_image", dash_image)
+            ("dash_image", dash_image),
         ]
 
         saved_image_urls = []
@@ -130,17 +123,21 @@ async def add_manual_vehicle(
                     {"vid": new_id, "url": public_url}
                 )
 
-        # ----------------------------------------------------
-        # 3. AI Estimates (front image only)
-        # ----------------------------------------------------
+        print(f"✔️ Saved {len(saved_image_urls)} images", flush=True)
+
+        # ---------------------------------------------
+        # 3. AI ESTIMATES
+        # ---------------------------------------------
         front_url = saved_image_urls[0] if saved_image_urls else None
 
         ai_repair = await estimate_repair_cost(front_url)
         ai_resale = await estimate_resale_value(year, make, model, mileage)
 
-        # ----------------------------------------------------
-        # 4. Fetch tax/title fees
-        # ----------------------------------------------------
+        print(f"✔️ AI repair={ai_repair}, resale={ai_resale}", flush=True)
+
+        # ---------------------------------------------
+        # 4. TAX/TITLE FEES
+        # ---------------------------------------------
         with engine.begin() as conn:
             row = conn.execute(
                 text("""
@@ -155,16 +152,16 @@ async def add_manual_vehicle(
         title_fee = row.title_fee if row else 0
         tax_amount = (ai_resale * tax_rate) / 100
 
-        # ----------------------------------------------------
-        # 5. Max Bid Calculation
-        # ----------------------------------------------------
+        # ---------------------------------------------
+        # 5. MAX BID CALC
+        # ---------------------------------------------
         max_bid = int(ai_resale - ai_repair - tax_amount - title_fee)
         if max_bid < 0:
             max_bid = 0
 
-        # ----------------------------------------------------
-        # 6. Update record with computed values
-        # ----------------------------------------------------
+        # ---------------------------------------------
+        # 6. UPDATE VEHICLE RECORD
+        # ---------------------------------------------
         with engine.begin() as conn:
             conn.execute(
                 text("""
@@ -182,24 +179,28 @@ async def add_manual_vehicle(
                     "tx": tax_amount,
                     "tf": title_fee,
                     "mb": max_bid,
-                    "id": new_id
-                }
+                    "id": new_id,
+                },
             )
+
+        print("✔️ Manual vehicle successfully saved & updated", flush=True)
 
         return {
             "vehicle_id": new_id,
             "images": saved_image_urls,
             "ai_repair_estimate": ai_repair,
             "ai_resale_estimate": ai_resale,
-            "max_bid": max_bid
+            "max_bid": max_bid,
         }
 
+    # ---------------------------------------------
+    # GLOBAL ERROR HANDLER
+    # ---------------------------------------------
     except Exception as e:
-        logging.error("❌ ERROR in /add_manual_vehicle")
-        logging.error(str(e))
-        logging.error(traceback.format_exc())
-
-        raise HTTPException(
+        print("❌ ERROR IN /add_manual_vehicle", flush=True)
+        print(str(e), flush=True)
+        print(traceback.format_exc(), flush=True)
+        return JSONResponse(
             status_code=500,
-            detail=f"Internal server error: {str(e)}"
+            content={"error": "Failed to add vehicle", "details": str(e)},
         )

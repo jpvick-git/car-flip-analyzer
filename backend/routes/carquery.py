@@ -60,9 +60,12 @@ def get_trims(make: str, year: int, model: str | None = None, model_name: str | 
 
     # Clean function
     def clean(val: str):
-        return (val or "").strip()
+        if not val:
+            return ""
+        # Remove ALL leading/trailing whitespace (including Unicode) AND collapse inner spaces
+        val = re.sub(r"\s+", " ", val, flags=re.UNICODE)
+        return val.strip()
 
-    cleaned_input = clean(input_model).lower()
 
     # ---------------------------------------
     # Normalize model name

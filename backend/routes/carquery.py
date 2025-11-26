@@ -4,74 +4,103 @@ import json
 
 router = APIRouter()
 
-def parse_carquery(data: str):
-    # Ensure response contains JSON
-    if "{" not in data:
-        print("CarQuery INVALID RESPONSE:", data[:200])
-        return {}
-    try:
-        json_str = data[data.index("{"): data.rindex("}") + 1]
-        return json.loads(json_str)
-    except Exception as e:
-        print("CarQuery parse error:", e)
-        return {}
+CARQUERY_BASE = "https://www.carqueryapi.com/api/0.3/"
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-    "Accept": "*/*",
-    "Connection": "keep-alive"
-}
 
+# ---------------------------------------------------------
+# 1. MAKES
+# ---------------------------------------------------------
 @router.get("/carquery/makes")
-def get_car_makes():
-    url = "https://www.carqueryapi.com/api/0.3/?cmd=getMakes"
-    r = requests.get(url, headers=HEADERS, timeout=10)
+def get_makes():
+    """
+    Returns all U.S.-sold consumer makes using CarQuery.
+    """
+    url = f"{CARQUERY_BASE}?cmd=getMakes&sold_in_us=1"
 
-    parsed = parse_carquery(r.text)
-    makes = parsed.get("Makes", [])
+    r = requests.get(url, timeout=15)
+    raw = r.json()
 
-    # Common automotive makes only
-    makes = [m for m in makes if m.get("make_is_common") == 1]
+    # CarQuery wraps JSON inside a string
+    json_str = raw.get("Makes", "[]")
+    makes_raw = json.loads(json_str)
 
-    makes.sort(key=lambda m: m.get("make_display", ""))
+    makes = sorted({
+        m.get("make_display")
+        for m in makes_raw
+        if m.get("make_display")
+    })
 
     return {"makes": makes}
 
+
+# ---------------------------------------------------------
+# 2. MODELS
+# ---------------------------------------------------------
 @router.get("/carquery/models")
-def get_car_models(make: str):
-    url = f"https://www.carqueryapi.com/api/0.3/?cmd=getModels&make={make}"
-    r = requests.get(url, headers=HEADERS, timeout=10)
+def get_models(make: str):
+    """
+    Returns all models for a given make.
+    CarQuery requires lowercase + sold_in_us flag.
+    """
+    make = make.lower()
 
-    parsed = parse_carquery(r.text)
-    models = parsed.get("Models", [])
+    url = (
+        f"{CARQUERY_BASE}?cmd=getModels"
+        f"&make={make}"
+        "&sold_in_us=1"
+    )
 
-    models.sort(key=lambda m: m.get("model_name", ""))
+    r = requests.get(url, timeout=15)
+    raw = r.json()
+
+    json_str = raw.get("Models", "[]")
+    models_raw = json.loads(json_str)
+
+    models = sorted({
+        m.get("model_name")
+        for m in models_raw
+        if m.get("model_name")
+    })
 
     return {"models": models}
 
+
+# ---------------------------------------------------------
+# 3. TRIMS (THIS IS THE IMPORTANT ONE)
+# ---------------------------------------------------------
 @router.get("/carquery/trims")
 def get_trims(make: str, model: str, year: int):
+    """
+    Returns all trims for a given make/model/year.
+    CarQuery trims endpoint ONLY works correctly with:
+    - lowercase make + model
+    - sold_in_us flag
+    - empty parameters for body & keywords
+    """
     make = make.lower()
     model = model.lower()
 
     url = (
-        "https://www.carqueryapi.com/api/0.3/"
-        f"?cmd=getTrims&make={make}&model={model}&year={year}"
-        "&sold_in_us=1&body=&keywords="
+        f"{CARQUERY_BASE}?cmd=getTrims"
+        f"&make={make}"
+        f"&model={model}"
+        f"&year={year}"
+        "&sold_in_us=1"
+        "&body="
+        "&keywords="
     )
 
-    r = requests.get(url)
+    r = requests.get(url, timeout=15)
     raw = r.json()
 
-    # CarQuery wraps JSON inside a string for this endpoint
+    # Trim list is also returned inside a JSON string
     json_str = raw.get("Trims", "[]")
-    trims_list = json.loads(json_str)
+    trims_raw = json.loads(json_str)
 
     trims = sorted({
         t.get("model_trim")
-        for t in trims_list
+        for t in trims_raw
         if t.get("model_trim") and t.get("model_trim").strip() not in ["", "0"]
     })
 
     return {"trims": trims}
-

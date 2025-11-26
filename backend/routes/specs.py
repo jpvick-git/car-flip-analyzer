@@ -5,17 +5,19 @@ from ..db import get_engine
 router = APIRouter()
 engine = get_engine()
 
+
 # -----------------------------
-#    VEHICLE SPECS ENDPOINTS
+#   Vehicle Specs Endpoints
 # -----------------------------
 
 @router.get("/specs/years")
 def get_years():
     with engine.begin() as conn:
         result = conn.execute(text("""
-            SELECT DISTINCT year 
+            SELECT DISTINCT model_year
             FROM car_specs
-            ORDER BY year DESC
+            WHERE model_year IS NOT NULL
+            ORDER BY model_year DESC;
         """))
         return [row[0] for row in result]
 
@@ -26,8 +28,8 @@ def get_makes(year: int):
         result = conn.execute(text("""
             SELECT DISTINCT make
             FROM car_specs
-            WHERE year = :yr
-            ORDER BY make
+            WHERE model_year = :yr
+            ORDER BY make;
         """), {"yr": year})
         return [row[0] for row in result]
 
@@ -38,8 +40,9 @@ def get_models(year: int, make: str):
         result = conn.execute(text("""
             SELECT DISTINCT model
             FROM car_specs
-            WHERE year = :yr AND make = :mk
-            ORDER BY model
+            WHERE model_year = :yr
+              AND LOWER(make) = LOWER(:mk)
+            ORDER BY model;
         """), {"yr": year, "mk": make})
         return [row[0] for row in result]
 
@@ -48,9 +51,15 @@ def get_models(year: int, make: str):
 def get_trims(year: int, make: str, model: str):
     with engine.begin() as conn:
         result = conn.execute(text("""
-            SELECT trim
+            SELECT DISTINCT trim
             FROM car_specs
-            WHERE year = :yr AND make = :mk AND model = :md
-            ORDER BY trim
-        """), {"yr": year, "mk": make, "md": model})
+            WHERE model_year = :yr
+              AND LOWER(make) = LOWER(:mk)
+              AND LOWER(model) = LOWER(:md)
+            ORDER BY trim;
+        """), {
+            "yr": year,
+            "mk": make.strip(),
+            "md": model.strip()
+        })
         return [row[0] for row in result]

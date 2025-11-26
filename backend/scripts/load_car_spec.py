@@ -7,15 +7,18 @@ import time
 from aiolimiter import AsyncLimiter
 import ssl
 
+# ---------------------------------------------------------
+# CARQUERY SETUP
+# ---------------------------------------------------------
 CARQUERY = "https://www.carqueryapi.com/api/0.3/"
-RATE_LIMIT = AsyncLimiter(3, 1)  # Up to 3 requests per second
+RATE_LIMIT = AsyncLimiter(3, 1)  # safe rate limiting for CarQuery API
 
 
 # ---------------------------------------------------------
-# CLEAN HELPERS
+# UTILITY FUNCTIONS
 # ---------------------------------------------------------
 def extract_json(body):
-    """Extract JSON even if wrapped in JS or HTML."""
+    """Extract JSON even if wrapped in JS, JSONP, or HTML."""
     try:
         return json.loads(body)
     except:
@@ -29,14 +32,14 @@ def extract_json(body):
         return {}
 
 
-def clean(s):
-    if not s:
+def clean(value):
+    if not value:
         return ""
-    return re.sub(r"\s+", " ", s).strip()
+    return re.sub(r"\s+", " ", value).strip()
 
 
 # ---------------------------------------------------------
-# FAST ASYNC FETCH
+# ASYNC FETCH
 # ---------------------------------------------------------
 async def fetch_json(session, url):
     attempts = [
@@ -56,7 +59,7 @@ async def fetch_json(session, url):
                         if data:
                             return data
             except:
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(0.3)
 
     return {}
 
@@ -76,7 +79,7 @@ class BulkBuffer:
             await self.flush()
 
     async def flush(self):
-        if len(self.rows) == 0:
+        if not self.rows:
             return
 
         insert_sql = """
@@ -98,66 +101,68 @@ class BulkBuffer:
 
 
 # ---------------------------------------------------------
-# MAIN LOADER LOGIC
+# MAIN LOAD FUNCTION
 # ---------------------------------------------------------
 async def load():
     # -----------------------------------------------
-    # CREATE WINDOWS-FRIENDLY SSL CONTEXT
+    # SSL CONTEXT (REQUIRED BY DIGITALOCEAN)
     # -----------------------------------------------
     ssl_ctx = ssl.create_default_context()
     ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE  # Required for Windows + DO
+    ssl_ctx.verify_mode = ssl.CERT_NONE
 
     # -----------------------------------------------
-    # CONNECT TO DIGITALOCEAN POSTGRES
+    # CONNECT TO DIGITALOCEAN POSTGRES (VPC PRIVATE HOST)
     # -----------------------------------------------
+    print("Connecting to DigitalOcean Managed Postgres...")
+
     pool = await asyncpg.create_pool(
-        user="postgres",
+        user="carflip_user",
         password="AVNS_KMNjNg_8wx4vECPoFfh",
         database="carflip",
-        host="carflip-db-do-user-28471662-0.i.db.ondigitalocean.com",
-        port=2500,
+        host="private-carflip-db-do-user-28471662-0.i.db.ondigitalocean.com",
+        port=25060,
         ssl=ssl_ctx,
         min_size=2,
         max_size=10
     )
 
+    print("✅ Connected using VPC private network")
+
     buffer = BulkBuffer(pool)
 
     # -----------------------------------------------
-    # ASYNC SESSION
+    # HTTP CLIENT FOR CARQUERY
     # -----------------------------------------------
     headers = {
         "User-Agent": "Mozilla/5.0",
         "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Referer": "https://www.carqueryapi.com/",
     }
 
     async with aiohttp.ClientSession(headers=headers) as session:
 
-        # -----------------------------------------------
-        # 1. FETCH MAKES
-        # -----------------------------------------------
-        makes_url = f"{CARQUERY}?cmd=getMakes&sold_in_us=1"
-        print("Fetching makes…", makes_url)
-
-        makes_json = await fetch_json(session, makes_url)
+        # ----------------------
+        # FETCH MAKES
+        # ----------------------
+        print("Fetching makes...")
+        makes_json = await fetch_json(session, f"{CARQUERY}?cmd=getMakes&sold_in_us=1")
         makes = makes_json.get("Makes", [])
 
-        print("Makes found:", len(makes))
+        print("Found makes:", len(makes))
         if not makes:
-            print("❌ No makes returned. API likely blocked.")
+            print("❌ No makes returned — API blocked or down")
             return
 
-        # -----------------------------------------------
-        # 2. PROCESS MAKES CONCURRENTLY
-        # -----------------------------------------------
+        # ---------------------------------------------------
+        # PROCESS EACH MAKE (CONCURRENTLY)
+        # ---------------------------------------------------
         async def process_make(mk):
             raw_make = mk.get("make_display") or mk.get("make_name")
             make_cleaned = clean(raw_make)
 
-            models_url = f"{CARQUERY}?cmd=getModels&make={make_cleaned}&sold_in_us=1"
-            models_json = await fetch_json(session, models_url)
+            models_json = await fetch_json(
+                session, f"{CARQUERY}?cmd=getModels&make={make_cleaned}&sold_in_us=1"
+            )
             models = models_json.get("Models", [])
 
             tasks = []
@@ -166,52 +171,4 @@ async def load():
 
             await asyncio.gather(*tasks)
 
-        # -----------------------------------------------
-        # 3. PROCESS MODEL
-        # -----------------------------------------------
-        async def process_model(make_cleaned, raw_make, md):
-            raw_model = md.get("model_name", "")
-            model_cleaned = clean(raw_model)
-
-            trims_url = (
-                f"{CARQUERY}?cmd=getTrims&make={make_cleaned}&model={raw_model}"
-            )
-            trims_json = await fetch_json(session, trims_url)
-            trims = trims_json.get("Trims", [])
-
-            for t in trims:
-                await buffer.add((
-                    make_cleaned,
-                    model_cleaned,
-                    clean(t.get("model_trim")),
-                    t.get("model_year"),
-                    raw_make,
-                    raw_model,
-                    t.get("model_trim"),
-                    t.get("model_body"),
-                    t.get("model_engine_fuel"),
-                    t.get("model_engine_cyl"),
-                    t.get("model_transmission_type"),
-                    t.get("model_drive"),
-                    t.get("model_doors")
-                ))
-
-        # -----------------------------------------------
-        # RUN ALL MAKES CONCURRENTLY
-        # -----------------------------------------------
-        await asyncio.gather(*(process_make(mk) for mk in makes))
-
-        # final flush
-        await buffer.flush()
-
-    await pool.close()
-    print("\n🎉 DONE — FAST LOAD COMPLETE!\n")
-
-
-# ---------------------------------------------------------
-# ENTRY POINT
-# ---------------------------------------------------------
-if __name__ == "__main__":
-    start = time.time()
-    asyncio.run(load())
-    print(f"⏱ Total time: {time.time() - start:.2f} seconds")
+        # ------------------------------------------------

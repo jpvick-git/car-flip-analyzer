@@ -3,7 +3,7 @@ import axios from "axios";
 import { Wrench, DollarSign } from "lucide-react";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-// MANUAL VEHICLE MODAL (CARQUERY + SIX PHOTOS)
+// MANUAL VEHICLE MODAL — COLLAPSIBLE VERSION (SOLUTION B, FULL COMPONENT)
 ///////////////////////////////////////////////////////////////////////////////////////////
 function ManualVehicleModal({ API, close, reload }) {
   const [form, setForm] = useState({
@@ -25,23 +25,28 @@ function ManualVehicleModal({ API, close, reload }) {
   const [models, setModels] = useState([]);
   const [trims, setTrims] = useState([]);
 
-  // Six image states
-  const [front, setFront] = useState(null);
-  const [driver, setDriver] = useState(null);
-  const [passenger, setPassenger] = useState(null);
-  const [rear, setRear] = useState(null);
-  const [interior, setInterior] = useState(null);
-  const [dash, setDash] = useState(null);
+  // all images stored in one object
+  const [images, setImages] = useState({
+    front_image: null,
+    driver_image: null,
+    passenger_image: null,
+    rear_image: null,
+    interior_image: null,
+    dash_image: null,
+  });
 
+  // years list
   const years = Array.from({ length: 2026 - 1980 + 1 }, (_, i) => 1980 + i);
 
-  const update = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  // update form fields
+  const update = (e) =>
+    setForm({ ...form, [e.target.name]: e.target.value });
 
-  // LOAD MAKES
+  // load makes
   useEffect(() => {
     const loadMakes = async () => {
       try {
-        const res = await axios.get(`${API}/carquery/makes`);
+        const res = await axios.get(`${API}/nhtsa/makes`);
         setMakes(res.data.makes || []);
       } catch (err) {
         console.error("Failed to load makes:", err);
@@ -50,12 +55,12 @@ function ManualVehicleModal({ API, close, reload }) {
     loadMakes();
   }, [API]);
 
-  // LOAD MODELS
+  // load models on make change
   useEffect(() => {
     if (!form.make) return;
     const loadModels = async () => {
       try {
-        const res = await axios.get(`${API}/carquery/models?make=${form.make}`);
+        const res = await axios.get(`${API}/nhtsa/models?make=${form.make}`);
         setModels(res.data.models || []);
         setTrims([]);
         setForm((prev) => ({ ...prev, model: "", trim: "" }));
@@ -66,16 +71,15 @@ function ManualVehicleModal({ API, close, reload }) {
     loadModels();
   }, [form.make, API]);
 
-  // LOAD TRIMS
+  // load trims
   useEffect(() => {
     if (!form.year || !form.make || !form.model) return;
     const loadTrims = async () => {
       try {
         const res = await axios.get(
-          `${API}/carquery/trims?make=${form.make}&model=${form.model}&year=${form.year}`
+          `${API}/nhtsa/trims?make=${form.make}&model=${form.model}&year=${form.year}`
         );
         setTrims(res.data.trims || []);
-        setForm((prev) => ({ ...prev, trim: "" }));
       } catch (err) {
         console.error("Failed to load trims:", err);
       }
@@ -83,18 +87,16 @@ function ManualVehicleModal({ API, close, reload }) {
     loadTrims();
   }, [form.year, form.make, form.model, API]);
 
-  // SUBMIT
+  // submit vehicle
   const submit = async () => {
     try {
       const fd = new FormData();
       Object.keys(form).forEach((k) => fd.append(k, form[k]));
 
-      if (front) fd.append("front_image", front);
-      if (driver) fd.append("driver_image", driver);
-      if (passenger) fd.append("passenger_image", passenger);
-      if (rear) fd.append("rear_image", rear);
-      if (interior) fd.append("interior_image", interior);
-      if (dash) fd.append("dash_image", dash);
+      // append images in correct order
+      Object.keys(images).forEach((key) => {
+        if (images[key]) fd.append(key, images[key]);
+      });
 
       await axios.post(`${API}/add_manual_vehicle`, fd, {
         headers: {
@@ -113,157 +115,109 @@ function ManualVehicleModal({ API, close, reload }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl text-black">
+      <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl text-black max-h-[90vh] overflow-y-auto">
+
         <h2 className="text-xl font-semibold mb-4 text-black">Add Vehicle</h2>
 
-        {/* YEAR */}
-        <select
-          name="year"
-          value={form.year}
-          onChange={update}
-          className="w-full border rounded-lg p-2 mb-3 text-black"
-        >
-          <option value="">Select Year</option>
-          {years.map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
+        {/* ---------------- VEHICLE INFO ---------------- */}
+        <details className="mb-4" open>
+          <summary className="font-semibold text-black cursor-pointer pb-2">
+            Vehicle Info
+          </summary>
+
+          <select name="year" value={form.year} onChange={update}
+            className="w-full border rounded-lg p-2 mb-3 text-black">
+            <option value="">Select Year</option>
+            {years.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+
+          <select name="make" value={form.make} onChange={update}
+            className="w-full border rounded-lg p-2 mb-3 text-black">
+            <option value="">Select Make</option>
+            {makes.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+
+          <select name="model" value={form.model} onChange={update}
+            disabled={!models.length}
+            className="w-full border rounded-lg p-2 mb-3 text-black">
+            <option value="">Select Model</option>
+            {models.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+
+          <select name="trim" value={form.trim} onChange={update}
+            disabled={!trims.length}
+            className="w-full border rounded-lg p-2 mb-3 text-black">
+            <option value="">Select Trim</option>
+            {trims.map((t, i) => (
+              <option key={i} value={t}>{t}</option>
+            ))}
+          </select>
+        </details>
+
+        {/* ---------------- VEHICLE DETAILS ---------------- */}
+        <details className="mb-4" open>
+          <summary className="font-semibold text-black cursor-pointer pb-2">
+            Vehicle Details
+          </summary>
+
+          {[
+            ["mileage", "Mileage"],
+            ["damage_description", "Damage"],
+            ["title_status", "Title Status"],
+            ["asking_price", "Asking Price"],
+            ["location", "Location"],
+            ["listing_url", "Listing URL (optional)"],
+            ["description", "Description"],
+            ["vin", "VIN"],
+          ].map(([key, label]) => (
+            <input
+              key={key}
+              name={key}
+              value={form[key]}
+              onChange={update}
+              placeholder={label}
+              className="w-full border rounded-lg p-2 mb-3 text-black"
+            />
           ))}
-        </select>
+        </details>
 
-        {/* MAKE */}
-        <select
-          name="make"
-          value={form.make}
-          onChange={update}
-          className="w-full border rounded-lg p-2 mb-3 text-black"
-        >
-          <option value="">Select Make</option>
-          {makes.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
+        {/* ---------------- PHOTOS ---------------- */}
+        <details className="mb-4" open>
+          <summary className="font-semibold text-black cursor-pointer pb-2">
+            Photos
+          </summary>
+
+          {[
+            ["front_image", "Front"],
+            ["driver_image", "Driver Side"],
+            ["passenger_image", "Passenger Side"],
+            ["rear_image", "Rear"],
+            ["interior_image", "Interior"],
+            ["dash_image", "Dash"],
+          ].map(([key, label]) => (
+            <div key={key} className="mb-3">
+              <label className="font-medium text-black">{label}</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) =>
+                  setImages({ ...images, [key]: e.target.files[0] })
+                }
+                className="w-full border p-2 rounded text-black"
+              />
+            </div>
           ))}
-        </select>
+        </details>
 
-        {/* MODEL */}
-        <select
-          name="model"
-          value={form.model}
-          onChange={update}
-          disabled={!models.length}
-          className="w-full border rounded-lg p-2 mb-3 text-black"
-        >
-          <option value="">Select Model</option>
-          {models.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-
-        {/* TRIM */}
-        <select
-          name="trim"
-          value={form.trim}
-          onChange={update}
-          disabled={!trims.length}
-          className="w-full border rounded-lg p-2 mb-3 text-black"
-        >
-          <option value="">Select Trim</option>
-          {trims.map((t, i) => (
-            <option key={i} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-
-        {/* OTHER INPUTS */}
-        {[
-          ["mileage", "Mileage"],
-          ["damage_description", "Damage"],
-          ["title_status", "Title Status"],
-          ["asking_price", "Asking Price"],
-          ["location", "Location"],
-          ["listing_url", "Listing URL (optional)"],
-          ["description", "Description"],
-          ["vin", "VIN"],
-        ].map(([key, label]) => (
-          <input
-            key={key}
-            name={key}
-            value={form[key]}
-            onChange={update}
-            placeholder={label}
-            className="w-full border rounded-lg p-2 mb-3 text-black"
-          />
-        ))}
-
-        {/* IMAGE INPUTS */}
-        <label className="font-medium mt-2">Photos</label>
-
-        <div className="space-y-2 mt-2 text-black">
-          <div>
-            <label>Front</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setFront(e.target.files[0])}
-              className="w-full border p-2 rounded"
-            />
-          </div>
-          <div>
-            <label>Driver Side</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setDriver(e.target.files[0])}
-              className="w-full border p-2 rounded"
-            />
-          </div>
-          <div>
-            <label>Passenger Side</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setPassenger(e.target.files[0])}
-              className="w-full border p-2 rounded"
-            />
-          </div>
-          <div>
-            <label>Rear</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setRear(e.target.files[0])}
-              className="w-full border p-2 rounded"
-            />
-          </div>
-          <div>
-            <label>Interior</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setInterior(e.target.files[0])}
-              className="w-full border p-2 rounded"
-            />
-          </div>
-          <div>
-            <label>Dash</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setDash(e.target.files[0])}
-              className="w-full border p-2 rounded"
-            />
-          </div>
-        </div>
-
+        {/* ---------------- BUTTONS ---------------- */}
         <div className="flex justify-end gap-2 mt-4">
-          <button
-            className="px-4 py-2 bg-gray-300 rounded-lg text-black"
-            onClick={close}
-          >
+          <button className="px-4 py-2 bg-gray-300 rounded-lg text-black" onClick={close}>
             Cancel
           </button>
           <button
@@ -273,6 +227,7 @@ function ManualVehicleModal({ API, close, reload }) {
             Save
           </button>
         </div>
+
       </div>
     </div>
   );

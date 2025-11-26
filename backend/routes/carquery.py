@@ -45,49 +45,58 @@ def get_models(make: str):
 
 
 @router.get("/carquery/trims")
-def get_trims(make: str, year: int, model: str | None = None, model_name: str | None = None):
-    # Pick whichever was sent
+def get_trims(make: str, year: int | None = None, model: str | None = None, model_name: str | None = None):
     input_model = (model_name or model or "").strip()
-
     if not input_model:
         return {"error": "Missing model or model_name"}
 
-    # --------------------------------------------
-    # STEP 1: Normalize model using CarQuery getModels
-    # --------------------------------------------
-    models_url = f"{CARQUERY}?cmd=getModels&make={make}&sold_in_us=1&callback="
+    # -------------------------------------------------
+    # STEP 1: Normalize the model name (case-insensitive)
+    # -------------------------------------------------
+    models_url = f"{CARQUERY}?cmd=getModels&make={make}&callback="
     r_models = requests.get(models_url, timeout=20)
     data_models = extract_json(r_models.text)
     model_list = data_models.get("Models", [])
 
-    # Try to find the correct CarQuery model_name
     normalized_model = None
     for m in model_list:
         name = m.get("model_name", "")
-        if name.lower() == input_model.lower():   # ← case-insensitive match
+        if name.lower() == input_model.lower():
             normalized_model = name
             break
 
-    # If still not found, fall back to input (may still work)
+    # fallback to what the user typed
     normalized_model = normalized_model or input_model
 
-    # --------------------------------------------
-    # STEP 2: Get trims using proper CarQuery model name
-    # --------------------------------------------
-    url = (
+    # -------------------------------------------------
+    # STEP 2: ALWAYS GET TRIMS WITHOUT YEAR FIRST
+    # -------------------------------------------------
+    url_no_year = (
         f"{CARQUERY}?cmd=getTrims"
         f"&make={make}"
         f"&model={normalized_model}"
-        f"&year={year}"
-        f"&sold_in_us=1"
         f"&callback="
     )
 
-    r = requests.get(url, timeout=20)
+    r = requests.get(url_no_year, timeout=20)
     data = extract_json(r.text)
-
     trims_raw = data.get("Trims", [])
 
+    # -------------------------------------------------
+    # STEP 3: If year provided, filter by year
+    # -------------------------------------------------
+    if year is not None:
+        year_str = str(year)
+        filtered = [t for t in trims_raw if str(t.get("model_year")) == year_str]
+
+        # If filtering returned something, use it
+        if filtered:
+            trims_raw = filtered
+        # Otherwise fallback to all-year trims (your dataset stays full)
+
+    # -------------------------------------------------
+    # STEP 4: Extract unique trim names
+    # -------------------------------------------------
     trims = sorted({
         t.get("model_trim")
         for t in trims_raw
@@ -97,6 +106,6 @@ def get_trims(make: str, year: int, model: str | None = None, model_name: str | 
     return {
         "input_model": input_model,
         "normalized_model": normalized_model,
+        "total_trims_found": len(trims),
         "trims": trims
     }
-

@@ -3,7 +3,7 @@ import axios from "axios";
 import { Wrench, DollarSign } from "lucide-react";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-// MANUAL VEHICLE MODAL — COLLAPSIBLE VERSION (SOLUTION B, FULL COMPONENT)
+// MANUAL VEHICLE MODAL — FULLY UPDATED FOR car_specs
 ///////////////////////////////////////////////////////////////////////////////////////////
 function ManualVehicleModal({ API, close, reload }) {
   const [form, setForm] = useState({
@@ -21,11 +21,11 @@ function ManualVehicleModal({ API, close, reload }) {
     vin: "",
   });
 
+  const [years, setYears] = useState([]);
   const [makes, setMakes] = useState([]);
   const [models, setModels] = useState([]);
   const [trims, setTrims] = useState([]);
 
-  // all images stored in one object
   const [images, setImages] = useState({
     front_image: null,
     driver_image: null,
@@ -35,65 +35,96 @@ function ManualVehicleModal({ API, close, reload }) {
     dash_image: null,
   });
 
-  // years list
-  const years = Array.from({ length: 2026 - 1980 + 1 }, (_, i) => 1980 + i);
-
-  // update form fields
-  const update = (e) =>
+  const update = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+  };
 
-  // load makes
+  // ---------------------------
+  // LOAD YEARS
+  // ---------------------------
   useEffect(() => {
+    const loadYears = async () => {
+      try {
+        const res = await axios.get(`${API}/specs/years`);
+        setYears(res.data || []);
+      } catch (err) {
+        console.error("Failed to load years:", err);
+      }
+    };
+    loadYears();
+  }, [API]);
+
+  // ---------------------------
+  // LOAD MAKES WHEN YEAR CHANGES
+  // ---------------------------
+  useEffect(() => {
+    if (!form.year) return;
+
     const loadMakes = async () => {
       try {
-        const res = await axios.get(`${API}/nhtsa/makes`);
-        setMakes(res.data.makes || []);
+        const res = await axios.get(`${API}/specs/makes/${form.year}`);
+        setMakes(res.data || []);
+        setModels([]);
+        setTrims([]);
+        setForm((prev) => ({ ...prev, make: "", model: "", trim: "" }));
       } catch (err) {
         console.error("Failed to load makes:", err);
       }
     };
-    loadMakes();
-  }, [API]);
 
-  // load models on make change
+    loadMakes();
+  }, [form.year, API]);
+
+  // ---------------------------
+  // LOAD MODELS WHEN MAKE CHANGES
+  // ---------------------------
   useEffect(() => {
-    if (!form.make) return;
+    if (!form.year || !form.make) return;
+
     const loadModels = async () => {
       try {
-        const res = await axios.get(`${API}/nhtsa/models?make=${form.make}`);
-        setModels(res.data.models || []);
+        const res = await axios.get(
+          `${API}/specs/models/${form.year}/${form.make}`
+        );
+        setModels(res.data || []);
         setTrims([]);
         setForm((prev) => ({ ...prev, model: "", trim: "" }));
       } catch (err) {
         console.error("Failed to load models:", err);
       }
     };
-    loadModels();
-  }, [form.make, API]);
 
-  // load trims
+    loadModels();
+  }, [form.year, form.make, API]);
+
+  // ---------------------------
+  // LOAD TRIMS WHEN MODEL CHANGES
+  // ---------------------------
   useEffect(() => {
     if (!form.year || !form.make || !form.model) return;
+
     const loadTrims = async () => {
       try {
         const res = await axios.get(
-          `${API}/nhtsa/trims?make=${form.make}&model=${form.model}&year=${form.year}`
+          `${API}/specs/trims/${form.year}/${form.make}/${form.model}`
         );
-        setTrims(res.data.trims || []);
+        setTrims(res.data || []);
       } catch (err) {
         console.error("Failed to load trims:", err);
       }
     };
+
     loadTrims();
   }, [form.year, form.make, form.model, API]);
 
-  // submit vehicle
+  // ---------------------------
+  // SUBMIT VEHICLE
+  // ---------------------------
   const submit = async () => {
     try {
       const fd = new FormData();
       Object.keys(form).forEach((k) => fd.append(k, form[k]));
 
-      // append images in correct order
       Object.keys(images).forEach((key) => {
         if (images[key]) fd.append(key, images[key]);
       });
@@ -125,37 +156,66 @@ function ManualVehicleModal({ API, close, reload }) {
             Vehicle Info
           </summary>
 
-          <select name="year" value={form.year} onChange={update}
-            className="w-full border rounded-lg p-2 mb-3 text-black">
+          {/* YEAR */}
+          <select
+            name="year"
+            value={form.year}
+            onChange={update}
+            className="w-full border rounded-lg p-2 mb-3 text-black"
+          >
             <option value="">Select Year</option>
             {years.map((y) => (
-              <option key={y} value={y}>{y}</option>
+              <option key={y} value={y}>
+                {y}
+              </option>
             ))}
           </select>
 
-          <select name="make" value={form.make} onChange={update}
-            className="w-full border rounded-lg p-2 mb-3 text-black">
+          {/* MAKE */}
+          <select
+            name="make"
+            value={form.make}
+            onChange={update}
+            disabled={!makes.length}
+            className="w-full border rounded-lg p-2 mb-3 text-black"
+          >
             <option value="">Select Make</option>
             {makes.map((m) => (
-              <option key={m} value={m}>{m}</option>
+              <option key={m} value={m}>
+                {m}
+              </option>
             ))}
           </select>
 
-          <select name="model" value={form.model} onChange={update}
+          {/* MODEL */}
+          <select
+            name="model"
+            value={form.model}
+            onChange={update}
             disabled={!models.length}
-            className="w-full border rounded-lg p-2 mb-3 text-black">
+            className="w-full border rounded-lg p-2 mb-3 text-black"
+          >
             <option value="">Select Model</option>
             {models.map((m) => (
-              <option key={m} value={m}>{m}</option>
+              <option key={m} value={m}>
+                {m}
+              </option>
             ))}
           </select>
 
-          <select name="trim" value={form.trim} onChange={update}
+          {/* TRIM */}
+          <select
+            name="trim"
+            value={form.trim}
+            onChange={update}
             disabled={!trims.length}
-            className="w-full border rounded-lg p-2 mb-3 text-black">
+            className="w-full border rounded-lg p-2 mb-3 text-black"
+          >
             <option value="">Select Trim</option>
             {trims.map((t, i) => (
-              <option key={i} value={t}>{t}</option>
+              <option key={i} value={t}>
+                {t}
+              </option>
             ))}
           </select>
         </details>
@@ -217,7 +277,10 @@ function ManualVehicleModal({ API, close, reload }) {
 
         {/* ---------------- BUTTONS ---------------- */}
         <div className="flex justify-end gap-2 mt-4">
-          <button className="px-4 py-2 bg-gray-300 rounded-lg text-black" onClick={close}>
+          <button
+            className="px-4 py-2 bg-gray-300 rounded-lg text-black"
+            onClick={close}
+          >
             Cancel
           </button>
           <button
@@ -227,11 +290,11 @@ function ManualVehicleModal({ API, close, reload }) {
             Save
           </button>
         </div>
-
       </div>
     </div>
   );
 }
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 // DASHBOARD — SHOW COPART + MANUAL VEHICLES TOGETHER

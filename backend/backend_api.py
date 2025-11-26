@@ -151,6 +151,7 @@ from .auth import router as auth_router
 from backend.routes.manual_vehicle import router as manual_vehicle_router
 from backend.routes.carquery import router as carquery_router
 from backend.routes.nhtsa import router as nhtsa_router
+from backend.routers.specs import router as specs_router
 
 
 
@@ -161,9 +162,7 @@ app.include_router(auth_router)
 app.include_router(manual_vehicle_router)
 app.include_router(carquery_router)
 app.include_router(nhtsa_router)
-
-
-
+app.include_router(specs_router, prefix="/api")
 
 # --------------------------------------------------
 # MAIN ENTRY POINT

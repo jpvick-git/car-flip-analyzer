@@ -162,5 +162,6 @@ app.include_router(specs_router, prefix="/api")
 # MAIN ENTRY POINT
 # --------------------------------------------------
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("backend.backend_api:app", host="0.0.0.0", port=8000)
+    pass
+#    import uvicorn
+#    uvicorn.run("backend.backend_api:app", host="0.0.0.0", port=8000)

@@ -55,37 +55,39 @@ def get_trims(make: str, model: str, year: int):
     import urllib.parse
     import json
 
+    # FIX 1: CarQuery requires lowercase
     make_clean = make.strip().lower()
     model_clean = model.strip().lower()
+    year_clean = int(year)
 
     url = (
         "https://www.carqueryapi.com/api/0.3/"
-        f"?callback=?&cmd=getTrims&make={urllib.parse.quote(make_clean)}"
-        f"&model={urllib.parse.quote(model_clean)}&year={year}"
+        f"?callback=?&cmd=getTrims"
+        f"&make={urllib.parse.quote(make_clean)}"
+        f"&model={urllib.parse.quote(model_clean)}"
+        f"&year={year_clean}"
     )
 
     try:
         r = requests.get(url, timeout=10)
         raw = r.text.strip()
 
-        # ---------- SAFETY CHECK: Must contain {} ----------
-        if "{" not in raw or "}" not in raw:
+        # FIX 2: If nothing valid returned → safe empty response
+        if not raw or "{" not in raw or "}" not in raw:
             return {"trims": []}
 
-        # ---------- Strip JSONP wrapper ----------
-        json_str = raw[raw.find("{") : raw.rfind("}") + 1].strip()
+        # Extract JSON between first "{" and last "}"
+        json_str = raw[raw.find("{"): raw.rfind("}") + 1].strip()
 
         if not json_str:
             return {"trims": []}
 
-        # ---------- Attempt JSON parsing ----------
         try:
             data = json.loads(json_str)
         except:
-            # invalid JSON
             return {"trims": []}
 
-        # ---------- Extract trims ----------
+        # FIX 3: Extract valid trims
         trims = [
             t.get("model_trim")
             for t in data.get("Trims", [])

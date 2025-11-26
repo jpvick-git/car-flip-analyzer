@@ -53,8 +53,8 @@ def get_car_models(make: str):
 def get_trims(make: str, model: str, year: int):
     import requests
     import urllib.parse
+    import json
 
-    # Normalize input
     make_clean = make.strip().lower()
     model_clean = model.strip().lower()
 
@@ -64,18 +64,37 @@ def get_trims(make: str, model: str, year: int):
         f"&model={urllib.parse.quote(model_clean)}&year={year}"
     )
 
-    r = requests.get(url, timeout=20)
+    try:
+        r = requests.get(url, timeout=10)
+        raw = r.text.strip()
 
-    # Strip JSONP
-    text = r.text
-    json_str = text[text.find("{") : text.rfind("}") + 1]
-    data = json.loads(json_str)
+        # ---------- SAFETY CHECK: Must contain {} ----------
+        if "{" not in raw or "}" not in raw:
+            return {"trims": []}
 
-    trims = [
-        t.get("model_trim")
-        for t in data.get("Trims", [])
-        if t.get("model_trim") and t.get("model_trim").strip()
-    ]
+        # ---------- Strip JSONP wrapper ----------
+        json_str = raw[raw.find("{") : raw.rfind("}") + 1].strip()
 
-    return {"trims": sorted(set(trims))}
+        if not json_str:
+            return {"trims": []}
+
+        # ---------- Attempt JSON parsing ----------
+        try:
+            data = json.loads(json_str)
+        except:
+            # invalid JSON
+            return {"trims": []}
+
+        # ---------- Extract trims ----------
+        trims = [
+            t.get("model_trim")
+            for t in data.get("Trims", [])
+            if t.get("model_trim") and t.get("model_trim").strip()
+        ]
+
+        return {"trims": sorted(set(trims))}
+
+    except Exception:
+        return {"trims": []}
+
 

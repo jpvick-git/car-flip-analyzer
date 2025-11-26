@@ -50,19 +50,32 @@ def get_car_models(make: str):
     return {"models": models}
 
 @router.get("/carquery/trims")
-def get_car_trims(make: str, model: str, year: int):
-    make = make.lower()
-    model = model.lower()
+def get_trims(make: str, model: str, year: int):
+    import requests
+    import urllib.parse
 
-    url = f"https://www.carqueryapi.com/api/0.3/?cmd=getTrims&make={make}&model={model}&year={year}"
-    r = requests.get(url, headers=HEADERS, timeout=10)
+    # Normalize input
+    make_clean = make.strip().lower()
+    model_clean = model.strip().lower()
 
-    parsed = parse_carquery(r.text)
-    trims = parsed.get("Trims", [])
-
-    trim_names = sorted(
-        list({t.get("model_trim") for t in trims if t.get("model_trim")})
+    url = (
+        "https://www.carqueryapi.com/api/0.3/"
+        f"?callback=?&cmd=getTrims&make={urllib.parse.quote(make_clean)}"
+        f"&model={urllib.parse.quote(model_clean)}&year={year}"
     )
 
-    return {"trims": trim_names}
+    r = requests.get(url, timeout=20)
+
+    # Strip JSONP
+    text = r.text
+    json_str = text[text.find("{") : text.rfind("}") + 1]
+    data = json.loads(json_str)
+
+    trims = [
+        t.get("model_trim")
+        for t in data.get("Trims", [])
+        if t.get("model_trim") and t.get("model_trim").strip()
+    ]
+
+    return {"trims": sorted(set(trims))}
 

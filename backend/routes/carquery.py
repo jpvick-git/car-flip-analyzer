@@ -45,72 +45,79 @@ def get_models(make: str):
 
 
 @router.get("/carquery/trims")
-def get_trims(make: str, year: int | None = None, model: str | None = None, model_name: str | None = None):
+def get_trims(make: str, year: int, model: str | None = None, model_name: str | None = None):
     input_model = (model_name or model or "").strip()
     if not input_model:
         return {"error": "Missing model or model_name"}
 
-    # -------------------------------------------
-    # STEP 1 — Fetch models
-    # -------------------------------------------
+    # ---------------------------------------
+    # GET ALL MODELS (to normalize properly)
+    # ---------------------------------------
     models_url = f"{CARQUERY}?cmd=getModels&make={make}&callback="
     r_models = requests.get(models_url, timeout=20)
     data_models = extract_json(r_models.text)
     model_list = data_models.get("Models", [])
 
-    # Helper: normalize whitespace including unicode
+    # Clean function
     def clean(val: str):
-        return re.sub(r"\s+", " ", val or "").strip()
+        return (val or "").strip()
 
     cleaned_input = clean(input_model).lower()
 
-    # -------------------------------------------
-    # STEP 2 — Clean each model_name and compare
-    # -------------------------------------------
+    # ---------------------------------------
+    # Normalize (Title Case + match CarQuery's spelling)
+    # ---------------------------------------
     normalized_model = None
 
     for m in model_list:
-        raw_name = m.get("model_name", "")
-        clean_name = clean(raw_name)
+        raw = m.get("model_name", "")
+        cleaned = clean(raw)
 
-        if clean_name.lower() == cleaned_input:
-            normalized_model = clean_name.title()
+        if cleaned.lower() == cleaned_input:
+            normalized_model = cleaned.title()
             break
 
-        # partial match fallback ("equinox" matches "Equinox AWD" etc.)
-        if cleaned_input in clean_name.lower():
-            normalized_model = clean_name.title()
-            # don't break yet: prefer exact match if found later
+    # Fallback to user input
+    normalized_model = normalized_model or clean(input_model).title()
 
-    # fallback: what user sent
-    normalized_model = (normalized_model or clean(input_model)).title()
-
-    # -------------------------------------------
-    # STEP 3 — ALWAYS fetch trims without year first
-    # -------------------------------------------
-    url_no_year = (
+    # ---------------------------------------
+    # 1️⃣ TRY WITH YEAR FIRST  (Equinox requires this)
+    # ---------------------------------------
+    url_with_year = (
         f"{CARQUERY}?cmd=getTrims"
         f"&make={make}"
         f"&model={normalized_model}"
+        f"&year={year}"
         f"&callback="
     )
 
-    r = requests.get(url_no_year, timeout=20)
-    data = extract_json(r.text)
-    trims_raw = data.get("Trims", [])
+    r1 = requests.get(url_with_year, timeout=20)
+    data1 = extract_json(r1.text)
+    trims_raw = data1.get("Trims", [])
 
-    # -------------------------------------------
-    # STEP 4 — Filter by year if requested
-    # -------------------------------------------
-    if year:
-        year_str = str(year)
-        filtered = [t for t in trims_raw if str(t.get("model_year")) == year_str]
-        if filtered:
-            trims_raw = filtered
+    # ---------------------------------------
+    # 2️⃣ IF NO TRIMS → fall back to no-year
+    # ---------------------------------------
+    if not trims_raw:
+        url_no_year = (
+            f"{CARQUERY}?cmd=getTrims"
+            f"&make={make}"
+            f"&model={normalized_model}"
+            f"&callback="
+        )
+        r2 = requests.get(url_no_year, timeout=20)
+        data2 = extract_json(r2.text)
+        trims_raw = data2.get("Trims", [])
 
-    # -------------------------------------------
-    # STEP 5 — Extract trim names
-    # -------------------------------------------
+        # Manually filter by year
+        trims_raw = [
+            t for t in trims_raw
+            if str(t.get("model_year")) == str(year)
+        ]
+
+    # ---------------------------------------
+    # Extract trims
+    # ---------------------------------------
     trims = sorted({
         t.get("model_trim")
         for t in trims_raw
@@ -120,6 +127,5 @@ def get_trims(make: str, year: int | None = None, model: str | None = None, mode
     return {
         "input_model": input_model,
         "normalized_model": normalized_model,
-        "total_trims_found": len(trims),
         "trims": trims
     }

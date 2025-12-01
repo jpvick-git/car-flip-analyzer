@@ -16,11 +16,12 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 LOCAL_TRIGGER_URL = "https://quinquevalent-hayley-unhackneyed.ngrok-free.dev/trigger"
 
-RDS_CONN = (
-    "mssql+pyodbc://jpvick-git:Nk^+Cq4MfUNt%8q@carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com,1433/cars"
-    "?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
+PG_CONN = (
+    "postgresql+psycopg2://carflip_user:AVNS_KMNjNg_8wx4vECPoFfh"
+    "@carflip-db-do-user-28471662-0.i.db.ondigitalocean.com:25060/carflip"
+    "?sslmode=require"
 )
-rds_engine = create_engine(RDS_CONN, pool_pre_ping=True)
+rds_engine = create_engine(PG_CONN, pool_pre_ping=True)
 
 
 # -----------------------------------------------------------
@@ -78,7 +79,7 @@ async def upload_file(
                     text("""
                         SELECT 1 FROM user_vehicles
                         WHERE user_id = :uid
-                          AND LTRIM(RTRIM(lot_number)) = :lot
+                          AND TRIM(lot_number) = :lot
                     """),
                     {"uid": user["id"], "lot": lot_number},
                 ).fetchone()
@@ -136,9 +137,9 @@ async def upload_file(
                                 auto_grade = :auto_grade,
                                 sale_light = :sale_light,
                                 announcements = :announcements,
-                                updated_at = GETDATE()
+                                updated_at = NOW()
                             WHERE user_id = :user_id
-                              AND LTRIM(RTRIM(lot_number)) = :lot_number
+                              AND TRIM(lot_number) = :lot_number
                         """),
                         values
                     )
@@ -164,7 +165,7 @@ async def upload_file(
                                 :title_code, :odometer, :odometer_description, :damage_description,
                                 :current_bid, :my_bid, :item_number, :sale_name,
                                 :auto_grade, :sale_light, :announcements,
-                                GETDATE()
+                                NOW()
                             )
                         """),
                         values

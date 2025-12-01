@@ -3,17 +3,269 @@ import axios from "axios";
 import { Wrench, DollarSign } from "lucide-react";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-// MANUAL VEHICLE MODAL (unchanged)
+//  ADD VEHICLE MODAL (ManualVehicleModal)
 ///////////////////////////////////////////////////////////////////////////////////////////
+
 function ManualVehicleModal({ API, close, reload }) {
-  ...
-  // (KEEP YOUR ORIGINAL MODAL — unchanged)
-  ...
+  const [form, setForm] = useState({
+    year: "",
+    make: "",
+    model: "",
+    trim: "",
+    mileage: "",
+    damage_description: "",
+    title_status: "",
+    asking_price: "",
+    location: "",
+    listing_url: "",
+    description: "",
+    vin: "",
+  });
+
+  const [years, setYears] = useState([]);
+  const [makes, setMakes] = useState([]);
+  const [models, setModels] = useState([]);
+  const [trims, setTrims] = useState([]);
+
+  const [images, setImages] = useState({
+    front_image: null,
+    driver_image: null,
+    passenger_image: null,
+    rear_image: null,
+    interior_image: null,
+    dash_image: null,
+  });
+
+  const update = (e) =>
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value,
+    });
+
+  // LOAD YEARS
+  useEffect(() => {
+    const loadYears = async () => {
+      try {
+        const res = await axios.get(`${API}/api/specs/years`);
+        setYears(res.data || []);
+      } catch (err) {
+        console.error("Failed to load years:", err);
+      }
+    };
+    loadYears();
+  }, [API]);
+
+  // LOAD MAKES
+  useEffect(() => {
+    if (!form.year) return;
+    const loadMakes = async () => {
+      try {
+        const res = await axios.get(`${API}/api/specs/makes/${form.year}`);
+        setMakes(res.data || []);
+        setModels([]);
+        setTrims([]);
+        setForm((prev) => ({ ...prev, make: "", model: "", trim: "" }));
+      } catch (err) {
+        console.error("Failed to load makes:", err);
+      }
+    };
+    loadMakes();
+  }, [form.year, API]);
+
+  // LOAD MODELS
+  useEffect(() => {
+    if (!form.year || !form.make) return;
+    const loadModels = async () => {
+      try {
+        const res = await axios.get(
+          `${API}/api/specs/models/${form.year}/${form.make}`
+        );
+        setModels(res.data || []);
+        setTrims([]);
+        setForm((prev) => ({ ...prev, model: "", trim: "" }));
+      } catch (err) {
+        console.error("Failed to load models:", err);
+      }
+    };
+    loadModels();
+  }, [form.year, form.make, API]);
+
+  // LOAD TRIMS
+  useEffect(() => {
+    if (!form.year || !form.make || !form.model) return;
+    const loadTrims = async () => {
+      try {
+        const res = await axios.get(
+          `${API}/api/specs/trims/${form.year}/${form.make}/${form.model}`
+        );
+        setTrims(res.data || []);
+      } catch (err) {
+        console.error("Failed to load trims:", err);
+      }
+    };
+    loadTrims();
+  }, [form.year, form.make, form.model, API]);
+
+  const submit = async () => {
+    try {
+      const fd = new FormData();
+      Object.keys(form).forEach((k) => fd.append(k, form[k]));
+      Object.keys(images).forEach((k) => {
+        if (images[k]) fd.append(k, images[k]);
+      });
+
+      await axios.post(`${API}/add_manual_vehicle`, fd, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      close();
+      reload();
+    } catch (err) {
+      console.error("Manual vehicle upload failed:", err);
+      alert("Failed to add vehicle.");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl text-black max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-semibold mb-4">Add Vehicle</h2>
+
+        {/* SECTIONS */}
+        <details className="mb-4" open>
+          <summary className="font-semibold pb-2">Vehicle Info</summary>
+
+          <select
+            name="year"
+            value={form.year}
+            onChange={update}
+            className="w-full border rounded-lg p-2 mb-3"
+          >
+            <option value="">Select Year</option>
+            {years.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+
+          <select
+            name="make"
+            value={form.make}
+            onChange={update}
+            disabled={!makes.length}
+            className="w-full border rounded-lg p-2 mb-3"
+          >
+            <option value="">Select Make</option>
+            {makes.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+
+          <select
+            name="model"
+            value={form.model}
+            onChange={update}
+            disabled={!models.length}
+            className="w-full border rounded-lg p-2 mb-3"
+          >
+            <option value="">Select Model</option>
+            {models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+
+          <select
+            name="trim"
+            value={form.trim}
+            onChange={update}
+            disabled={!trims.length}
+            className="w-full border rounded-lg p-2 mb-3"
+          >
+            <option value="">Select Trim</option>
+            {trims.map((t, i) => (
+              <option key={i} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </details>
+
+        <details className="mb-4" open>
+          <summary className="font-semibold pb-2">Vehicle Details</summary>
+
+          {[
+            ["mileage", "Mileage"],
+            ["damage_description", "Damage"],
+            ["title_status", "Title Status"],
+            ["asking_price", "Asking Price"],
+            ["location", "Location"],
+            ["listing_url", "Listing URL (optional)"],
+            ["description", "Description"],
+            ["vin", "VIN"],
+          ].map(([key, label]) => (
+            <input
+              key={key}
+              name={key}
+              value={form[key]}
+              onChange={update}
+              className="w-full border rounded-lg p-2 mb-3"
+              placeholder={label}
+            />
+          ))}
+        </details>
+
+        <details className="mb-4" open>
+          <summary className="font-semibold pb-2">Photos</summary>
+          {[
+            ["front_image", "Front"],
+            ["driver_image", "Driver Side"],
+            ["passenger_image", "Passenger Side"],
+            ["rear_image", "Rear"],
+            ["interior_image", "Interior"],
+            ["dash_image", "Dash"],
+          ].map(([key, label]) => (
+            <div key={key} className="mb-3">
+              <label className="font-medium">{label}</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) =>
+                  setImages({ ...images, [key]: e.target.files[0] })
+                }
+                className="w-full border p-2 rounded"
+              />
+            </div>
+          ))}
+        </details>
+
+        <div className="flex justify-end gap-2">
+          <button className="px-4 py-2 bg-gray-300 rounded" onClick={close}>
+            Cancel
+          </button>
+          <button
+            className="px-4 py-2 bg-green-600 text-white rounded"
+            onClick={submit}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-// CSV UPLOAD MODAL  ⭐ NEW ⭐
+//  CSV UPLOAD MODAL
 ///////////////////////////////////////////////////////////////////////////////////////////
+
 function CSVUploadModal({
   showCSVModal,
   setShowCSVModal,
@@ -25,7 +277,7 @@ function CSVUploadModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white p-6 rounded-xl w-full max-w-md shadow-xl text-black">
+      <div className="bg-white p-6 rounded-xl w-full max-w-md text-black shadow-xl">
         <h2 className="text-xl font-semibold mb-4">Upload CSV</h2>
 
         <input
@@ -42,7 +294,6 @@ function CSVUploadModal({
           >
             Cancel
           </button>
-
           <button
             className="px-4 py-2 bg-blue-600 text-white rounded"
             onClick={uploadUserFile}
@@ -56,9 +307,10 @@ function CSVUploadModal({
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-// DASHBOARD — ADD CSV MODAL + EXISTING VEHICLE GRID
+//  DASHBOARD
 ///////////////////////////////////////////////////////////////////////////////////////////
-const Dashboard = ({
+
+export default function Dashboard({
   showAddModal,
   setShowAddModal,
   showCSVModal,
@@ -66,7 +318,7 @@ const Dashboard = ({
   uploadFile,
   setUploadFile,
   uploadUserFile,
-}) => {
+}) {
   const [cars, setCars] = useState([]);
   const [selectedCar, setSelectedCar] = useState(null);
   const [tempMargin, setTempMargin] = useState(15);
@@ -76,69 +328,70 @@ const Dashboard = ({
   const API =
     process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com";
 
-  // UNIFIED MAX BID CALC
+  // MAX BID CALC
   const calculateCarWithMargin = (car, marginInput) => {
     const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
     const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
     const taxRate = Number(car.avg_tax_rate || 0);
     const titleFee = Number(car.title_fee || 0);
-
     const margin = Number(marginInput) / 100;
-    const divisor = 1 + 0.075 + taxRate / 100;
 
+    const divisor = 1 + 0.075 + taxRate / 100;
     let bid = (resale * (1 - margin) - titleFee - repair) / divisor;
+
     if (isNaN(bid) || bid < 0) bid = 0;
     bid = Math.round(bid);
 
     const buyerFee = bid * 0.075;
     const taxAmt = bid * (taxRate / 100);
-    const totalCost = bid + buyerFee + taxAmt + titleFee + repair;
-    const profit = resale - totalCost;
-    const marginActual = resale > 0 ? (profit / resale) * 100 : 0;
 
     return {
       ...car,
       max_bid: bid,
       buyer_fee: Math.round(buyerFee),
       tax_amount_calc: Math.round(taxAmt),
-      total_cost: Math.round(totalCost),
-      profit: Math.round(profit),
-      margin_actual: Number(marginActual.toFixed(1)),
+      total_cost: Math.round(bid + buyerFee + taxAmt + titleFee + repair),
+      profit: Math.round(resale - (bid + buyerFee + taxAmt + titleFee + repair)),
+      margin_actual: resale
+        ? Number(
+            (((resale - (bid + buyerFee + taxAmt + titleFee + repair)) /
+              resale) *
+              100
+            ).toFixed(1)
+          )
+        : 0,
     };
   };
 
   // LOAD VEHICLES
   useEffect(() => {
-    const fetchCars = async () => {
+    const load = async () => {
       try {
-        setLoading(true);
-
-        const response = await axios.get(`${API}/get_vehicles`, {
+        const res = await axios.get(`${API}/get_vehicles`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         });
 
-        let vehicles = [];
-        if (Array.isArray(response.data)) vehicles = response.data;
-        else if (Array.isArray(response.data.vehicles))
-          vehicles = response.data.vehicles;
+        let list = Array.isArray(res.data)
+          ? res.data
+          : res.data.vehicles || [];
 
-        vehicles = vehicles.map((car) => {
-          if (car.image_urls && car.image_urls.length > 0) {
+        list = list.map((car) => {
+          if (car.image_urls?.length > 0) {
             car.image_url = car.image_urls[0];
           }
           return calculateCarWithMargin(car, 15);
         });
 
-        setCars(vehicles);
+        setCars(list);
       } catch (err) {
-        console.error("Failed to load vehicles:", err);
+        console.error(err);
         setError("Failed to load vehicles");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCars();
+    load();
   }, []);
 
   const updateCarValue = (id, field, value) => {
@@ -153,8 +406,8 @@ const Dashboard = ({
 
   if (loading)
     return (
-      <div className="flex justify-center items-center h-screen text-gray-700">
-        Loading vehicles...
+      <div className="flex justify-center items-center h-screen">
+        Loading…
       </div>
     );
 
@@ -177,7 +430,7 @@ const Dashboard = ({
         />
       )}
 
-      {/* CSV UPLOAD MODAL ⭐ NEW ⭐ */}
+      {/* CSV MODAL */}
       <CSVUploadModal
         showCSVModal={showCSVModal}
         setShowCSVModal={setShowCSVModal}
@@ -186,19 +439,16 @@ const Dashboard = ({
         uploadUserFile={uploadUserFile}
       />
 
-      {/* CAR GRID */}
+      {/* GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {cars.map((car) => (
           <div
             key={car.id}
-            className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-lg transition overflow-hidden"
+            className="bg-white border rounded-xl shadow hover:shadow-lg transition"
           >
             <div className="relative">
               <img
-                src={
-                  car.image_url ||
-                  "https://placehold.co/400x250?text=No+Image"
-                }
+                src={car.image_url || "https://placehold.co/400x250?text=No+Image"}
                 className="w-full h-56 object-cover"
                 alt=""
               />
@@ -208,18 +458,14 @@ const Dashboard = ({
             </div>
 
             <div className="p-4 space-y-2">
-              <h2 className="text-lg font-semibold text-gray-900">
+              <h2 className="text-lg font-semibold">
                 {car.year} {car.make} {car.model}
               </h2>
 
-              <p className="text-sm text-gray-500">
-                Lot #: {car.lot_number || "Manual"}
-              </p>
-
+              <p className="text-sm text-gray-500">Lot #: {car.lot_number || "Manual"}</p>
               <p className="text-sm text-gray-500">
                 Location: {car.sale_name || car.location || "N/A"}
               </p>
-
               <p className="text-sm text-gray-500">
                 Sale Date:{" "}
                 {car.sale_date
@@ -227,41 +473,29 @@ const Dashboard = ({
                   : "N/A"}
               </p>
 
-              {/* Repair + Resale */}
+              {/* Repairs / Resale */}
               <div className="flex items-center justify-between pt-2 border-t">
-                <div className="flex items-center space-x-1 text-gray-700">
+                <div className="flex items-center space-x-1">
                   <Wrench size={16} />
                   <span>Repair:</span>
                   <input
                     type="number"
-                    value={
-                      car.repair_estimate || car.ai_repair_estimate || 0
-                    }
+                    value={car.repair_estimate || car.ai_repair_estimate || 0}
                     onChange={(e) =>
-                      updateCarValue(
-                        car.id,
-                        "repair_estimate",
-                        Number(e.target.value)
-                      )
+                      updateCarValue(car.id, "repair_estimate", Number(e.target.value))
                     }
                     className="w-20 border rounded px-2 py-1"
                   />
                 </div>
 
-                <div className="flex items-center space-x-1 text-gray-700">
+                <div className="flex items-center space-x-1">
                   <DollarSign size={16} />
                   <span>Resale:</span>
                   <input
                     type="number"
-                    value={
-                      car.resale_estimate || car.ai_resale_estimate || 0
-                    }
+                    value={car.resale_estimate || car.ai_resale_estimate || 0}
                     onChange={(e) =>
-                      updateCarValue(
-                        car.id,
-                        "resale_estimate",
-                        Number(e.target.value)
-                      )
+                      updateCarValue(car.id, "resale_estimate", Number(e.target.value))
                     }
                     className="w-20 border rounded px-2 py-1"
                   />
@@ -269,14 +503,14 @@ const Dashboard = ({
               </div>
 
               {/* Max Bid */}
-              <div className="mt-2 text-gray-700">
-                <span className="font-medium">Max Bid: </span>$
-                {car.max_bid?.toLocaleString()}
+              <div className="mt-2">
+                <span className="font-medium">Max Bid:</span>{" "}
+                ${car.max_bid?.toLocaleString()}
               </div>
 
               <button
+                className="mt-4 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"
                 onClick={() => setSelectedCar(car)}
-                className="mt-4 px-4 py-2 border rounded-lg text-gray-800 hover:bg-gray-50 text-sm"
               >
                 View Details
               </button>
@@ -285,14 +519,147 @@ const Dashboard = ({
         ))}
       </div>
 
-      {/* DETAILS MODAL (unchanged) */}
-      {selectedCar && (
-        ...
-        // KEEP YOUR ORIGINAL DETAILS MODAL — unchanged
-        ...
-      )}
+      {/* DETAILS MODAL */}
+      {selectedCar && (() => {
+        const activeCar =
+          cars.find((c) => c.id === selectedCar.id) || selectedCar;
+
+        const live = calculateCarWithMargin(activeCar, tempMargin);
+
+        return (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl relative">
+              <button
+                onClick={() => setSelectedCar(null)}
+                className="absolute top-3 right-3 text-2xl text-gray-600 hover:text-black"
+              >
+                ✕
+              </button>
+
+              <h2 className="text-xl font-semibold mb-2">
+                {activeCar.year} {activeCar.make} {activeCar.model}
+              </h2>
+
+              <p className="text-gray-700 mb-1">
+                <strong>Lot:</strong> {activeCar.lot_number || "Manual"}
+              </p>
+
+              <p className="text-gray-700 mb-1">
+                <strong>Location:</strong>{" "}
+                {activeCar.sale_name || activeCar.location || "N/A"}
+              </p>
+
+              <hr className="my-3" />
+
+              {/* REPAIR & RESALE */}
+              <div className="flex justify-between mb-3">
+                <div className="flex items-center space-x-1">
+                  <Wrench size={16} />
+                  <span>Repair:</span>
+                  <input
+                    type="number"
+                    value={
+                      activeCar.repair_estimate ||
+                      activeCar.ai_repair_estimate ||
+                      0
+                    }
+                    onChange={(e) =>
+                      updateCarValue(
+                        activeCar.id,
+                        "repair_estimate",
+                        Number(e.target.value)
+                      )
+                    }
+                    className="w-24 border rounded px-2 py-1"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-1">
+                  <DollarSign size={16} />
+                  <span>Resale:</span>
+                  <input
+                    type="number"
+                    value={
+                      activeCar.resale_estimate ||
+                      activeCar.ai_resale_estimate ||
+                      0
+                    }
+                    onChange={(e) =>
+                      updateCarValue(
+                        activeCar.id,
+                        "resale_estimate",
+                        Number(e.target.value)
+                      )
+                    }
+                    className="w-24 border rounded px-2 py-1"
+                  />
+                </div>
+              </div>
+
+              {/* MARGIN */}
+              <div className="flex items-center space-x-2 mb-3">
+                <span className="font-medium">Desired Margin:</span>
+                <input
+                  type="number"
+                  value={tempMargin}
+                  onChange={(e) => {
+                    let val = Number(e.target.value);
+                    if (isNaN(val)) val = 0;
+                    if (val < 0) val = 0;
+                    if (val > 90) val = 90;
+                    setTempMargin(val);
+                  }}
+                  className="w-20 border rounded px-2 py-1"
+                />
+                <span>%</span>
+              </div>
+
+              {/* CALCULATED VALUES */}
+              <div className="text-lg font-bold mb-2">
+                Max Bid: ${live.max_bid.toLocaleString()}
+              </div>
+
+              <div className="text-sm text-gray-700 space-y-1">
+                <p>Buyer Fee (7.5%): ${live.buyer_fee.toLocaleString()}</p>
+                <p>Tax ({activeCar.avg_tax_rate}%): ${live.tax_amount_calc.toLocaleString()}</p>
+                <p>Title Fee: ${Number(activeCar.title_fee).toLocaleString()}</p>
+                <p>Repairs: ${Number(activeCar.repair_estimate || 0).toLocaleString()}</p>
+              </div>
+
+              <hr className="my-3" />
+
+              <p>
+                <strong>Total Cost:</strong> ${live.total_cost.toLocaleString()}
+              </p>
+              <p>
+                <strong>Profit:</strong> ${live.profit.toLocaleString()}
+              </p>
+              <p>
+                <strong>Margin:</strong> {live.margin_actual}%
+              </p>
+
+              <hr className="my-3" />
+
+              <p>
+                <strong>Description:</strong>{" "}
+                {activeCar.description || "N/A"}
+              </p>
+
+              {activeCar.listing_url && (
+                <a
+                  href={activeCar.listing_url}
+                  className="text-blue-600 underline mt-3 inline-block"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open Listing →
+                </a>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
     </main>
   );
-};
-
-export default Dashboard;
+}

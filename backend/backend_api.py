@@ -159,3 +159,14 @@ app.include_router(manual_vehicle_router)
 app.include_router(vehicles_router)
 app.include_router(specs_router, prefix="/api")
 
+# --------------------------------------------------
+# UVICORN SERVER START
+# --------------------------------------------------
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "backend.backend_api:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=False
+    )

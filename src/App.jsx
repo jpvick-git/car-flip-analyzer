@@ -91,20 +91,22 @@ function Layout() {
         <Route path="/login" element={<Login />} />
 
         {/* DASHBOARD */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Dashboard
-                showAddModal={showAddModal}
-                setShowAddModal={setShowAddModal}
-                showCSVModal={showCSVModal}
-                setShowCSVModal={setShowCSVModal}
-              />
-            </ProtectedRoute>
-          }
-        />
-
+		<Route
+		  path="/"
+		  element={
+			<ProtectedRoute>
+			  <Dashboard
+				showAddModal={showAddModal}
+				setShowAddModal={setShowAddModal}
+				showCSVModal={showCSVModal}
+				setShowCSVModal={setShowCSVModal}
+				uploadFile={uploadFile}
+				setUploadFile={setUploadFile}
+				uploadUserFile={uploadUserFile}
+			  />
+			</ProtectedRoute>
+		  }
+		/>
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

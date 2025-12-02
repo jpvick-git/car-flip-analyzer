@@ -1,0 +1,5 @@
+Script print reached
+Using OpenAI key prefix: sk-proj-bG...
+Project ID: proj_yG0FqcGEaLjCW7kutLC5nG4S
+Fatal error: (pyodbc.OperationalError) ('08001', '[08001] [Microsoft][ODBC Driver 18 for SQL Server]TCP Provider: No such host is known.\r\n (11001) (SQLDriverConnect); [08001] [Microsoft][ODBC Driver 18 for SQL Server]Login timeout expired (0); [08001] [Microsoft][ODBC Driver 18 for SQL Server]A network-related or instance-specific error has occurred while establishing a connection to carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com,1433. Server is not found or not accessible. Check if instance name is correct and if SQL Server is configured to allow remote connections. For more information see SQL Server Books Online. (11001)')
+(Background on this error at: https://sqlalche.me/e/20/e3q8)

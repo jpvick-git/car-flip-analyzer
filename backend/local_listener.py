@@ -3,21 +3,25 @@ import subprocess
 import os
 import shutil
 from datetime import datetime
-import requests
 import json
+import sys
 
 app = Flask(__name__)
 
-# === CONFIG ===
+# ================================================
+# CONFIG — Your real Windows paths
+# ================================================
 ROOT = r"C:\car-flip-analyzer"
 BACKEND_DIR = os.path.join(ROOT, "backend")
 
-PYTHON_PATH = os.path.join(ROOT, "venv", "Scripts", "python.exe")
-AI_SCRIPT = os.path.join(BACKEND_DIR, "ai_repair_estimator.py")
-COPART_SCRIPT = os.path.join(BACKEND_DIR, "copart_download_parallel.py")
+# 🔥 Use SYSTEM PYTHON where Playwright is installed
+PYTHON_PATH = r"C:\Program Files\Python311\python.exe"
 
-DOWNLOADS = os.path.join(ROOT, "downloads")             # mirror Linux backend
-MANUAL_UPLOADS = os.path.join(ROOT, "manual_uploads")   # raw files storage
+# 🔥 Your scripts are inside backend\
+COPART_SCRIPT = os.path.join(BACKEND_DIR, "copart_download_parallel.py")
+AI_SCRIPT     = os.path.join(BACKEND_DIR, "ai_repair_estimator.py")
+
+# Logs folder path (already exists)
 LOGS_DIR = os.path.join(BACKEND_DIR, "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
 
@@ -27,9 +31,9 @@ def get_log_file(task_name, ident):
     return os.path.join(LOGS_DIR, f"{task_name}_{ident}_{timestamp}.log")
 
 
-# ---------------------------------------------------------------------
-# MANUAL AI PROCESSING
-# ---------------------------------------------------------------------
+# ================================================
+# MANUAL AI ENDPOINT
+# ================================================
 @app.route("/manual_ai", methods=["POST"])
 def manual_ai():
     try:
@@ -46,25 +50,23 @@ def manual_ai():
             return jsonify({"error": "No image URLs provided"}), 400
 
         # === Prepare folder ===
-        folder = os.path.join(BASE_DIR, "manual_uploads", str(vehicle_id))
+        folder = os.path.join(ROOT, "manual_uploads", str(vehicle_id))
         os.makedirs(folder, exist_ok=True)
 
-        # === Download each image ===
+        # === Download images ===
         import requests
-
         for label, url in images.items():
             response = requests.get(url, stream=True)
             ext = ".jpg"
             filename = f"{vehicle_id}_{label}{ext}"
             save_path = os.path.join(folder, filename)
-
             with open(save_path, "wb") as f:
                 shutil.copyfileobj(response.raw, f)
 
-        # === Run the AI tool ===
-        ai_log_file = get_log_file(vehicle_id, "manual_ai")
+        # === Run AI script ===
+        log_file = get_log_file("manual_ai", vehicle_id)
 
-        with open(ai_log_file, "w") as log_file:
+        with open(log_file, "w") as lf:
             subprocess.Popen(
                 [
                     PYTHON_PATH,
@@ -72,11 +74,11 @@ def manual_ai():
                     "--manual",
                     str(vehicle_id),
                     "--folder",
-                    folder
+                    folder,
                 ],
-                cwd=BASE_DIR,
-                stdout=log_file,
-                stderr=log_file
+                cwd=BACKEND_DIR,
+                stdout=lf,
+                stderr=lf
             )
 
         return jsonify({
@@ -86,33 +88,35 @@ def manual_ai():
         })
 
     except Exception as e:
-        print(f"❌ Error in manual_ai: {e}")
+        print(f"❌ manual_ai ERROR: {e}")
         return jsonify({"error": str(e)}), 500
 
-# ---------------------------------------------------------------------
-# COPART / AI TRIGGER (unchanged)
-# ---------------------------------------------------------------------
+
+# ================================================
+# COPART / AI TRIGGER — MAIN ENTRYPOINT
+# ================================================
 @app.route("/trigger", methods=["POST"])
 def trigger():
     try:
         data = request.get_json(force=True)
         print("📦 Received Trigger:", data)
 
-        user_id = data.get("user_id")
-        ai_lots = data.get("ai_lots", [])
+        user_id     = data.get("user_id")
+        ai_lots     = data.get("ai_lots", [])
         copart_lots = data.get("copart_lots", [])
 
         if not user_id:
             return jsonify({"error": "Missing user_id"}), 400
 
-        # === Copart ===
+        # -------- COPART DOWNLOADER --------
         if copart_lots:
             log_file = get_log_file("copart", user_id)
             with open(log_file, "w") as lf:
+                print("🚀 Launching Copart downloader:", copart_lots)
                 subprocess.Popen(
                     [
-                        PYTHON_PATH,
-                        COPART_SCRIPT,
+                        PYTHON_PATH,            # system python w/ Playwright
+                        COPART_SCRIPT,          # script path
                         str(user_id),
                         "--lots", ",".join(map(str, copart_lots)),
                         "--download"
@@ -122,10 +126,11 @@ def trigger():
                     stderr=lf
                 )
 
-        # === AI Estimator ===
+        # -------- AI ESTIMATOR --------
         if ai_lots:
             log_file = get_log_file("ai", user_id)
             with open(log_file, "w") as lf:
+                print("🤖 Launching AI estimator:", ai_lots)
                 subprocess.Popen(
                     [
                         PYTHON_PATH,
@@ -150,9 +155,9 @@ def trigger():
         return jsonify({"error": str(e)}), 500
 
 
-# ---------------------------------------------------------------------
+# ================================================
 # START SERVER
-# ---------------------------------------------------------------------
+# ================================================
 if __name__ == "__main__":
     print("🚀 Local Listener Running at http://127.0.0.1:5001")
     app.run(host="127.0.0.1", port=5001)

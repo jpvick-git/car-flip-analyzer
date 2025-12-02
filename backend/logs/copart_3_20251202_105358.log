@@ -1,0 +1,12 @@
+Script print reached
+Traceback (most recent call last):
+  File "C:\car-flip-analyzer\backend\copart_download_parallel.py", line 48, in <module>
+    rds_engine = create_engine(PG_CONN, pool_pre_ping=True)
+  File "<string>", line 2, in create_engine
+  File "C:\car-flip-analyzer\venv\Lib\site-packages\sqlalchemy\util\deprecations.py", line 281, in warned
+    return fn(*args, **kwargs)  # type: ignore[no-any-return]
+  File "C:\car-flip-analyzer\venv\Lib\site-packages\sqlalchemy\engine\create.py", line 617, in create_engine
+    dbapi = dbapi_meth(**dbapi_args)
+  File "C:\car-flip-analyzer\venv\Lib\site-packages\sqlalchemy\dialects\postgresql\psycopg2.py", line 696, in import_dbapi
+    import psycopg2
+ModuleNotFoundError: No module named 'psycopg2'

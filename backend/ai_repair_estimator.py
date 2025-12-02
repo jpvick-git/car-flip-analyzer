@@ -7,7 +7,8 @@ import base64
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import create_engine, text
-from openai import OpenAI
+from dotenv import load_dotenv
+
 
 # --------------------------------------------------
 # CONFIGURATION
@@ -26,17 +27,41 @@ MAX_WORKERS = 3
 SLEEP_BETWEEN_LOTS = 2.0
 MAX_IMAGES = 8  # up to 8 Copart photos per vehicle
 
-# Database connection (RDS only)
-RDS_CONN = (
-    "mssql+pyodbc://jpvick-git:Nk^+Cq4MfUNt%8q@carflip-db.crqg0ema4vx8.us-east-2.rds.amazonaws.com,1433/cars"
-    "?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
+# RDS connection
+PG_CONN = (
+    "postgresql+psycopg2://carflip_user:AVNS_KMNjNg_8wx4vECPoFfh"
+    "@carflip-db-do-user-28471662-0.i.db.ondigitalocean.com:25060/carflip"
+    "?sslmode=require"
 )
-rds_engine = create_engine(RDS_CONN, pool_pre_ping=True)
+rds_engine = create_engine(PG_CONN, pool_pre_ping=True)
 
-# OpenAI client
-client = OpenAI()
-print(f"Using OpenAI key prefix: {client.api_key[:10]}...")
-print("Project ID: proj_yG0FqcGEaLjCW7kutLC5nG4S")
+# --------------------------------------------
+# FIXED ENV LOADING
+# --------------------------------------------
+from dotenv import load_dotenv
+import os
+
+# Force load from backend/.env
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_PATH = os.path.join(BASE_DIR, ".env")  # backend/.env
+
+print("Looking for .env at:", ENV_PATH)
+
+if not os.path.exists(ENV_PATH):
+    raise Exception(f".env file NOT FOUND at: {ENV_PATH}")
+
+load_dotenv(ENV_PATH)  # <- THE FIX
+
+openai_key = os.getenv("OPENAI_API_KEY")
+if not openai_key:
+    raise Exception("❌ OPENAI_API_KEY missing in backend/.env")
+
+print(f"Loaded OPENAI_API_KEY prefix: {openai_key[:12]}")
+
+from openai import OpenAI
+client = OpenAI(api_key=openai_key)
+
+print("DEBUG: Calling OpenAI with client.api_key prefix:", client.api_key[:10])
 
 # --------------------------------------------------
 # HELPERS
@@ -187,9 +212,10 @@ def process_lot(lot, rds_engine):
         with rds_engine.connect() as conn:
             row = conn.execute(
                 text("""
-                    SELECT TOP 1 year, make, model, damage_description, odometer, title_code, repair_estimate
+                    SELECT  year, make, model, damage_description, odometer, title_code, repair_estimate
                     FROM user_vehicles
                     WHERE lot_number = :lot
+                    LIMIT 1
                 """),
                 {"lot": lot},
             ).fetchone()
@@ -237,7 +263,7 @@ def process_lot(lot, rds_engine):
                         repair_details = :repair_details,
                         resale_estimate = :resale_estimate,
                         resale_details = :resale_details,
-                        updated_at = GETDATE()
+                        updated_at = NOW()
                     WHERE lot_number = :lot;
                 """),
                 {

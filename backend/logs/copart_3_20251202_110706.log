@@ -1,0 +1,24 @@
+Script print reached
+Using OpenAI key prefix: sk-proj-bG...
+Project ID: proj_yG0FqcGEaLjCW7kutLC5nG4S
+Downloading images for lot 87182465
+Extracted images for lot 87182465 to C:\car-flip-analyzer\backend\downloads\87182465
+First image detected: https://api.carflipanalyzer.com/backend/downloads/87182465/87182465_Image_1.jpg
+Saved image URL to DB for lot 87182465
+Images downloaded for lot 87182465
+ Attaching up to 0 images for lot 87182465...
+AI estimation error for lot 87182465: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-********************************************************************************************************************************************************krEA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+Downloading images for lot 48316315
+Extracted images for lot 48316315 to C:\car-flip-analyzer\backend\downloads\48316315
+First image detected: https://api.carflipanalyzer.com/backend/downloads/48316315/48316315_Image_1.jpg
+Saved image URL to DB for lot 48316315
+Images downloaded for lot 48316315
+ Attaching up to 0 images for lot 48316315...
+AI estimation error for lot 48316315: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-********************************************************************************************************************************************************krEA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}}
+Downloading images for lot 91995055
+Extracted images for lot 91995055 to C:\car-flip-analyzer\backend\downloads\91995055
+First image detected: https://api.carflipanalyzer.com/backend/downloads/91995055/91995055_Image_1.jpg
+Saved image URL to DB for lot 91995055
+Images downloaded for lot 91995055
+ Attaching up to 0 images for lot 91995055...
+AI estimation error for lot 91995055: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-********************************************************************************************************************************************************krEA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}}

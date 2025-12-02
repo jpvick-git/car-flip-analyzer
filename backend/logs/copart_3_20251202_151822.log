@@ -1,0 +1,22 @@
+Script print reached
+Looking for .env at: C:\car-flip-analyzer\backend\.env
+Loaded OPENAI_API_KEY prefix: sk-proj-QT2l
+DEBUG: Calling OpenAI with client.api_key prefix: sk-proj-QT
+Downloading images for lot 87182465
+Extracted images for lot 87182465 to C:\car-flip-analyzer\backend\downloads\87182465
+First image detected: https://api.carflipanalyzer.com/backend/downloads/87182465/87182465_Image_1.jpg
+Saved image URL for lot 87182465
+Images downloaded for lot 87182465
+ Attaching up to 0 images for lot 87182465...
+Downloading images for lot 48316315
+Extracted images for lot 48316315 to C:\car-flip-analyzer\backend\downloads\48316315
+First image detected: https://api.carflipanalyzer.com/backend/downloads/48316315/48316315_Image_1.jpg
+Saved image URL for lot 48316315
+Images downloaded for lot 48316315
+ Attaching up to 0 images for lot 48316315...
+Downloading images for lot 91995055
+Extracted images for lot 91995055 to C:\car-flip-analyzer\backend\downloads\91995055
+First image detected: https://api.carflipanalyzer.com/backend/downloads/91995055/91995055_Image_1.jpg
+Saved image URL for lot 91995055
+Images downloaded for lot 91995055
+ Attaching up to 0 images for lot 91995055...

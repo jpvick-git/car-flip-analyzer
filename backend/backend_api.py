@@ -159,6 +159,22 @@ app.include_router(manual_vehicle_router)
 app.include_router(vehicles_router)
 app.include_router(specs_router, prefix="/api")
 
+from fastapi import UploadFile, File, Form
+import shutil
+import os
+
+@app.post("/upload_image")
+async def upload_image(lot: str = Form(...), file: UploadFile = File(...)):
+    lot_dir = f"/root/car-flip-analyzer/backend/downloads/{lot}"
+    os.makedirs(lot_dir, exist_ok=True)
+
+    file_path = os.path.join(lot_dir, file.filename)
+
+    with open(file_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    return {"status": "ok", "path": file_path}
+
 # --------------------------------------------------
 # UVICORN SERVER START
 # --------------------------------------------------

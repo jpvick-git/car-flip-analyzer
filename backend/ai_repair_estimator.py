@@ -15,11 +15,8 @@ from dotenv import load_dotenv
 # --------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DOWNLOAD_DIR = (
-    os.path.join(BASE_DIR, "downloads")
-    if "backend" in BASE_DIR.lower()
-    else os.path.join(BASE_DIR, "backend", "downloads")
-)
+DOWNLOAD_DIR = r"C:\car-flip-analyzer\backend\downloads"
+
 # Corrected path to user_uploads
 uploads_dir = os.path.join(os.path.dirname(BASE_DIR), "user_uploads")
 

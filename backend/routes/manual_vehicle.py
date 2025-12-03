@@ -176,17 +176,29 @@ async def add_manual_vehicle(
         # 6. Get tax & title fee for user
         # ---------------------------------------
         with engine.connect() as conn:
+            user_row = conn.execute(
+                text("SELECT state_code FROM users WHERE id = :uid"),
+                {"uid": user_id}
+            ).fetchone()
+
+        state_code = user_row.state_code if user_row else None
+
+        # -------------------------------------------------------
+        # GET TAX/TITLE FEES
+        # -------------------------------------------------------
+        with engine.connect() as conn:
             fee_row = conn.execute(
                 text("""
-                    SELECT avg_tax_rate, title_fee 
+                    SELECT avg_tax_rate, title_fee
                     FROM tax_title_fees
                     WHERE state_code = :sc
                 """),
-                {"sc": current_user["state_code"]}
+                {"sc": state_code}
             ).fetchone()
 
         tax_rate = fee_row.avg_tax_rate if fee_row else 0
         title_fee = fee_row.title_fee if fee_row else 0
+
 
         tax_amt = (ai_resale * tax_rate) / 100 if ai_resale else 0
 

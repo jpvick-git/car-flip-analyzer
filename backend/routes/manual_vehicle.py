@@ -10,7 +10,7 @@ from ..db import get_engine
 engine = get_engine()
 
 from ..auth import get_current_user
-from ..ai_estimator import estimate_repair_cost, estimate_resale_value
+from ..ai_estimator import estimate_repair_cost, estimate_resale_value  # unchanged
 
 router = APIRouter()
 
@@ -115,10 +115,12 @@ async def add_manual_vehicle(
                         sale_name,
                         repair_estimate,
                         resale_estimate,
+                        repair_details,
+                        resale_details,
                         image_url
                     )
                     VALUES (
-                        :uid, 
+                        :uid,
                         :lot_url,
                         :lot,
                         :retail,
@@ -137,6 +139,8 @@ async def add_manual_vehicle(
                         0,
                         0,
                         :location,
+                        NULL,
+                        NULL,
                         NULL,
                         NULL,
                         :image_url
@@ -167,8 +171,8 @@ async def add_manual_vehicle(
         # ---------------------------------------
         ai_image = primary_image if primary_image else None
 
-        ai_repair = await estimate_repair_cost(ai_image)
-        ai_resale = await estimate_resale_value(year, make, model, mileage)
+        ai_repair, ai_repair_details = await estimate_repair_cost(ai_image)
+        ai_resale, ai_resale_details = await estimate_resale_value(year, make, model, mileage)
 
         print("✔️ AI:", ai_repair, ai_resale, flush=True)
 
@@ -181,7 +185,8 @@ async def add_manual_vehicle(
                 {"uid": user_id}
             ).fetchone()
 
-        state_code = user_row.state_code if user_row else None
+        # prevent 'state_code' KeyError
+        state_code = user_row.state_code if user_row and user_row.state_code else None
 
         # -------------------------------------------------------
         # GET TAX/TITLE FEES
@@ -198,7 +203,6 @@ async def add_manual_vehicle(
 
         tax_rate = fee_row.avg_tax_rate if fee_row else 0
         title_fee = fee_row.title_fee if fee_row else 0
-
 
         tax_amt = (ai_resale * tax_rate) / 100 if ai_resale else 0
 
@@ -222,12 +226,22 @@ async def add_manual_vehicle(
                     SET 
                         repair_estimate = :rep,
                         resale_estimate = :res,
+                        repair_details = :repd,
+                        resale_details = :resd,
+                        title_fee = :tf,
+                        avg_tax_rate = :tr,
+                        max_bid = :mb,
                         updated_at = NOW()
                     WHERE lot_number = :lot
                 """),
                 {
                     "rep": ai_repair,
                     "res": ai_resale,
+                    "repd": ai_repair_details,
+                    "resd": ai_resale_details,
+                    "tf": title_fee,
+                    "tr": tax_rate,
+                    "mb": max_bid,
                     "lot": lot_number,
                 }
             )
@@ -240,6 +254,8 @@ async def add_manual_vehicle(
             "image_urls": saved_images,
             "ai_repair_estimate": ai_repair,
             "ai_resale_estimate": ai_resale,
+            "repair_details": ai_repair_details,
+            "resale_details": ai_resale_details,
             "max_bid": max_bid,
         }
 

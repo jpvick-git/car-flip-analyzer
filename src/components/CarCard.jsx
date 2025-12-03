@@ -49,7 +49,7 @@ export default function CarCard({
 
             <input
               type="number"
-              className="w-20 border border-gray-300 rounded-md px-1 py-0.5 text-sm"
+              className="w-20 border border-gray-300 rounded-md px-1 py-0.5 text-sm text-black"
               value={car.repair_estimate}
               onChange={(e) =>
                 onUpdateValues(car.id, {
@@ -66,7 +66,7 @@ export default function CarCard({
 
             <input
               type="number"
-              className="w-24 border border-gray-300 rounded-md px-1 py-0.5 text-sm"
+              className="w-24 border border-gray-300 rounded-md px-1 py-0.5 text-sm text-black"
               value={car.resale_estimate}
               onChange={(e) =>
                 onUpdateValues(car.id, {
@@ -88,7 +88,11 @@ export default function CarCard({
         {/* Footer Buttons */}
         <div className="flex justify-between items-center pt-3">
           <button
-            onClick={() => setSelectedCar(car)}
+            onClick={() => setSelectedCar({
+              ...car,
+              repair_details: car.repair_details,
+              resale_details: car.resale_details,
+            })}
             className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 hover:bg-gray-50 transition"
           >
             View Details

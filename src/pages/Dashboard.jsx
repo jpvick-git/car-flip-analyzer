@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import CarCard from "./CarCard";
+import CarCard from "../components/CarCard";
 
 export default function Dashboard() {
   const [cars, setCars] = useState([]);

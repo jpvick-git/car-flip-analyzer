@@ -1,0 +1,47 @@
+Processing Lot 94195765...
+Traceback (most recent call last):
+  File "C:\car-flip-analyzer\backend\copart_download_parallel.py", line 138, in download_copart_images
+    page.click("button:has-text('Download all')") # Adjust selector based on actual UI
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python311\Lib\site-packages\playwright\sync_api\_generated.py", line 9927, in click
+    self._sync(
+  File "C:\Program Files\Python311\Lib\site-packages\playwright\_impl\_sync_base.py", line 115, in _sync
+    return task.result()
+           ^^^^^^^^^^^^^
+  File "C:\Program Files\Python311\Lib\site-packages\playwright\_impl\_page.py", line 858, in click
+    return await self._main_frame.click(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python311\Lib\site-packages\playwright\_impl\_frame.py", line 549, in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+  File "C:\Program Files\Python311\Lib\site-packages\playwright\_impl\_connection.py", line 69, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python311\Lib\site-packages\playwright\_impl\_connection.py", line 558, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.TimeoutError: Page.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("button:has-text('Download all')")
+    - waiting for" https://www.copart.com/public/data/lotImages/download/94195765/1?isHD=true" navigation to finish...
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\car-flip-analyzer\backend\copart_download_parallel.py", line 152, in download_copart_images
+    print(f"\u26a0\ufe0f Could not automate download for {lot_number}: {e}")
+  File "C:\Program Files\Python311\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 0-1: character maps to <undefined>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\car-flip-analyzer\backend\copart_download_parallel.py", line 174, in <module>
+    download_copart_images(lot, args.user_id)
+  File "C:\car-flip-analyzer\backend\copart_download_parallel.py", line 155, in download_copart_images
+    print(f"\u274c Browser Error: {e}")
+  File "C:\Program Files\Python311\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>

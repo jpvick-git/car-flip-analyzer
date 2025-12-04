@@ -1,0 +1,34 @@
+Processing Lot 93817795...
+Traceback (most recent call last):
+  File "C:\car-flip-analyzer\backend\copart_download_parallel.py", line 137, in download_copart_images
+    with page.expect_download(timeout=30000) as download_info:
+  File "C:\Program Files\Python311\Lib\site-packages\playwright\_impl\_sync_base.py", line 85, in __exit__
+    self._event.value
+  File "C:\Program Files\Python311\Lib\site-packages\playwright\_impl\_sync_base.py", line 59, in value
+    raise exception
+playwright._impl._errors.TimeoutError: Timeout 30000ms exceeded while waiting for event "download"
+=========================== logs ===========================
+waiting for event "download"
+============================================================
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\car-flip-analyzer\backend\copart_download_parallel.py", line 152, in download_copart_images
+    print(f"\u26a0\ufe0f Could not automate download for {lot_number}: {e}")
+  File "C:\Program Files\Python311\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 0-1: character maps to <undefined>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\car-flip-analyzer\backend\copart_download_parallel.py", line 174, in <module>
+    download_copart_images(lot, args.user_id)
+  File "C:\car-flip-analyzer\backend\copart_download_parallel.py", line 155, in download_copart_images
+    print(f"\u274c Browser Error: {e}")
+  File "C:\Program Files\Python311\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u274c' in position 0: character maps to <undefined>

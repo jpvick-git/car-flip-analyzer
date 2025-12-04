@@ -1,0 +1,32 @@
+Script print reached
+Looking for .env at: C:\car-flip-analyzer\backend\.env
+Loaded OPENAI_API_KEY prefix: sk-proj-QT2l
+DEBUG: Calling OpenAI with client.api_key prefix: sk-proj-QT
+Downloading images for lot 93817795
+Extracted images for lot 93817795 to C:\car-flip-analyzer\backend\downloads\93817795
+Error processing images for lot 93817795: 'charmap' codec can't encode characters in position 0-1: character maps to <undefined>
+Images downloaded & processed for lot 93817795
+ Attaching up to 0 images for lot 93817795...
+Downloading images for lot 92886715
+Extracted images for lot 92886715 to C:\car-flip-analyzer\backend\downloads\92886715
+Error processing images for lot 92886715: 'charmap' codec can't encode characters in position 0-1: character maps to <undefined>
+Images downloaded & processed for lot 92886715
+ Attaching up to 0 images for lot 92886715...
+Downloading images for lot 90531675
+Extracted images for lot 90531675 to C:\car-flip-analyzer\backend\downloads\90531675
+Error processing images for lot 90531675: 'charmap' codec can't encode characters in position 0-1: character maps to <undefined>
+Images downloaded & processed for lot 90531675
+ Attaching up to 0 images for lot 90531675...
+Downloading images for lot 81578215
+Extracted images for lot 81578215 to C:\car-flip-analyzer\backend\downloads\81578215
+Error processing images for lot 81578215: 'charmap' codec can't encode characters in position 0-1: character maps to <undefined>
+Images downloaded & processed for lot 81578215
+ Attaching up to 0 images for lot 81578215...
+Downloading images for lot 80739275
+Error for lot 80739275: Download arrow not found
+ Attaching up to 0 images for lot 80739275...
+Downloading images for lot 66681455
+Extracted images for lot 66681455 to C:\car-flip-analyzer\backend\downloads\66681455
+Error processing images for lot 66681455: 'charmap' codec can't encode characters in position 0-1: character maps to <undefined>
+Images downloaded & processed for lot 66681455
+ Attaching up to 0 images for lot 66681455...

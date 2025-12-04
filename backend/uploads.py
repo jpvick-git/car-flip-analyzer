@@ -1,28 +1,27 @@
 import os
 import pandas as pd
 import requests
-from fastapi import APIRouter, UploadFile, Depends, Request, HTTPException
+from fastapi import APIRouter, UploadFile, Depends, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import create_engine, text
-from .auth import get_current_user
+from sqlalchemy import text
+from ..auth import get_current_user
+from ..db import get_engine  # ✅ Use shared DB engine
 
 router = APIRouter()
 
 # -----------------------------------------------------------
 # CONFIG
 # -----------------------------------------------------------
+# Correct absolute path for your VPS
 UPLOAD_DIR = "/root/car-flip-analyzer/user_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-LOCAL_TRIGGER_URL = "https://quinquevalent-hayley-unhackneyed.ngrok-free.dev/trigger"
+# ✅ TRIGGER FIX: Send to Localhost (our Proxy) instead of Ngrok directly.
+# This lets backend_api.py handle the changing Ngrok URL.
+INTERNAL_TRIGGER_URL = "http://localhost:8000/trigger"
 
-PG_CONN = (
-    "postgresql+psycopg2://carflip_user:AVNS_KMNjNg_8wx4vECPoFfh"
-    "@carflip-db-do-user-28471662-0.i.db.ondigitalocean.com:25060/carflip"
-    "?sslmode=require"
-)
-rds_engine = create_engine(PG_CONN, pool_pre_ping=True)
-
+# ✅ DB FIX: Use the shared engine (Postgres) instead of hardcoding credentials
+rds_engine = get_engine()
 
 # -----------------------------------------------------------
 # HELPERS
@@ -52,7 +51,7 @@ async def upload_file(
 ):
     try:
         # ------------------------------------------------------------------
-        # SAVE UPLOADED CSV
+        # 1. SAVE UPLOADED CSV
         # ------------------------------------------------------------------
         file_path = os.path.join(UPLOAD_DIR, file.filename)
         with open(file_path, "wb") as f:
@@ -61,17 +60,15 @@ async def upload_file(
         print(f"Saved CSV upload to: {file_path}")
 
         df = pd.read_csv(file_path)
-        print("CSV Columns:", list(df.columns))
 
         # ------------------------------------------------------------------
-        # PROCESS CSV ROWS: INSERT OR UPDATE VEHICLES
+        # 2. PROCESS CSV ROWS
         # ------------------------------------------------------------------
         with rds_engine.begin() as conn:
             for _, row in df.iterrows():
 
                 lot_number = normalize_lot(row.get("Lot/Inv #", ""))
                 if not lot_number:
-                    print("Skipping row with missing lot number:", row)
                     continue
 
                 # Check if record already exists for user
@@ -109,10 +106,8 @@ async def upload_file(
                     "announcements": getval(row, "Announcements"),
                 }
 
-                # ----------------------------------------------------------
-                # UPDATE EXISTING
-                # ----------------------------------------------------------
                 if exists:
+                    # UPDATE existing record
                     conn.execute(
                         text("""
                             UPDATE user_vehicles
@@ -120,35 +115,15 @@ async def upload_file(
                                 lot_url = :lot_url,
                                 est_retail_value = :est_retail_value,
                                 sale_date = :sale_date,
-                                year = :year,
-                                make = :make,
-                                model = :model,
-                                engine_type = :engine_type,
-                                cylinders = :cylinders,
-                                vin = :vin,
-                                title_code = :title_code,
-                                odometer = :odometer,
-                                odometer_description = :odometer_description,
-                                damage_description = :damage_description,
-                                current_bid = :current_bid,
-                                my_bid = :my_bid,
-                                item_number = :item_number,
-                                sale_name = :sale_name,
-                                auto_grade = :auto_grade,
-                                sale_light = :sale_light,
-                                announcements = :announcements,
                                 updated_at = NOW()
                             WHERE user_id = :user_id
                               AND TRIM(lot_number) = :lot_number
                         """),
-                        values
+                        {"lot_url": values["lot_url"], "est_retail_value": values["est_retail_value"], 
+                         "sale_date": values["sale_date"], "user_id": user["id"], "lot_number": lot_number}
                     )
-                    print(f"Updated lot {lot_number} for user {user['id']}")
-
-                # ----------------------------------------------------------
-                # INSERT NEW RECORD
-                # ----------------------------------------------------------
                 else:
+                    # INSERT new record
                     conn.execute(
                         text("""
                             INSERT INTO user_vehicles (
@@ -170,10 +145,9 @@ async def upload_file(
                         """),
                         values
                     )
-                    print(f"Inserted lot {lot_number} for user {user['id']}")
 
         # ------------------------------------------------------------------
-        # AFTER PROCESSING ALL LOTS → TRIGGER COPART IMAGE DOWNLOAD
+        # 3. TRIGGER LOGIC
         # ------------------------------------------------------------------
         try:
             with rds_engine.connect() as conn:
@@ -191,21 +165,23 @@ async def upload_file(
             print("Lots needing images:", lots_to_download)
 
             if lots_to_download:
-                print("Sending trigger payload to:", LOCAL_TRIGGER_URL)
+                print("Sending trigger to internal proxy:", INTERNAL_TRIGGER_URL)
+                
+                # Send to localhost (backend_api.py), which proxies to Windows
                 resp = requests.post(
-                    LOCAL_TRIGGER_URL,
+                    INTERNAL_TRIGGER_URL,
                     json={
                         "user_id": user["id"],
                         "copart_lots": lots_to_download,
                         "ai_lots": []
-                    }
+                    },
+                    timeout=5
                 )
-                print("Trigger response:", resp.status_code, resp.text)
+                print("Trigger response:", resp.status_code)
 
         except Exception as e:
             print("Downloader trigger failed:", e)
 
-        # ------------------------------------------------------------------
         return {"status": "success", "rows": len(df)}
 
     except Exception as e:

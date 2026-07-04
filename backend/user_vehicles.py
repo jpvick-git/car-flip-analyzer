@@ -63,6 +63,35 @@ async def upload_user_file(file: UploadFile = File(...), current_user: dict = De
         raise HTTPException(status_code=500, detail=str(e))
 
 # --------------------------------------------------------------
+# GET ALL IMAGES FOR A VEHICLE
+# --------------------------------------------------------------
+@router.get("/vehicle/{vehicle_id}/images")
+def get_vehicle_images(vehicle_id: int, current_user: dict = Depends(get_current_user)):
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT lot_number FROM user_vehicles WHERE id = :id AND user_id = :uid"),
+            {"id": vehicle_id, "uid": current_user["id"]}
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+
+    lot_number = str(row[0])
+    lot_dir = os.path.join(DOWNLOAD_DIR, lot_number)
+
+    if not os.path.exists(lot_dir):
+        return {"images": []}
+
+    files = sorted([
+        f for f in os.listdir(lot_dir)
+        if f.lower().endswith((".jpg", ".jpeg", ".png"))
+    ])
+
+    base_url = f"https://carflipanalyzer.com/downloads/{lot_number}"
+    return {"images": [f"{base_url}/{f}" for f in files]}
+
+
+# --------------------------------------------------------------
 # DELETE VEHICLE
 # --------------------------------------------------------------
 @router.delete("/delete_vehicle/{vehicle_id}")

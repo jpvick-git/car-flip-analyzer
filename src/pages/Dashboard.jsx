@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import { Wrench, DollarSign } from "lucide-react";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -320,6 +321,7 @@ export default function Dashboard({
   uploadUserFile,
   uploadComplete,
 }) {
+  const navigate = useNavigate();
   const [cars, setCars] = useState([]);
   const [selectedCar, setSelectedCar] = useState(null);
   const [tempMargin, setTempMargin] = useState(15);
@@ -565,7 +567,7 @@ export default function Dashboard({
 
               <button
                 className="mt-4 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"
-                onClick={() => setSelectedCar(car)}
+                onClick={() => navigate(`/vehicle/${car.id}`)}
               >
                 View Details
               </button>

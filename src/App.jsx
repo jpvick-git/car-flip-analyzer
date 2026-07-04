@@ -11,6 +11,7 @@ import {
 
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import VehicleDetail from "./pages/VehicleDetail";
 import Header from "./components/Header";
 
 // ProtectedRoute
@@ -30,7 +31,7 @@ function Layout() {
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadComplete, setUploadComplete] = useState(false);
 
-  const hideHeader = location.pathname === "/login";
+  const hideHeader = location.pathname === "/login" || location.pathname.startsWith("/vehicle/");
 
   // Logout handler
   const logout = () => {
@@ -108,6 +109,16 @@ function Layout() {
 			</ProtectedRoute>
 		  }
 		/>
+        {/* VEHICLE DETAIL */}
+        <Route
+          path="/vehicle/:id"
+          element={
+            <ProtectedRoute>
+              <VehicleDetail />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

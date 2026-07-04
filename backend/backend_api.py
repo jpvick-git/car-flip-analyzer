@@ -146,7 +146,7 @@ async def upload_image(lot: str = Form(...), file: UploadFile = File(...)):
         return {
             "status": "ok",
             "path": file_path,
-            "url": f"http://159.65.160.82/downloads/{lot}/{file.filename}"
+            "url": f"https://carflipanalyzer.com/downloads/{lot}/{file.filename}"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

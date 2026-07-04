@@ -19,11 +19,7 @@ export default function Login() {
 
   const navigate = useNavigate();
 
-  // 🔧 Correct backend base URL
-  const apiBase =
-    process.env.NODE_ENV === "development"
-      ? "http://localhost:8000"
-      : "https://api.carflipanalyzer.com";
+  const apiBase = process.env.REACT_APP_API_BASE_URL || "";
 
   // ZIP Validator
   const validateZip = (value) => {
@@ -58,7 +54,7 @@ export default function Login() {
         body.append("phone", phone);
       }
 
-      const res = await fetch(`${apiBase}/${endpoint}`, {
+      const res = await fetch(`${apiBase}/api/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body,

@@ -4,8 +4,8 @@ import requests
 from fastapi import APIRouter, UploadFile, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
-from ..auth import get_current_user
-from ..db import get_engine  # ✅ Use shared DB engine
+from .auth import get_current_user
+from .db import get_engine
 
 router = APIRouter()
 
@@ -13,7 +13,7 @@ router = APIRouter()
 # CONFIG
 # -----------------------------------------------------------
 # Correct absolute path for your VPS
-UPLOAD_DIR = "/root/car-flip-analyzer/user_uploads"
+UPLOAD_DIR = "/opt/carflip/user_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # ✅ TRIGGER FIX: Send to Localhost (our Proxy) instead of Ngrok directly.

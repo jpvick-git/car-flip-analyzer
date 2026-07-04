@@ -1,4 +1,13 @@
-# --------------------------------------------------
+cd /opt/carflip && python3 -c "
+f = open('src/pages/Login.jsx','r')
+code = f.read()
+f.close()
+code = code.replace('\${apiBase}/\${endpoint}', '\${apiBase}/api/\${endpoint}')
+f = open('src/pages/Login.jsx','w')
+f.write(code)
+f.close()
+print('Login.jsx endpoints updated')
+"# --------------------------------------------------
 # Car Flip Analyzer Backend (Clean Build)
 # --------------------------------------------------
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
@@ -40,7 +49,7 @@ app.add_middleware(
 # CONFIGURATION
 # --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DOWNLOAD_DIR = "/root/car-flip-analyzer/backend/downloads"
+DOWNLOAD_DIR = "/opt/carflip/backend/downloads"
 
 # Ensure download directory exists
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -152,10 +161,10 @@ except ImportError:
     from .routes.manual_vehicle import router as manual_vehicle_router
     from .routes.specs import router as specs_router
 
-app.include_router(uploads_router)
-app.include_router(auth_router)
-app.include_router(manual_vehicle_router)
-app.include_router(vehicles_router)
+app.include_router(uploads_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
+app.include_router(manual_vehicle_router, prefix="/api")
+app.include_router(vehicles_router, prefix="/api")
 app.include_router(specs_router, prefix="/api")
 
 # --------------------------------------------------

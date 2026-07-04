@@ -40,14 +40,12 @@ export default function VehicleDetail() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [carRes, imagesRes, statesRes] = await Promise.all([
+        const [carRes, imagesRes] = await Promise.all([
           axios.get(`${API}/api/vehicle/${id}`, { headers }),
           axios.get(`${API}/api/vehicle/${id}/images`, { headers }),
-          axios.get(`${API}/api/states`, { headers }),
         ]);
         setCar(carRes.data);
         setImages(imagesRes.data.images || []);
-        setStates(statesRes.data || []);
       } catch (err) {
         console.error(err);
         setCar(null);
@@ -55,7 +53,17 @@ export default function VehicleDetail() {
         setLoading(false);
       }
     };
+    // Fetch states separately so a failure doesn't break the page
+    const fetchStates = async () => {
+      try {
+        const res = await axios.get(`${API}/api/states`, { headers });
+        setStates(res.data || []);
+      } catch (err) {
+        console.error("States load failed:", err);
+      }
+    };
     fetchData();
+    fetchStates();
   }, [id]);
 
   useEffect(() => {

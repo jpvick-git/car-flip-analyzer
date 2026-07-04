@@ -25,12 +25,10 @@ function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // 🔥 Add Vehicle Modal Controller
   const [showAddModal, setShowAddModal] = useState(false);
-
-  // 🔥 CSV Upload Controller
   const [showCSVModal, setShowCSVModal] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
+  const [uploadComplete, setUploadComplete] = useState(false);
 
   const hideHeader = location.pathname === "/login";
 
@@ -61,8 +59,10 @@ function Layout() {
       );
 
       if (response.ok) {
-        alert("File uploaded successfully!");
         setUploadFile(null);
+        setShowCSVModal(false);
+        setUploadComplete(true);
+        setTimeout(() => setUploadComplete(false), 100);
       } else {
         alert("Upload failed.");
       }
@@ -103,6 +103,7 @@ function Layout() {
 				uploadFile={uploadFile}
 				setUploadFile={setUploadFile}
 				uploadUserFile={uploadUserFile}
+				uploadComplete={uploadComplete}
 			  />
 			</ProtectedRoute>
 		  }

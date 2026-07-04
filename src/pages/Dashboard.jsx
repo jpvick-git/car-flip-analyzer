@@ -318,12 +318,14 @@ export default function Dashboard({
   uploadFile,
   setUploadFile,
   uploadUserFile,
+  uploadComplete,
 }) {
   const [cars, setCars] = useState([]);
   const [selectedCar, setSelectedCar] = useState(null);
   const [tempMargin, setTempMargin] = useState(15);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [downloading, setDownloading] = useState(false);
 
   const API =
     process.env.REACT_APP_API_BASE_URL ?? "";
@@ -394,6 +396,49 @@ export default function Dashboard({
     load();
   }, []);
 
+  // Reload vehicles and start polling after CSV upload
+  useEffect(() => {
+    if (!uploadComplete) return;
+
+    const fetchVehicles = async () => {
+      try {
+        const res = await axios.get(`${API}/api/get_vehicles`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        let list = Array.isArray(res.data) ? res.data : res.data.vehicles || [];
+        list = list.map((car) => {
+          if (car.image_urls?.length > 0) car.image_url = car.image_urls[0];
+          return calculateCarWithMargin(car, 15);
+        });
+        setCars(list);
+        return list;
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    setDownloading(true);
+    fetchVehicles();
+
+    const interval = setInterval(async () => {
+      const list = await fetchVehicles();
+      if (list && list.every((car) => car.image_url)) {
+        setDownloading(false);
+        clearInterval(interval);
+      }
+    }, 5000);
+
+    const timeout = setTimeout(() => {
+      setDownloading(false);
+      clearInterval(interval);
+    }, 5 * 60 * 1000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [uploadComplete]);
+
   const updateCarValue = (id, field, value) => {
     setCars((prev) =>
       prev.map((car) =>
@@ -420,6 +465,16 @@ export default function Dashboard({
 
   return (
     <main className="p-6 bg-gray-50 min-h-screen">
+
+      {downloading && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 text-sm font-medium animate-pulse">
+          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+          </svg>
+          Downloading images from Copart…
+        </div>
+      )}
 
       {/* ADD VEHICLE MODAL */}
       {showAddModal && (

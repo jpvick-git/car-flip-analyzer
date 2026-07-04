@@ -17,6 +17,8 @@ import {
   ExternalLink,
   Images,
 } from "lucide-react";
+import RepairBreakdown from "../components/RepairBreakdown";
+import { parseRepairItems } from "../utils/repairBreakdown";
 
 const API = process.env.REACT_APP_API_BASE_URL ?? "";
 
@@ -49,7 +51,9 @@ export default function VehicleDetail() {
   const [lightbox, setLightbox] = useState(null);
   const [states, setStates] = useState([]);
   const [selectedState, setSelectedState] = useState("");
+  const [repairTotal, setRepairTotal] = useState(0);
 
+  const isDemo = localStorage.getItem("is_demo") === "1";
   const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
 
   useEffect(() => {
@@ -61,6 +65,10 @@ export default function VehicleDetail() {
         ]);
         setCar(carRes.data);
         setImages(imagesRes.data.images || []);
+        setRepairTotal(
+          parseRepairItems(carRes.data).reduce((sum, item) => sum + (Number(item.cost) || 0), 0) ||
+            Number(carRes.data.repair_estimate || 0)
+        );
       } catch (err) {
         console.error(err);
         setCar(null);
@@ -119,7 +127,12 @@ export default function VehicleDetail() {
   const stateData = states.find((s) => s.state_code === selectedState) || null;
   const overrideTax = stateData ? Number(stateData.avg_tax_rate) : null;
   const overrideTitle = stateData ? Number(stateData.title_fee) : null;
-  const { bid, buyerFee, taxAmt, titleFee, repair, totalCost, profit, resale, taxRate } = calcMaxBid(car, margin, overrideTax, overrideTitle);
+  const { bid, buyerFee, taxAmt, titleFee, repair, totalCost, profit, resale, taxRate } = calcMaxBid(
+    { ...car, repair_estimate: repairTotal },
+    margin,
+    overrideTax,
+    overrideTitle
+  );
   const odometer = Number(car.odometer);
 
   const details = [
@@ -293,9 +306,9 @@ export default function VehicleDetail() {
             )}
 
             {/* AI Details */}
-            {(car.repair_details || car.resale_details) && (
+            {(car.repair_details || car.repair_breakdown || car.resale_details) && (
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                {car.repair_details && (
+                {(car.repair_details || car.repair_breakdown) && (
                   <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                       <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-600">
@@ -303,7 +316,12 @@ export default function VehicleDetail() {
                       </span>
                       Repair Analysis
                     </h3>
-                    <p className="text-sm leading-relaxed text-slate-600">{car.repair_details}</p>
+                    <RepairBreakdown
+                      car={car}
+                      apiBase={API}
+                      readOnly={isDemo}
+                      onTotalChange={setRepairTotal}
+                    />
                   </section>
                 )}
                 {car.resale_details && (

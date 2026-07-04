@@ -1,0 +1,93 @@
+import React, { useEffect, useRef, useState } from "react";
+import axios from "axios";
+import { parseRepairItems, sumRepairItems } from "../utils/repairBreakdown";
+
+export default function RepairBreakdown({
+  car,
+  apiBase = "",
+  readOnly = false,
+  onTotalChange,
+  className = "",
+}) {
+  const [items, setItems] = useState(() => parseRepairItems(car));
+  const saveTimer = useRef(null);
+  const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
+
+  useEffect(() => {
+    setItems(parseRepairItems(car));
+  }, [car?.id, car?.repair_breakdown, car?.repair_details, car?.repair_estimate]);
+
+  useEffect(() => {
+    onTotalChange?.(sumRepairItems(items));
+  }, [items, onTotalChange]);
+
+  const persist = (nextItems) => {
+    if (readOnly || !car?.id) return;
+
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try {
+        await axios.patch(
+          `${apiBase}/api/vehicle/${car.id}/repair`,
+          { repair_items: nextItems },
+          { headers }
+        );
+      } catch (err) {
+        console.error("Failed to save repair breakdown:", err);
+      }
+    }, 500);
+  };
+
+  const updateItem = (index, field, value) => {
+    setItems((prev) => {
+      const next = prev.map((item, idx) =>
+        idx === index
+          ? {
+              ...item,
+              [field]: field === "cost" ? Math.max(0, Number(value) || 0) : value,
+            }
+          : item
+      );
+      persist(next);
+      return next;
+    });
+  };
+
+  if (!items.length) {
+    return (
+      <p className={`text-sm leading-relaxed text-slate-600 ${className}`}>
+        No repair items identified.
+      </p>
+    );
+  }
+
+  return (
+    <ul className={`space-y-2 ${className}`}>
+      {items.map((item, index) => (
+        <li
+          key={`${car?.id || "car"}-repair-${index}`}
+          className="flex items-start gap-3 border-b border-slate-100 pb-2 last:border-b-0 last:pb-0"
+        >
+          <span className="mt-2 text-slate-400">•</span>
+          <p className="flex-1 text-sm leading-relaxed text-slate-600">{item.description}</p>
+          <div className="flex shrink-0 items-center gap-1">
+            <span className="text-sm text-slate-400">$</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              readOnly={readOnly}
+              value={item.cost}
+              onChange={(e) => updateItem(index, "cost", e.target.value)}
+              className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
+            />
+          </div>
+        </li>
+      ))}
+      <li className="flex items-center justify-between pt-1 text-sm font-semibold text-slate-700">
+        <span>Total repair</span>
+        <span className="tabular-nums">${sumRepairItems(items).toLocaleString()}</span>
+      </li>
+    </ul>
+  );
+}

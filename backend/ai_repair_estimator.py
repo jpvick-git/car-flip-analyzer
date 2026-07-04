@@ -71,9 +71,17 @@ Return JSON with this exact structure:
   "parts_to_repair": [],
   "labor_hours": 0,
   "interior_notes": "",
-  "repair_estimate": 0,
+  "repair_items": [
+    {"description": "Front bumper replacement (Photo 4)", "cost": 350}
+  ],
+  "repair_estimate": 350,
   "repair_details": "2-4 sentence summary citing photo evidence"
 }
+
+Rules for repair_items:
+8. List each visible repair as its own line item with description (include photo reference when possible) and cost in USD.
+9. repair_estimate MUST equal the sum of all repair_items costs.
+10. If no visible damage, use repair_items: [] and repair_estimate: 0.
 """
 
 RESALE_SYSTEM_PROMPT = (
@@ -334,10 +342,67 @@ def _attach_images(messages, image_entries, lot_number: str) -> None:
             print(f" Failed to attach {img_path}: {e}")
 
 
+def _normalize_repair_items(parsed: dict) -> list[dict]:
+    items = parsed.get("repair_items") or []
+    normalized = []
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        description = str(item.get("description") or "").strip()
+        if not description:
+            continue
+        try:
+            cost = int(float(item.get("cost") or 0))
+        except (TypeError, ValueError):
+            cost = 0
+        normalized.append({"description": description, "cost": max(cost, 0)})
+
+    if normalized:
+        return normalized
+
+    try:
+        total = int(float(parsed.get("repair_estimate") or 0))
+    except (TypeError, ValueError):
+        total = 0
+
+    parts = []
+    for part in (parsed.get("parts_to_replace") or []) + (parsed.get("parts_to_repair") or []):
+        part = str(part).strip()
+        if part:
+            parts.append(part)
+
+    if parts:
+        if total > 0:
+            share = max(1, total // len(parts))
+            remainder = total - share * (len(parts) - 1)
+            return [
+                {"description": part, "cost": remainder if idx == len(parts) - 1 else share}
+                for idx, part in enumerate(parts)
+            ]
+        return [{"description": part, "cost": 0} for part in parts]
+
+    details = (parsed.get("repair_details") or "").strip()
+    if details:
+        return [{"description": details, "cost": max(total, 0)}]
+    return []
+
+
+def _finalize_repair_fields(parsed: dict) -> dict:
+    items = _normalize_repair_items(parsed)
+    total = sum(item["cost"] for item in items)
+    return {
+        "repair_estimate": total,
+        "repair_details": parsed.get("repair_details") or "No repair details available.",
+        "repair_breakdown": json.dumps(items),
+    }
+
+
 def _empty_repair_result(reason: str) -> dict:
     return {
         "repair_estimate": 0,
         "repair_details": reason,
+        "repair_breakdown": "[]",
     }
 
 
@@ -387,9 +452,9 @@ def analyze_vehicle_repair(vehicle: dict) -> dict:
         lot_number,
         {"repair_estimate": None, "repair_details": raw[:800]},
     )
+    repair_fields = _finalize_repair_fields(parsed)
     return {
-        "repair_estimate": parsed.get("repair_estimate"),
-        "repair_details": parsed.get("repair_details") or "No repair details available.",
+        **repair_fields,
         "_repair_structured": parsed,
         "_usage": [usage],
     }
@@ -645,6 +710,7 @@ def process_lot(lot, rds_engine, dry_run=False, force=False):
                     UPDATE user_vehicles
                     SET repair_estimate = :repair_estimate,
                         repair_details = :repair_details,
+                        repair_breakdown = :repair_breakdown,
                         resale_estimate = :resale_estimate,
                         resale_details = :resale_details,
                         updated_at = NOW()
@@ -654,6 +720,7 @@ def process_lot(lot, rds_engine, dry_run=False, force=False):
                     "lot": lot,
                     "repair_estimate": ai_result.get("repair_estimate"),
                     "repair_details": ai_result.get("repair_details"),
+                    "repair_breakdown": ai_result.get("repair_breakdown", "[]"),
                     "resale_estimate": ai_result.get("resale_estimate"),
                     "resale_details": ai_result.get("resale_details"),
                 },

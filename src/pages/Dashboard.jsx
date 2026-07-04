@@ -16,6 +16,7 @@ import {
   MoreVertical,
   Trash2,
 } from "lucide-react";
+import RepairBreakdown from "../components/RepairBreakdown";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 //  ADD VEHICLE MODAL (ManualVehicleModal)
@@ -919,12 +920,17 @@ export default function Dashboard({
         {/* DESCRIPTIONS */}
         <div className="mt-5 space-y-4">
           <div>
-            <p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
               <Wrench size={13} className="text-amber-500" /> Repair Details
             </p>
-            <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">
-              {activeCar.repair_details || "No repair details available."}
-            </p>
+            <RepairBreakdown
+              car={activeCar}
+              apiBase={API}
+              readOnly={isDemo}
+              onTotalChange={(total) =>
+                updateCarValue(activeCar.id, "repair_estimate", total)
+              }
+            />
           </div>
 
           <div>

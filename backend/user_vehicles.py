@@ -2,7 +2,9 @@
 
 import os
 import shutil
+import json
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import text
 from .db import get_engine
 from .auth import get_current_user, get_vehicle_owner_id, require_not_demo
@@ -12,9 +14,27 @@ router = APIRouter()
 
 engine = get_engine()
 
-# Correct downloads directory
 DOWNLOAD_DIR = "/opt/carflip/backend/downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+
+def _ensure_repair_breakdown_column():
+    with engine.begin() as conn:
+        conn.execute(
+            text("ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS repair_breakdown TEXT")
+        )
+
+
+_ensure_repair_breakdown_column()
+
+
+class RepairItem(BaseModel):
+    description: str
+    cost: int
+
+
+class RepairUpdatePayload(BaseModel):
+    repair_items: list[RepairItem]
 
 
 # --------------------------------------------------------------
@@ -77,6 +97,47 @@ def get_vehicle(vehicle_id: int, current_user: dict = Depends(get_current_user))
     if not row:
         raise HTTPException(status_code=404, detail="Vehicle not found")
     return dict(row._mapping)
+
+
+@router.patch("/vehicle/{vehicle_id}/repair")
+def update_vehicle_repair(
+    vehicle_id: int,
+    payload: RepairUpdatePayload,
+    current_user: dict = Depends(get_current_user),
+):
+    require_not_demo(current_user)
+    owner_id = get_vehicle_owner_id(current_user)
+
+    items = [
+        {"description": item.description.strip(), "cost": max(int(item.cost), 0)}
+        for item in payload.repair_items
+        if item.description.strip()
+    ]
+    total = sum(item["cost"] for item in items)
+
+    with engine.begin() as conn:
+        result = conn.execute(
+            text("""
+                UPDATE user_vehicles
+                SET repair_estimate = :total,
+                    repair_breakdown = :breakdown,
+                    updated_at = NOW()
+                WHERE id = :id AND user_id = :uid
+            """),
+            {
+                "total": total,
+                "breakdown": json.dumps(items),
+                "id": vehicle_id,
+                "uid": owner_id,
+            },
+        )
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Vehicle not found")
+
+    return {
+        "repair_estimate": total,
+        "repair_breakdown": items,
+    }
 
 
 # --------------------------------------------------------------

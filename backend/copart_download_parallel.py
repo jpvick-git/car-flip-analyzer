@@ -368,6 +368,7 @@ def process_lots_directly(lots, uid):
                             SET repair_estimate = :rep_est,
                                 resale_estimate = :res_est,
                                 repair_details = :rep_det,
+                                repair_breakdown = :rep_breakdown,
                                 resale_details = :res_det,
                                 updated_at = NOW()
                             WHERE lot_number = :lot AND user_id = :uid
@@ -376,6 +377,7 @@ def process_lots_directly(lots, uid):
                             "rep_est": result.get("repair_estimate"),
                             "res_est": result.get("resale_estimate"),
                             "rep_det": result.get("repair_details"),
+                            "rep_breakdown": result.get("repair_breakdown", "[]"),
                             "res_det": result.get("resale_details"),
                             "lot": lot,
                             "uid": user_id,

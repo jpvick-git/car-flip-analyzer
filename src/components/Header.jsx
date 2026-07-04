@@ -1,21 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Menu, X } from "lucide-react";
 
-export default function Header({ onAddVehicle, onUploadCSV, logout }) {
+export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [userIP, setUserIP] = useState("");
-  const [isAllowed, setIsAllowed] = useState(false);
-
-  const allowedIP = "68.186.200.184";
-
-  useEffect(() => {
-    fetch("https://api.ipify.org?format=json")
-      .then((res) => res.json())
-      .then((data) => {
-        setUserIP(data.ip);
-        setIsAllowed(data.ip === allowedIP);
-      });
-  }, []);
 
   return (
     <header className="flex items-center justify-between px-4 py-3 bg-white shadow">
@@ -25,6 +12,11 @@ export default function Header({ onAddVehicle, onUploadCSV, logout }) {
         <span className="text-xl font-semibold text-gray-900">
           Car Flip Analyzer
         </span>
+        {isDemo && (
+          <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+            Demo
+          </span>
+        )}
       </div>
 
       {/* Hamburger Button */}
@@ -41,6 +33,8 @@ export default function Header({ onAddVehicle, onUploadCSV, logout }) {
 		  <div className="absolute right-4 top-16 w-64 bg-white border border-gray-200 rounded-md shadow-sm z-50">
 			<div className="flex flex-col py-2">
 
+			  {!isDemo && (
+			    <>
 			  {/* Upload CSV */}
 			  <button
 				onClick={() => {
@@ -63,8 +57,9 @@ export default function Header({ onAddVehicle, onUploadCSV, logout }) {
 				Add Vehicle
 			  </button>
 
-			  {/* Divider */}
 			  <div className="border-t my-1"></div>
+			    </>
+			  )}
 
 			  {/* Logout */}
 			  <button

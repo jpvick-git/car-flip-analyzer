@@ -357,6 +357,7 @@ export default function Dashboard({
   setUploadFile,
   uploadUserFile,
   uploadComplete,
+  isDemo = false,
 }) {
   const navigate = useNavigate();
   const [cars, setCars] = useState([]);
@@ -559,10 +560,17 @@ export default function Dashboard({
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Vehicle Inventory</h1>
             <p className="mt-1 text-sm text-slate-500">
-              {cars.length} {cars.length === 1 ? "vehicle" : "vehicles"} in your pipeline
+              {visibleCars.length} {visibleCars.length === 1 ? "vehicle" : "vehicles"}
+              {isDemo ? " in demo preview" : " in your pipeline"}
             </p>
           </div>
         </div>
+
+        {isDemo && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Demo mode — browse only. Upload, add, and delete are disabled.
+          </div>
+        )}
 
         {/* GRID */}
         {visibleCars.length === 0 ? (
@@ -602,6 +610,7 @@ export default function Dashboard({
                   </span>
 
                   {/* Card menu */}
+                  {!isDemo && (
                   <div className="absolute right-3 top-3" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
@@ -627,6 +636,7 @@ export default function Dashboard({
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
 
                 <div className="flex flex-1 flex-col p-5">
@@ -662,11 +672,12 @@ export default function Dashboard({
                         <span className="text-sm font-bold text-amber-700">$</span>
                         <input
                           type="number"
+                          readOnly={isDemo}
                           value={car.repair_estimate || car.ai_repair_estimate || 0}
                           onChange={(e) =>
                             updateCarValue(car.id, "repair_estimate", Number(e.target.value))
                           }
-                          className="w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-amber-700 focus:outline-none"
+                          className={`w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-amber-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
                         />
                       </div>
                     </div>
@@ -680,11 +691,12 @@ export default function Dashboard({
                         <span className="text-sm font-bold text-emerald-700">$</span>
                         <input
                           type="number"
+                          readOnly={isDemo}
                           value={car.resale_estimate || car.ai_resale_estimate || 0}
                           onChange={(e) =>
                             updateCarValue(car.id, "resale_estimate", Number(e.target.value))
                           }
-                          className="w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-emerald-700 focus:outline-none"
+                          className={`w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-emerald-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
                         />
                       </div>
                     </div>

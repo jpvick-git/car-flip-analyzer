@@ -5,7 +5,7 @@ import requests
 from fastapi import APIRouter, UploadFile, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
-from .auth import get_current_user
+from .auth import get_current_user, require_not_demo
 from .db import get_engine
 
 router = APIRouter()
@@ -50,6 +50,7 @@ async def upload_file(
     file: UploadFile,
     user=Depends(get_current_user),
 ):
+    require_not_demo(user)
     try:
         # ------------------------------------------------------------------
         # 1. SAVE UPLOADED CSV

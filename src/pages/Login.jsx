@@ -76,6 +76,7 @@ export default function Login() {
 
         if (token) {
           localStorage.setItem("token", token);
+          localStorage.setItem("is_demo", data?.is_demo ? "1" : "0");
           setStatus("✅ Login successful!");
           navigate("/");
         } else {
@@ -258,6 +259,12 @@ export default function Login() {
             {isRegistering ? "Login" : "Register"}
           </button>
         </p>
+
+        {!isRegistering && (
+          <p className="mt-4 text-center text-xs text-gray-400">
+            Demo: demo@carflipanalyzer.com / DemoView2026!
+          </p>
+        )}
 
         {/* Status */}
         {status && (

@@ -5,7 +5,7 @@ import shutil
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy import text
 from .db import get_engine
-from .auth import get_current_user
+from .auth import get_current_user, get_vehicle_owner_id, require_not_demo
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
@@ -23,7 +23,7 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 @router.get("/get_vehicles")
 def get_vehicles(current_user: dict = Depends(get_current_user)):
     try:
-        user_id = current_user["id"]
+        user_id = get_vehicle_owner_id(current_user)
 
         with engine.connect() as conn:
             query = text("""
@@ -49,6 +49,7 @@ def get_vehicles(current_user: dict = Depends(get_current_user)):
 # --------------------------------------------------------------
 @router.post("/upload_user_file")
 async def upload_user_file(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    require_not_demo(current_user)
     try:
         upload_dir = "/opt/carflip/user_uploads"
         os.makedirs(upload_dir, exist_ok=True)
@@ -67,10 +68,11 @@ async def upload_user_file(file: UploadFile = File(...), current_user: dict = De
 # --------------------------------------------------------------
 @router.get("/vehicle/{vehicle_id}")
 def get_vehicle(vehicle_id: int, current_user: dict = Depends(get_current_user)):
+    owner_id = get_vehicle_owner_id(current_user)
     with engine.connect() as conn:
         row = conn.execute(
             text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
-            {"id": vehicle_id, "uid": current_user["id"]}
+            {"id": vehicle_id, "uid": owner_id}
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Vehicle not found")
@@ -82,10 +84,11 @@ def get_vehicle(vehicle_id: int, current_user: dict = Depends(get_current_user))
 # --------------------------------------------------------------
 @router.get("/vehicle/{vehicle_id}/images")
 def get_vehicle_images(vehicle_id: int, current_user: dict = Depends(get_current_user)):
+    owner_id = get_vehicle_owner_id(current_user)
     with engine.connect() as conn:
         row = conn.execute(
             text("SELECT lot_number FROM user_vehicles WHERE id = :id AND user_id = :uid"),
-            {"id": vehicle_id, "uid": current_user["id"]}
+            {"id": vehicle_id, "uid": owner_id}
         ).fetchone()
 
     if not row:
@@ -123,6 +126,7 @@ def get_states():
 # --------------------------------------------------------------
 @router.delete("/delete_vehicle/{vehicle_id}")
 def delete_vehicle(vehicle_id: int, current_user: dict = Depends(get_current_user)):
+    require_not_demo(current_user)
     try:
         user_id = current_user["id"]
         with engine.begin() as conn:

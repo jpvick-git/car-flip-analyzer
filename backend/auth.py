@@ -17,6 +17,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 1 day
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
+DEMO_EMAIL = os.getenv("DEMO_EMAIL", "demo@carflipanalyzer.com")
+
 # --------------------------------------------------
 # PASSWORD HELPERS
 # --------------------------------------------------
@@ -50,13 +52,26 @@ def create_access_token(data: dict):
 def get_user_by_email(email):
     with engine.connect() as conn:
         row = conn.execute(text("""
-            SELECT id, email, password_hash
+            SELECT id, email, password_hash, COALESCE(is_demo, false) AS is_demo
             FROM users
             WHERE email = :email
         """), {"email": email}).fetchone()
         if not row:
             return None
         return dict(row._mapping)
+
+def get_vehicle_owner_id(current_user: dict) -> int:
+    """User id whose vehicles this account may view."""
+    if current_user.get("is_demo"):
+        owner = os.getenv("DEMO_VEHICLE_USER_ID")
+        if not owner:
+            raise HTTPException(status_code=503, detail="Demo account is not configured")
+        return int(owner)
+    return current_user["id"]
+
+def require_not_demo(current_user: dict):
+    if current_user.get("is_demo"):
+        raise HTTPException(status_code=403, detail="Demo account is read-only")
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
@@ -71,7 +86,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return {"id": user["id"], "email": user["email"]}
+    return {"id": user["id"], "email": user["email"], "is_demo": bool(user.get("is_demo"))}
 
 # --------------------------------------------------
 # ROUTES
@@ -129,4 +144,8 @@ def login(form: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token({"sub": user["email"], "id": user["id"]})
-    return {"access_token": token, "token_type": "bearer"}
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "is_demo": bool(user.get("is_demo")),
+    }

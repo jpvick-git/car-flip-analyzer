@@ -11,7 +11,7 @@ from sqlalchemy import text
 from ..db import get_engine
 engine = get_engine()
 
-from ..auth import get_current_user
+from ..auth import get_current_user, require_not_demo
 
 router = APIRouter()
 
@@ -43,6 +43,7 @@ async def add_manual_vehicle(
     current_user=Depends(get_current_user),
 ):
     print("➡️ /add_manual_vehicle called", flush=True)
+    require_not_demo(current_user)
 
     try:
         user_id = current_user["id"]

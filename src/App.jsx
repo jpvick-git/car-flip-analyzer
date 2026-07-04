@@ -33,9 +33,12 @@ function Layout() {
 
   const hideHeader = location.pathname === "/login" || location.pathname.startsWith("/vehicle/");
 
+  const isDemo = localStorage.getItem("is_demo") === "1";
+
   // Logout handler
   const logout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("is_demo");
     navigate("/login");
   };
 
@@ -84,6 +87,7 @@ function Layout() {
           setUploadFile={setUploadFile}
           uploadUserFile={uploadUserFile}
           logout={logout}
+          isDemo={isDemo}
         />
       )}
 
@@ -105,6 +109,7 @@ function Layout() {
 				setUploadFile={setUploadFile}
 				uploadUserFile={uploadUserFile}
 				uploadComplete={uploadComplete}
+				isDemo={isDemo}
 			  />
 			</ProtectedRoute>
 		  }

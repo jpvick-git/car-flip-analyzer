@@ -18,7 +18,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # ✅ TRIGGER FIX: Send to Localhost (our Proxy) instead of Ngrok directly.
 # This lets backend_api.py handle the changing Ngrok URL.
-INTERNAL_TRIGGER_URL = "http://localhost:8000/trigger"
+INTERNAL_TRIGGER_URL = "http://localhost:8000/api/trigger"
 
 # ✅ DB FIX: Use the shared engine (Postgres) instead of hardcoding credentials
 rds_engine = get_engine()

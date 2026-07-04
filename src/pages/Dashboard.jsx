@@ -528,7 +528,7 @@ export default function Dashboard({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl relative text-black">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl relative text-black overflow-y-auto max-h-[90vh]">
         <button
           onClick={() => setSelectedCar(null)}
           className="absolute top-3 right-3 text-2xl text-gray-600 hover:text-black"

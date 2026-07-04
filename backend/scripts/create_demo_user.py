@@ -23,7 +23,9 @@ with engine.begin() as conn:
         ALTER TABLE users
         ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT FALSE
     """))
+print("Added is_demo column (if missing)")
 
+with engine.begin() as conn:
     existing = conn.execute(
         text("SELECT id FROM users WHERE email = :email"),
         {"email": DEMO_EMAIL},
@@ -40,6 +42,12 @@ with engine.begin() as conn:
         )
         print(f"Updated demo user (id={existing[0]})")
     else:
+        conn.execute(text("""
+            SELECT setval(
+                pg_get_serial_sequence('users', 'id'),
+                COALESCE((SELECT MAX(id) FROM users), 0)
+            )
+        """))
         conn.execute(
             text("""
                 INSERT INTO users (username, email, password_hash, is_demo, created_at)

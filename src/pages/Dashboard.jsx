@@ -13,6 +13,8 @@ import {
   TrendingDown,
   ExternalLink,
   Car,
+  MoreVertical,
+  Trash2,
 } from "lucide-react";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -349,6 +351,9 @@ export default function Dashboard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [downloading, setDownloading] = useState(false);
+  const [menuOpenId, setMenuOpenId] = useState(null);
+  const [carToDelete, setCarToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const API =
     process.env.REACT_APP_API_BASE_URL ?? "";
@@ -462,6 +467,30 @@ export default function Dashboard({
     };
   }, [uploadComplete]);
 
+  useEffect(() => {
+    if (menuOpenId === null) return;
+    const close = () => setMenuOpenId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [menuOpenId]);
+
+  const deleteVehicle = async (car) => {
+    setDeleting(true);
+    try {
+      await axios.delete(`${API}/api/delete_vehicle/${car.id}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      setCars((prev) => prev.filter((c) => c.id !== car.id));
+      if (selectedCar?.id === car.id) setSelectedCar(null);
+      setCarToDelete(null);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete vehicle. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const updateCarValue = (id, field, value) => {
     setCars((prev) =>
       prev.map((car) =>
@@ -560,6 +589,33 @@ export default function Dashboard({
                   <span className="absolute left-3 top-3 rounded-full bg-black/70 px-3 py-1 text-xs font-medium text-white backdrop-blur">
                     {car.damage_description || "Unknown Damage"}
                   </span>
+
+                  {/* Card menu */}
+                  <div className="absolute right-3 top-3" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      aria-label="Vehicle options"
+                      onClick={() => setMenuOpenId(menuOpenId === car.id ? null : car.id)}
+                      className="rounded-full bg-black/70 p-1.5 text-white backdrop-blur transition hover:bg-black/85"
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                    {menuOpenId === car.id && (
+                      <div className="absolute right-0 top-full z-10 mt-1 w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpenId(null);
+                            setCarToDelete(car);
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                        >
+                          <Trash2 size={14} />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex flex-1 flex-col p-5">
@@ -644,6 +700,40 @@ export default function Dashboard({
           </div>
         )}
       </div>
+
+      {/* DELETE CONFIRMATION */}
+      {carToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 className="text-lg font-bold text-slate-900">Delete vehicle?</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Are you sure you want to delete the{" "}
+              <span className="font-semibold text-slate-800">
+                {carToDelete.year} {carToDelete.make} {carToDelete.model}
+              </span>
+              ? This action is permanent and cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setCarToDelete(null)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => deleteVehicle(carToDelete)}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? "Deleting…" : "Delete permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
 {/* DETAILS MODAL */}
 {selectedCar && (() => {

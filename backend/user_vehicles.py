@@ -122,19 +122,18 @@ def get_states():
 # DELETE VEHICLE
 # --------------------------------------------------------------
 @router.delete("/delete_vehicle/{vehicle_id}")
-def delete_vehicle(vehicle_id: int, db=Depends(get_engine), current_user: dict = Depends(get_current_user)):
+def delete_vehicle(vehicle_id: int, current_user: dict = Depends(get_current_user)):
     try:
         user_id = current_user["id"]
-
-        delete_query = text("""
-            DELETE FROM user_vehicles
-            WHERE id = :id AND user_id = :uid
-        """)
-
-        db.execute(delete_query, {"id": vehicle_id, "uid": user_id})
-        db.commit()
-
+        with engine.begin() as conn:
+            result = conn.execute(
+                text("DELETE FROM user_vehicles WHERE id = :id AND user_id = :uid"),
+                {"id": vehicle_id, "uid": user_id},
+            )
+            if result.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Vehicle not found")
         return {"status": "deleted"}
-
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

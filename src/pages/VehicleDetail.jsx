@@ -5,11 +5,11 @@ import { ArrowLeft, Wrench, DollarSign, X, ChevronLeft, ChevronRight } from "luc
 
 const API = process.env.REACT_APP_API_BASE_URL ?? "";
 
-function calcMaxBid(car, margin) {
+function calcMaxBid(car, margin, overrideTaxRate, overrideTitleFee) {
   const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
   const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
-  const taxRate = Number(car.avg_tax_rate || 0);
-  const titleFee = Number(car.title_fee || 0);
+  const taxRate = overrideTaxRate !== null ? overrideTaxRate : Number(car.avg_tax_rate || 0);
+  const titleFee = overrideTitleFee !== null ? overrideTitleFee : Number(car.title_fee || 0);
   const m = Number(margin) / 100;
   const divisor = 1 + 0.075 + taxRate / 100;
   let bid = (resale * (1 - m) - titleFee - repair) / divisor;
@@ -19,7 +19,7 @@ function calcMaxBid(car, margin) {
   const taxAmt = Math.round(bid * (taxRate / 100));
   const totalCost = bid + buyerFee + taxAmt + titleFee + repair;
   const profit = Math.round(resale - totalCost);
-  return { bid, buyerFee, taxAmt, titleFee, repair, totalCost, profit, resale };
+  return { bid, buyerFee, taxAmt, titleFee, repair, totalCost, profit, resale, taxRate };
 }
 
 export default function VehicleDetail() {
@@ -32,18 +32,22 @@ export default function VehicleDetail() {
   const [margin, setMargin] = useState(15);
   const [activePhoto, setActivePhoto] = useState(0);
   const [lightbox, setLightbox] = useState(null);
+  const [states, setStates] = useState([]);
+  const [selectedState, setSelectedState] = useState("");
 
   const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [carRes, imagesRes] = await Promise.all([
+        const [carRes, imagesRes, statesRes] = await Promise.all([
           axios.get(`${API}/api/vehicle/${id}`, { headers }),
           axios.get(`${API}/api/vehicle/${id}/images`, { headers }),
+          axios.get(`${API}/api/states`, { headers }),
         ]);
         setCar(carRes.data);
         setImages(imagesRes.data.images || []);
+        setStates(statesRes.data || []);
       } catch (err) {
         console.error(err);
         setCar(null);
@@ -80,7 +84,10 @@ export default function VehicleDetail() {
       </div>
     );
 
-  const { bid, buyerFee, taxAmt, titleFee, repair, totalCost, profit, resale } = calcMaxBid(car, margin);
+  const stateData = states.find((s) => s.state_code === selectedState) || null;
+  const overrideTax = stateData ? Number(stateData.avg_tax_rate) : null;
+  const overrideTitle = stateData ? Number(stateData.title_fee) : null;
+  const { bid, buyerFee, taxAmt, titleFee, repair, totalCost, profit, resale, taxRate } = calcMaxBid(car, margin, overrideTax, overrideTitle);
   const odometer = Number(car.odometer);
 
   const details = [
@@ -218,6 +225,26 @@ export default function VehicleDetail() {
                 <p className="text-5xl font-extrabold text-blue-700">${bid.toLocaleString()}</p>
               </div>
 
+              {/* State selector */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">Purchase State</label>
+                <select
+                  value={selectedState}
+                  onChange={(e) => setSelectedState(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">— Use vehicle defaults —</option>
+                  {states.map((s) => (
+                    <option key={s.state_code} value={s.state_code}>
+                      {s.state_name} ({s.state_code}) — Tax: {s.avg_tax_rate}% | Title: ${Number(s.title_fee).toLocaleString()}
+                    </option>
+                  ))}
+                </select>
+                {stateData && (
+                  <p className="text-xs text-gray-400">{stateData.notes}</p>
+                )}
+              </div>
+
               <div className="space-y-1">
                 <div className="flex justify-between text-sm font-medium text-gray-700">
                   <span>Desired Margin</span>
@@ -233,7 +260,7 @@ export default function VehicleDetail() {
 
               <div className="text-sm text-gray-500 space-y-1 border-t pt-3">
                 <div className="flex justify-between"><span>Buyer Fee (7.5%)</span><span>${buyerFee.toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>Tax</span><span>${taxAmt.toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Tax ({taxRate}%)</span><span>${taxAmt.toLocaleString()}</span></div>
                 <div className="flex justify-between"><span>Title Fee</span><span>${titleFee.toLocaleString()}</span></div>
                 <div className="flex justify-between"><span>Repairs</span><span>${repair.toLocaleString()}</span></div>
                 <div className="flex justify-between font-semibold text-gray-800 border-t pt-1 mt-1">

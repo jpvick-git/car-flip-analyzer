@@ -107,6 +107,18 @@ def get_vehicle_images(vehicle_id: int, current_user: dict = Depends(get_current
 
 
 # --------------------------------------------------------------
+# GET STATE TAX / TITLE FEES
+# --------------------------------------------------------------
+@router.get("/states")
+def get_states():
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT state_code, state_name, title_fee, avg_tax_rate, notes FROM tax_title_fees ORDER BY state_name")
+        ).fetchall()
+    return [dict(r._mapping) for r in rows]
+
+
+# --------------------------------------------------------------
 # DELETE VEHICLE
 # --------------------------------------------------------------
 @router.delete("/delete_vehicle/{vehicle_id}")

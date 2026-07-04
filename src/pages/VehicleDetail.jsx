@@ -69,7 +69,7 @@ export default function VehicleDetail() {
   const resaleVal = Number(car.resale_estimate || car.ai_resale_estimate || 0);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-100" style={{ background: "#f3f4f6" }}>
       {/* Header bar */}
       <div className="bg-white border-b px-6 py-4 flex items-center gap-4 sticky top-0 z-10 shadow-sm">
         <button

@@ -69,6 +69,17 @@ def test_db():
 # --------------------------------------------------
 # TRIGGER ENDPOINT
 # --------------------------------------------------
+import subprocess
+from datetime import datetime
+
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+LOGS_DIR = os.path.join(BACKEND_DIR, "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+
+PYTHON_PATH = "/opt/carflip-env/bin/python3"
+COPART_SCRIPT = os.path.join(BACKEND_DIR, "copart_download_parallel.py")
+AI_SCRIPT = os.path.join(BACKEND_DIR, "ai_repair_estimator.py")
+
 class TriggerPayload(BaseModel):
     user_id: int
     ai_lots: list[str] = []
@@ -76,17 +87,49 @@ class TriggerPayload(BaseModel):
 
 @app.post("/api/trigger")
 async def trigger_pipeline(payload: TriggerPayload):
-    windows_worker_url = os.getenv("WINDOWS_WORKER_URL", "")
-    if not windows_worker_url:
-        return {"status": "error", "detail": "WINDOWS_WORKER_URL not configured"}
-    target_url = f"{windows_worker_url}/trigger"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    launched = []
+
     try:
-        resp = requests.post(target_url, json=payload.dict(), timeout=5)
-        if resp.status_code == 200:
-            return {"status": "success", "worker_response": resp.json()}
-        else:
-            return {"status": "error", "worker_status": resp.status_code}
+        if payload.copart_lots:
+            log_file = os.path.join(LOGS_DIR, f"copart_{payload.user_id}_{timestamp}.log")
+            with open(log_file, "w") as lf:
+                subprocess.Popen(
+                    [
+                        "xvfb-run", "--auto-servernum",
+                        PYTHON_PATH,
+                        COPART_SCRIPT,
+                        str(payload.user_id),
+                        "--lots", ",".join(payload.copart_lots),
+                        "--download"
+                    ],
+                    cwd=BACKEND_DIR,
+                    stdout=lf,
+                    stderr=lf,
+                    env={**os.environ, "DISPLAY": ":99"}
+                )
+            launched.append("copart")
+
+        if payload.ai_lots:
+            log_file = os.path.join(LOGS_DIR, f"ai_{payload.user_id}_{timestamp}.log")
+            with open(log_file, "w") as lf:
+                subprocess.Popen(
+                    [
+                        PYTHON_PATH,
+                        AI_SCRIPT,
+                        str(payload.user_id),
+                        "--lots", ",".join(payload.ai_lots)
+                    ],
+                    cwd=BACKEND_DIR,
+                    stdout=lf,
+                    stderr=lf
+                )
+            launched.append("ai")
+
+        return {"status": "success", "launched": launched}
+
     except Exception as e:
+        print(f"Trigger error: {e}")
         return {"status": "error", "detail": str(e)}
 
 # --------------------------------------------------

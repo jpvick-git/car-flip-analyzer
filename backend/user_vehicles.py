@@ -13,7 +13,7 @@ router = APIRouter()
 engine = get_engine()
 
 # Correct downloads directory
-DOWNLOAD_DIR = "/root/car-flip-analyzer/backend/downloads"
+DOWNLOAD_DIR = "/opt/carflip/backend/downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 
@@ -50,7 +50,7 @@ def get_vehicles(current_user: dict = Depends(get_current_user)):
 @router.post("/upload_user_file")
 async def upload_user_file(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     try:
-        upload_dir = "/root/car-flip-analyzer/user_uploads"
+        upload_dir = "/opt/carflip/user_uploads"
         os.makedirs(upload_dir, exist_ok=True)
 
         file_path = os.path.join(upload_dir, file.filename)

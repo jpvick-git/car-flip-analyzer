@@ -52,13 +52,22 @@ def create_access_token(data: dict):
 def get_user_by_email(email):
     with engine.connect() as conn:
         row = conn.execute(text("""
-            SELECT id, email, password_hash, COALESCE(is_demo, false) AS is_demo
+            SELECT id, email, password_hash
             FROM users
             WHERE email = :email
         """), {"email": email}).fetchone()
         if not row:
             return None
-        return dict(row._mapping)
+        user = dict(row._mapping)
+        try:
+            demo = conn.execute(
+                text("SELECT COALESCE(is_demo, false) FROM users WHERE email = :email"),
+                {"email": email},
+            ).scalar()
+            user["is_demo"] = bool(demo)
+        except Exception:
+            user["is_demo"] = email.lower() == DEMO_EMAIL.lower()
+        return user
 
 def get_vehicle_owner_id(current_user: dict) -> int:
     """User id whose vehicles this account may view."""

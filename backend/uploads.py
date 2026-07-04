@@ -175,7 +175,7 @@ async def upload_file(
                         "copart_lots": lots_to_download,
                         "ai_lots": []
                     },
-                    timeout=5
+                    timeout=30
                 )
                 print("Trigger response:", resp.status_code)
 

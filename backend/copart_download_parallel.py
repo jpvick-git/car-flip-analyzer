@@ -44,7 +44,7 @@ UPLOADS_DIR = (
 )
 
 # ⚠️ POINTS TO YOUR VPS API (For the Air Gap Fix)
-API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000/api")
 
 MAX_WORKERS = 3
 SLEEP_BETWEEN_LOTS = 2.0

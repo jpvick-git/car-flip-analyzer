@@ -336,10 +336,12 @@ function CSVUploadModal({
 
 function isCarReady(car) {
   if (!car.image_url) return false;
-  const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
-  const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
-  // Copart imports need images + AI estimates before showing
-  if (car.lot_number) return repair > 0 && resale > 0;
+  if (car.lot_number) {
+    const repairSet =
+      car.repair_estimate != null && car.repair_estimate !== "";
+    const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
+    return repairSet && resale > 0;
+  }
   // Manual entries: image is enough
   return true;
 }

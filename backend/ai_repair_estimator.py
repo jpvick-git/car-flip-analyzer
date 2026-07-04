@@ -2,63 +2,100 @@ import os
 import time
 import re
 import json
-import sys
 import base64
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
-
+from openai import OpenAI
 
 # --------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DOWNLOAD_DIR = r"C:\car-flip-analyzer\backend\downloads"
-
-# Corrected path to user_uploads
-uploads_dir = os.path.join(os.path.dirname(BASE_DIR), "user_uploads")
-
-MAX_WORKERS = 3
-SLEEP_BETWEEN_LOTS = 2.0
-MAX_IMAGES = 8  # up to 8 Copart photos per vehicle
-
-# RDS connection
-PG_CONN = (
-    "postgresql+psycopg2://carflip_user:AVNS_KMNjNg_8wx4vECPoFfh"
-    "@carflip-db-do-user-28471662-0.i.db.ondigitalocean.com:25060/carflip"
-    "?sslmode=require"
-)
-rds_engine = create_engine(PG_CONN, pool_pre_ping=True)
-
-# --------------------------------------------
-# FIXED ENV LOADING
-# --------------------------------------------
-from dotenv import load_dotenv
-import os
-
-# Force load from backend/.env
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ENV_PATH = os.path.join(BASE_DIR, ".env")  # backend/.env
-
-print("Looking for .env at:", ENV_PATH)
-
+ENV_PATH = os.path.join(BASE_DIR, ".env")
 if not os.path.exists(ENV_PATH):
     raise Exception(f".env file NOT FOUND at: {ENV_PATH}")
 
-load_dotenv(ENV_PATH)  # <- THE FIX
+load_dotenv(ENV_PATH)
+
+DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", os.path.join(BASE_DIR, "downloads"))
+
+MAX_WORKERS = 3
+SLEEP_BETWEEN_LOTS = 2.0
+MAX_IMAGES = int(os.getenv("AI_MAX_IMAGES", "8"))
+IMAGE_DETAIL = os.getenv("AI_IMAGE_DETAIL", "low")
+REPAIR_MODEL = os.getenv("AI_REPAIR_MODEL", "gpt-4o")
+RESALE_MODEL = os.getenv("AI_RESALE_MODEL", "gpt-4.1-mini")
 
 openai_key = os.getenv("OPENAI_API_KEY")
 if not openai_key:
-    raise Exception("❌ OPENAI_API_KEY missing in backend/.env")
+    raise Exception("OPENAI_API_KEY missing in backend/.env")
 
-print(f"Loaded OPENAI_API_KEY prefix: {openai_key[:12]}")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL not set in backend/.env")
 
-from openai import OpenAI
+rds_engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 client = OpenAI(api_key=openai_key)
 
-print("DEBUG: Calling OpenAI with client.api_key prefix:", client.api_key[:10])
+# Static prefix first — eligible for OpenAI prompt caching on repeated batch runs.
+REPAIR_SYSTEM_PROMPT = (
+    "You are an experienced automotive appraiser and body shop estimator. "
+    "You inspect vehicle photos and report only damage you can see. "
+    "You never assume or invent damage that is not visible in the photos."
+)
+
+REPAIR_RULES = """
+Rules:
+1. Default every body region (front, rear, left, right, roof, undercarriage) to UNDAMAGED unless photos show clear evidence.
+2. Every damaged region must include photo evidence (e.g., "Photo 2: crease in hood").
+3. Auction damage notes and title type are context only — not proof of visible damage.
+4. If photos show a clean vehicle, report minimal or zero repair cost.
+5. Do not invent crumpled panels, broken lights, deployed airbags, or missing parts unless clearly visible.
+6. List parts_to_replace only for visibly damaged or missing components.
+7. Estimate repair cost conservatively (parts + labor + paint).
+
+Return JSON with this exact structure:
+{
+  "regions": {
+    "front": {"damaged": false, "evidence": ""},
+    "rear": {"damaged": false, "evidence": ""},
+    "left": {"damaged": false, "evidence": ""},
+    "right": {"damaged": false, "evidence": ""},
+    "roof": {"damaged": false, "evidence": ""},
+    "undercarriage": {"damaged": false, "evidence": ""}
+  },
+  "parts_to_replace": [],
+  "parts_to_repair": [],
+  "labor_hours": 0,
+  "interior_notes": "",
+  "repair_estimate": 0,
+  "repair_details": "2-4 sentence summary citing photo evidence"
+}
+"""
+
+RESALE_SYSTEM_PROMPT = (
+    "You are an experienced used-car market analyst specializing in wholesale and auction resale values. "
+    "You produce conservative wholesale resale estimates based on vehicle specs, title status, mileage, "
+    "and any known repair summary — not photo inspection."
+)
+
+RESALE_RULES = """
+Rules:
+1. Use wholesale/auction pricing, not retail listing prices.
+2. Apply title discounts: branded/salvage titles typically 30–50% below clean-title wholesale.
+3. Mileage may vary ±10,000 miles internally; always cite the odometer value provided.
+4. Factor repair cost and severity when a repair summary is provided.
+5. Be conservative — understate rather than overstate value.
+
+Return JSON with this exact structure:
+{
+  "resale_estimate": 0,
+  "resale_details": "2-4 sentence wholesale value rationale"
+}
+"""
 
 # --------------------------------------------------
 # HELPERS
@@ -69,188 +106,538 @@ def extract_lot_number(value: str) -> str:
     match = re.search(r"\d{5,}", value)
     return match.group(0) if match else value.strip()
 
-# --------------------------------------------------
-# CORE ANALYSIS FUNCTION
-# --------------------------------------------------
 
-def analyze_vehicle(vehicle):
+# Copart zip files use {lot}_Image_N.jpg — typical gallery order below.
+# Manual uploads use the same Image_1..6 sequence (front, driver, passenger, rear, interior, dash).
+COPART_INDEX_TO_ANGLE = {
+    1: "front",
+    2: "rear",
+    3: "left",
+    4: "right",
+    5: "interior",
+    6: "dashboard",
+}
+
+ANGLE_KEYWORDS = {
+    "front": ("front", "fwd", "forward"),
+    "rear": ("rear", "back", "tail"),
+    "left": ("driver", "left", "ds", "lh"),
+    "right": ("passenger", "right", "ps", "rh"),
+    "interior": ("interior", "inside", "cabin", "seat"),
+    "dashboard": ("dash", "dashboard", "odometer", "odo", "instrument"),
+    "detail": ("detail", "damage", "close", "zoom", "engine", "undercarriage", "under"),
+}
+
+ANGLE_PRIORITY = ["front", "rear", "left", "right", "interior", "dashboard", "detail"]
+
+
+def _parse_image_index(filename: str) -> int | None:
+    name = filename.lower()
+    for pattern in (
+        r"image[_\-]?(\d+)",
+        r"img[_\-]?(\d+)",
+        r"[_\-](\d+)\.(?:jpe?g|png)$",
+        r"^(\d+)\.(?:jpe?g|png)$",
+    ):
+        match = re.search(pattern, name)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def _detect_angle_from_filename(filename: str) -> str | None:
+    name = filename.lower()
+    for angle, keywords in ANGLE_KEYWORDS.items():
+        if any(keyword in name for keyword in keywords):
+            return angle
+    return None
+
+
+def _classify_image(filename: str) -> tuple[str, int]:
+    """Return (angle_bucket, sort_index) for an image filename."""
+    angle = _detect_angle_from_filename(filename)
+    index = _parse_image_index(filename)
+
+    if angle:
+        return angle, index if index is not None else 9999
+    if index is not None:
+        if index in COPART_INDEX_TO_ANGLE:
+            return COPART_INDEX_TO_ANGLE[index], index
+        if index >= 7:
+            return "detail", index
+    return "extra", index if index is not None else 9999
+
+
+def select_images_by_angle(lot_dir: str, max_images: int | None = None) -> tuple[list[dict], dict]:
     """
-    Analyze a single vehicle with AI using LOCAL image bytes (not hosted URLs).
-    Returns repair/resale estimates and descriptive details.
+    Pick diverse inspection photos instead of the first N alphabetically.
+    Returns ([{"path", "label", "filename"}, ...], debug_info).
     """
-    year = vehicle.get("year")
-    make = vehicle.get("make")
-    model = vehicle.get("model")
-    damage = vehicle.get("damage_description", "")
-    lot_number = vehicle.get("lot_number")
-    image_paths = vehicle.get("images", [])
-    odometer_display = vehicle.get("odometer", "Unknown")
-    # Normalize title type for clarity
-    raw_title = vehicle.get("title_code", "Unknown")
+    limit = max_images if max_images is not None else MAX_IMAGES
+    lot_dir = str(lot_dir)
+
+    files = [
+        f for f in os.listdir(lot_dir)
+        if f.lower().endswith((".jpg", ".jpeg", ".png"))
+    ]
+    if not files:
+        return [], {"total_available": 0, "selected": []}
+
+    buckets: dict[str, list[tuple[int, str, str]]] = {angle: [] for angle in ANGLE_PRIORITY}
+    buckets["extra"] = []
+
+    for filename in files:
+        angle, sort_index = _classify_image(filename)
+        target = angle if angle in buckets else "extra"
+        buckets[target].append((sort_index, filename, os.path.join(lot_dir, filename)))
+
+    selected: list[dict] = []
+    selected_debug: list[str] = []
+    used_paths: set[str] = set()
+
+    for angle in ANGLE_PRIORITY:
+        if len(selected) >= limit:
+            break
+        for _, filename, path in sorted(buckets[angle], key=lambda item: item[0]):
+            if path in used_paths:
+                continue
+            selected.append({"path": path, "label": angle, "filename": filename})
+            selected_debug.append(f"{angle}: {filename}")
+            used_paths.add(path)
+            break
+
+    if len(selected) < limit:
+        extras = sorted(
+            [
+                (sort_index, filename, path)
+                for angle in ANGLE_PRIORITY + ["extra"]
+                for sort_index, filename, path in buckets.get(angle, [])
+                if path not in used_paths
+            ],
+            key=lambda item: item[0],
+        )
+        for sort_index, filename, path in extras:
+            if len(selected) >= limit:
+                break
+            if path in used_paths:
+                continue
+            angle, _ = _classify_image(filename)
+            label = angle if angle != "extra" else f"extra_{sort_index}"
+            selected.append({"path": path, "label": label, "filename": filename})
+            selected_debug.append(f"{label}: {filename}")
+            used_paths.add(path)
+
+    return selected, {
+        "total_available": len(files),
+        "selected": selected_debug,
+    }
+
+
+def _photo_manifest(image_entries: list[dict]) -> str:
+    if not image_entries:
+        return ""
+    lines = [
+        f"Photo {idx}: {entry['label']} ({entry['filename']})"
+        for idx, entry in enumerate(image_entries, start=1)
+    ]
+    return "Attached photos (use these labels when citing evidence):\n" + "\n".join(lines)
+
+
+def _normalize_title_code(raw_title) -> str:
     title_code = str(raw_title).strip().title() if raw_title else "Unknown"
+    lowered = title_code.lower()
+    if any(term in lowered for term in ["salvage", "rebuilt", "junk", "flood", "lemon"]):
+        return "Branded"
+    if "clean" in lowered:
+        return "Clean"
+    if "unknown" in lowered or not title_code.strip():
+        return "Unknown"
+    return title_code
 
-    # Handle common Copart variants (normalize terms)
-    if any(term in title_code.lower() for term in ["salvage", "rebuilt", "junk", "flood", "lemon"]):
-        title_code = "Branded"
-    elif "clean" in title_code.lower():
-        title_code = "Clean"
-    elif "unknown" in title_code.lower() or not title_code.strip():
-        title_code = "Unknown"
-    
 
-    system_prompt = (
-        "You are an experienced automotive appraiser, body shop estimator, "
-        "and used-car market analyst. You evaluate salvage auction vehicles "
-        "using photos and damage notes to produce realistic repair and resale estimates."
+def _vehicle_context(vehicle) -> str:
+    year = vehicle.get("year") or "Unknown"
+    make = vehicle.get("make") or "Unknown"
+    model = vehicle.get("model") or "Unknown"
+    damage = vehicle.get("damage_description") or "None reported"
+    odometer_display = vehicle.get("odometer", "Unknown")
+    title_code = _normalize_title_code(vehicle.get("title_code", "Unknown"))
+
+    return (
+        "Vehicle context (identification and auction metadata — do not treat as proof of visible damage):\n"
+        f"- Year: {year}\n"
+        f"- Make: {make}\n"
+        f"- Model: {model}\n"
+        f"- Reported damage notes: {damage}\n"
+        f"- Odometer: {odometer_display}\n"
+        f"- Title type: {title_code}"
     )
 
-    user_prompt = f"""
-You are a professional automotive appraiser and auction analyst who evaluates vehicles for wholesale resale or flipping.
-This vehicle was acquired from a salvage or wholesale auction.
 
-Vehicle Info:
-- Year: {year}
-- Make: {make}
-- Model: {model}
-- Reported Damage: {damage}
-- Odometer: {odometer_display}
-- Title Type: {title_code}
+def _extract_usage(label: str, response) -> dict:
+    usage = getattr(response, "usage", None)
+    if not usage:
+        return {"label": label, "prompt": 0, "completion": 0, "cached": 0, "total": 0}
 
-Guidelines:
-- Treat all vehicles as **non-retail ready** unless the title type explicitly states "Clean."
-- If the title type is Salvage, Rebuilt, Flood, Lemon, Junk, or similar, apply appropriate discounts (typically 30–50% below clean title values).
-- You may assume mileage varies within ±10,000 miles when estimating resale.
-- When writing your explanation, **always reference the odometer value shown above** (never invent a different number).
+    cached_details = getattr(usage, "prompt_tokens_details", None)
+    cached = getattr(cached_details, "cached_tokens", 0) if cached_details else 0
+    return {
+        "label": label,
+        "prompt": usage.prompt_tokens or 0,
+        "completion": usage.completion_tokens or 0,
+        "cached": cached or 0,
+        "total": usage.total_tokens or 0,
+    }
 
-From the provided photos and details, assess the following:
 
-1. Describe visible exterior and structural damage (front, rear, sides, roof, undercarriage).
-2. Identify parts that likely require replacement (e.g., bumper, hood, headlights).
-3. List components that could be repaired (e.g., trim, scratches, paintless dent repair).
-4. Estimate realistic labor hours for body and paint work.
-5. Note any signs of frame, flood, or mechanical damage.
-6. Check for missing parts, deployed airbags, or wheel/tire issues.
-7. Review interior condition (seats, dash, controls, panels).
-8. Estimate a conservative repair cost (parts + labor + paint).
-9. Estimate a realistic **wholesale resale value**, factoring:
-   - Odometer reading of {odometer_display} miles (±10k internal range)
-   - Title Type: {title_code}
-   - Damage severity
-   - Current wholesale and auction trends
-10. Provide a short expert summary assessing overall flip potential.
+def _log_token_usage(label: str, response) -> dict:
+    stats = _extract_usage(label, response)
+    print(
+        f" [{stats['label']}] tokens: prompt={stats['prompt']}, "
+        f"completion={stats['completion']}, cached={stats['cached']}, total={stats['total']}"
+    )
+    return stats
 
-Return **only valid JSON** in the following structure:
-{{
-  "repair_estimate": number,
-  "repair_details": "string",
-  "resale_estimate": number,
-  "resale_details": "string"
-}}
-"""
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
+def _parse_json_response(raw: str, lot_number: str, fallback: dict) -> dict:
+    clean = re.sub(r'(?<=\d),(?=\d)', '', raw.strip())
+    clean = clean.replace("$", "").strip()
+    try:
+        return json.loads(clean)
+    except json.JSONDecodeError as e:
+        print(f" Invalid JSON for lot {lot_number}: {e}\nRaw:\n{raw[:500]}")
+        return fallback
+
+
+def _attach_images(messages, image_entries, lot_number: str) -> None:
+    valid_entries = [
+        entry for entry in image_entries[:MAX_IMAGES]
+        if entry.get("path") and os.path.isfile(entry["path"])
     ]
-
-    print(f" Attaching up to {len(image_paths[:MAX_IMAGES])} images for lot {lot_number}...")
-    for img_path in image_paths[:MAX_IMAGES]:
+    print(
+        f" Attaching {len(valid_entries)} angle-selected images for lot {lot_number}: "
+        + ", ".join(entry["label"] for entry in valid_entries)
+    )
+    for entry in valid_entries:
+        img_path = entry["path"]
         try:
             with open(img_path, "rb") as f:
-                img_bytes = f.read()
-                img_b64 = base64.b64encode(img_bytes).decode("utf-8")
-
+                img_b64 = base64.b64encode(f.read()).decode("utf-8")
             messages[1]["content"].append({
                 "type": "image_url",
-                "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{img_b64}",
+                    "detail": IMAGE_DETAIL,
+                },
             })
         except Exception as e:
             print(f" Failed to attach {img_path}: {e}")
 
-    # Send to OpenAI
+
+def _empty_repair_result(reason: str) -> dict:
+    return {
+        "repair_estimate": 0,
+        "repair_details": reason,
+    }
+
+
+def _empty_resale_result(reason: str) -> dict:
+    return {
+        "resale_estimate": None,
+        "resale_details": reason,
+    }
+
+
+# --------------------------------------------------
+# CORE ANALYSIS FUNCTIONS
+# --------------------------------------------------
+
+def analyze_vehicle_repair(vehicle: dict) -> dict:
+    """Vision-based repair assessment. Requires local image paths."""
+    lot_number = vehicle.get("lot_number", "unknown")
+    image_entries = vehicle.get("image_entries") or []
+    if not image_entries and vehicle.get("images"):
+        image_entries = [{"path": p, "label": "unknown", "filename": os.path.basename(p)} for p in vehicle["images"]]
+
+    manifest = _photo_manifest(image_entries)
+    user_prompt = f"{REPAIR_RULES.strip()}\n\n{_vehicle_context(vehicle)}"
+    if manifest:
+        user_prompt += f"\n\n{manifest}"
+
+    messages = [
+        {"role": "system", "content": REPAIR_SYSTEM_PROMPT},
+        {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
+    ]
+    _attach_images(messages, image_entries, lot_number)
+
+    if len(messages[1]["content"]) == 1:
+        return _empty_repair_result("No usable photos attached for repair analysis.")
+
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=REPAIR_MODEL,
         messages=messages,
-        temperature=0.4,
+        temperature=0,
+        response_format={"type": "json_object"},
     )
+    usage = _log_token_usage("repair", response)
 
     raw = response.choices[0].message.content.strip()
+    parsed = _parse_json_response(
+        raw,
+        lot_number,
+        {"repair_estimate": None, "repair_details": raw[:800]},
+    )
+    return {
+        "repair_estimate": parsed.get("repair_estimate"),
+        "repair_details": parsed.get("repair_details") or "No repair details available.",
+        "_repair_structured": parsed,
+        "_usage": [usage],
+    }
 
-    # Clean up JSON (in case it’s wrapped in markdown)
-    if raw.startswith("```"):
-        raw = raw.strip("`")
-        raw = raw.replace("json", "", 1).strip()
-    if raw.endswith("```"):
-        raw = raw[:-3].strip()
 
-    clean = re.sub(r'(?<=\d),(?=\d)', '', raw)
-    clean = clean.replace('$', '').strip()
+def analyze_vehicle_resale(vehicle: dict, repair_result: dict | None = None) -> dict:
+    """Text-only wholesale resale estimate — no images."""
+    lot_number = vehicle.get("lot_number", "unknown")
+    odometer_display = vehicle.get("odometer", "Unknown")
+    title_code = _normalize_title_code(vehicle.get("title_code", "Unknown"))
 
-    try:
-        parsed = json.loads(clean)
-    except json.JSONDecodeError as e:
-        print(f" Invalid JSON for lot {lot_number}: {e}\nRaw:\n{raw}")
-        parsed = {
-            "repair_estimate": None,
-            "repair_details": raw[:800],
-            "resale_estimate": None,
-            "resale_details": "",
-        }
+    repair_summary = ""
+    if repair_result:
+        estimate = repair_result.get("repair_estimate")
+        details = repair_result.get("repair_details") or ""
+        if estimate is not None or details:
+            repair_summary = (
+                "\nKnown repair assessment:\n"
+                f"- Repair estimate: {estimate if estimate is not None else 'Unknown'}\n"
+                f"- Summary: {details}"
+            )
 
-    return parsed
+    user_prompt = (
+        f"{RESALE_RULES.strip()}\n\n"
+        f"{_vehicle_context(vehicle)}\n"
+        f"{repair_summary}\n\n"
+        f"Odometer for resale math: {odometer_display} miles (±10k internal range).\n"
+        f"Title type for resale math: {title_code}."
+    )
+
+    response = client.chat.completions.create(
+        model=RESALE_MODEL,
+        messages=[
+            {"role": "system", "content": RESALE_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+    usage = _log_token_usage("resale", response)
+
+    raw = response.choices[0].message.content.strip()
+    parsed = _parse_json_response(
+        raw,
+        lot_number,
+        {"resale_estimate": None, "resale_details": raw[:800]},
+    )
+    return {
+        "resale_estimate": parsed.get("resale_estimate"),
+        "resale_details": parsed.get("resale_details") or "No resale details available.",
+        "_usage": [usage],
+    }
+
+
+def analyze_vehicle(vehicle, mode: str = "full") -> dict:
+    """
+    Analyze a vehicle with AI.
+
+    mode:
+      - "full": repair (if photos) + resale
+      - "repair": vision repair only
+      - "resale": text resale only
+    """
+    mode = vehicle.get("mode", mode)
+    result = {}
+    usages = []
+
+    image_paths = [p for p in (vehicle.get("images") or []) if p and os.path.isfile(p)]
+    has_images = bool(image_paths)
+
+    if mode in ("full", "repair"):
+        if has_images:
+            repair_result = analyze_vehicle_repair(vehicle)
+            usages.extend(repair_result.pop("_usage", []))
+            result.update(repair_result)
+        else:
+            result.update(_empty_repair_result("No photos provided for repair analysis."))
+
+    if mode in ("full", "resale"):
+        repair_context = None
+        if mode == "full" and has_images:
+            repair_context = result
+        elif vehicle.get("repair_context"):
+            repair_context = vehicle["repair_context"]
+        resale_result = analyze_vehicle_resale(vehicle, repair_context)
+        usages.extend(resale_result.pop("_usage", []))
+        result.update(resale_result)
+
+    if usages:
+        result["_usage"] = usages
+
+    if not vehicle.get("keep_structured"):
+        result.pop("_repair_structured", None)
+
+    return result
+
 
 # --------------------------------------------------
 # LOT PROCESSING FUNCTION
 # --------------------------------------------------
 
-def process_lot(lot, rds_engine):
-    """Handles one vehicle lot end-to-end (read → analyze → update DB)."""
-    try:
-        with rds_engine.connect() as conn:
-            row = conn.execute(
-                text("""
-                    SELECT  year, make, model, damage_description, odometer, title_code, repair_estimate
-                    FROM user_vehicles
-                    WHERE lot_number = :lot
-                    LIMIT 1
-                """),
-                {"lot": lot},
-            ).fetchone()
+def _load_vehicle_for_lot(lot, rds_engine):
+    """Load vehicle metadata and local image paths for a lot."""
+    lot = str(lot).strip()
+    with rds_engine.connect() as conn:
+        row = conn.execute(
+            text("""
+                SELECT year, make, model, damage_description, odometer, title_code, repair_estimate
+                FROM user_vehicles
+                WHERE lot_number = :lot
+                LIMIT 1
+            """),
+            {"lot": lot},
+        ).fetchone()
 
-        if not row:
-            print(f"No user_vehicles record found for lot {lot}")
+    if not row:
+        return None, f"No user_vehicles record found for lot {lot}"
+
+    year, make, model, damage, odometer, title_code, existing_repair = row
+
+    lot_dir = os.path.join(DOWNLOAD_DIR, lot)
+    if not os.path.isdir(lot_dir):
+        return None, f"No download folder for lot {lot}: {lot_dir}"
+
+    image_entries, image_selection = select_images_by_angle(lot_dir, MAX_IMAGES)
+    if not image_entries:
+        return None, f"No images found for lot {lot} in {lot_dir}"
+
+    vehicle = {
+        "lot_number": lot,
+        "year": year,
+        "make": make,
+        "model": model,
+        "damage_description": damage,
+        "images": [entry["path"] for entry in image_entries],
+        "image_entries": image_entries,
+        "odometer": odometer or "Unknown",
+        "title_code": title_code if title_code else "Unknown",
+        "keep_structured": True,
+    }
+    meta = {
+        "year": year,
+        "make": make,
+        "model": model,
+        "damage": damage,
+        "existing_repair": existing_repair,
+        "image_count": len(image_entries),
+        "images_available": image_selection["total_available"],
+        "image_selection": image_selection["selected"],
+        "download_dir": lot_dir,
+    }
+    return vehicle, meta
+
+
+def _print_dry_run_result(lot, meta, ai_result):
+    usages = ai_result.pop("_usage", [])
+    structured = ai_result.pop("_repair_structured", None)
+
+    print("\n" + "=" * 72)
+    print(f"DRY RUN — lot {lot}")
+    print(f"Vehicle: {meta['year']} {meta['make']} {meta['model']}")
+    print(f"Reported damage: {meta['damage']}")
+    print(
+        f"Images: {meta['image_count']} selected of {meta.get('images_available', meta['image_count'])} "
+        f"available (max {MAX_IMAGES}, detail={IMAGE_DETAIL})"
+    )
+    if meta.get("image_selection"):
+        print("Selected angles:")
+        for line in meta["image_selection"]:
+            print(f"  {line}")
+    print(f"Models: repair={REPAIR_MODEL}, resale={RESALE_MODEL}")
+    print(f"Download dir: {meta['download_dir']}")
+    print("-" * 72)
+    print(f"Repair estimate:  {ai_result.get('repair_estimate')}")
+    print(f"Repair details:   {ai_result.get('repair_details')}")
+    print(f"Resale estimate:  {ai_result.get('resale_estimate')}")
+    print(f"Resale details:   {ai_result.get('resale_details')}")
+
+    if structured and structured.get("regions"):
+        print("-" * 72)
+        print("Region flags:")
+        for region, info in structured["regions"].items():
+            damaged = info.get("damaged", False)
+            evidence = info.get("evidence") or ""
+            print(f"  {region}: damaged={damaged}  evidence={evidence or '(none)'}")
+
+    if usages:
+        print("-" * 72)
+        prompt_total = completion_total = cached_total = grand_total = 0
+        for stat in usages:
+            print(
+                f"  {stat['label']:>6}: prompt={stat['prompt']:,}, "
+                f"completion={stat['completion']:,}, cached={stat['cached']:,}, "
+                f"total={stat['total']:,}"
+            )
+            prompt_total += stat["prompt"]
+            completion_total += stat["completion"]
+            cached_total += stat["cached"]
+            grand_total += stat["total"]
+        print(
+            f"  {'TOTAL':>6}: prompt={prompt_total:,}, completion={completion_total:,}, "
+            f"cached={cached_total:,}, total={grand_total:,}"
+        )
+    print("=" * 72 + "\n")
+
+
+def dry_run_lot(lot, rds_engine):
+    """Run AI for one lot without writing to the database."""
+    vehicle, meta_or_error = _load_vehicle_for_lot(lot, rds_engine)
+    if not vehicle:
+        print(meta_or_error)
+        return False
+
+    print(
+        f"Dry run lot {lot}: {meta_or_error['year']} {meta_or_error['make']} "
+        f"{meta_or_error['model']} ({meta_or_error['damage']})"
+    )
+    ai_result = analyze_vehicle(vehicle, mode="full")
+    _print_dry_run_result(lot, meta_or_error, ai_result)
+    return True
+
+
+def process_lot(lot, rds_engine, dry_run=False, force=False):
+    """Handles one vehicle lot end-to-end (read → analyze → update DB)."""
+    if dry_run:
+        return dry_run_lot(lot, rds_engine)
+
+    try:
+        vehicle, meta_or_error = _load_vehicle_for_lot(lot, rds_engine)
+        if not vehicle:
+            print(meta_or_error)
             return False
 
-        year, make, model, damage, odometer, title_code, existing_repair = row
-        if existing_repair:
+        if meta_or_error["existing_repair"] and not force:
             print(f"Skipping lot {lot} (already analyzed)")
             return True
 
-        print(f"Lot {lot}: {year} {make} {model} ({damage})")
+        if force and meta_or_error["existing_repair"]:
+            print(f"Re-analyzing lot {lot} (--force)")
 
-        lot_dir = os.path.join(DOWNLOAD_DIR, str(lot))
-        images = [
-            os.path.join(lot_dir, img)
-            for img in sorted(os.listdir(lot_dir))
-            if img.lower().endswith((".jpg", ".jpeg", ".png"))
-        ][:MAX_IMAGES]
+        print(
+            f"Lot {lot}: {meta_or_error['year']} {meta_or_error['make']} "
+            f"{meta_or_error['model']} ({meta_or_error['damage']})"
+        )
 
-        if not images:
-            print(f"No images found for lot {lot}")
-            return False
-
-        vehicle = {
-            "lot_number": lot,
-            "year": year,
-            "make": make,
-            "model": model,
-            "damage_description": damage,
-            "images": images,
-            "odometer": odometer or "Unknown",
-            "title_code": title_code if title_code else "Unknown",
-        }
-
-        ai_result = analyze_vehicle(vehicle)
+        vehicle.pop("keep_structured", None)
+        ai_result = analyze_vehicle(vehicle, mode="full")
+        ai_result.pop("_usage", None)
 
         with rds_engine.begin() as conn:
             result = conn.execute(
@@ -283,11 +670,12 @@ def process_lot(lot, rds_engine):
         print(f"Error processing lot {lot}: {e}")
         return False
 
+
 # --------------------------------------------------
 # MAIN BATCH EXECUTION
 # --------------------------------------------------
 
-def main(user_id: int):
+def main(user_id: int, force: bool = False):
     uploads_dir = os.path.join(os.path.dirname(BASE_DIR), "user_uploads")
 
     if not os.path.exists(uploads_dir):
@@ -343,7 +731,7 @@ def main(user_id: int):
         futures = []
         for lot in lot_numbers:
             print(f"Queuing lot {lot} for AI analysis...")
-            futures.append(executor.submit(process_lot, lot, rds_engine))
+            futures.append(executor.submit(process_lot, lot, rds_engine, False, force))
             time.sleep(SLEEP_BETWEEN_LOTS)
 
         for future in as_completed(futures):
@@ -360,6 +748,7 @@ def main(user_id: int):
     print(f"\nSummary: {done} done | {failed} failed | Elapsed {elapsed/60:.1f} min.")
     print(f"Completed AI analysis for user {user_id}.")
 
+
 # --------------------------------------------------
 # ENTRY POINT
 # --------------------------------------------------
@@ -367,12 +756,46 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("user_id", type=int, help="User ID")
+    parser.add_argument("user_id", type=int, nargs="?", default=0, help="User ID (not used with --dry-run)")
     parser.add_argument("--lots", type=str, help="Comma-separated lot numbers", default=None)
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run AI and log token usage without writing to the database",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-run AI even if repair_estimate is already set",
+    )
     args = parser.parse_args()
 
     USER_ID = args.user_id
-    LOTS = args.lots.split(",") if args.lots else []
+    LOTS = [lot.strip() for lot in args.lots.split(",") if lot.strip()] if args.lots else []
+
+    if args.dry_run:
+        if not LOTS:
+            print("--dry-run requires --lots (comma-separated lot numbers)")
+            raise SystemExit(1)
+
+        print(f"DRY RUN — no database writes")
+        print(f"Download dir: {DOWNLOAD_DIR}")
+        print(f"AI config: MAX_IMAGES={MAX_IMAGES}, detail={IMAGE_DETAIL}, angle_selection=on")
+        env_cap = os.getenv("AI_MAX_IMAGES")
+        print(f"  AI_MAX_IMAGES env: {env_cap if env_cap else 'not set (default 8)'}")
+        print(f"Lots: {', '.join(LOTS)}")
+
+        done = failed = 0
+        start_time = time.time()
+        for lot in LOTS:
+            if dry_run_lot(lot, rds_engine):
+                done += 1
+            else:
+                failed += 1
+
+        elapsed = time.time() - start_time
+        print(f"Dry run summary: {done} ok | {failed} failed | Elapsed {elapsed:.1f}s")
+        raise SystemExit(0 if failed == 0 else 1)
 
     if LOTS:
         print(f"Running AI estimator for specific lots: {LOTS}")
@@ -384,7 +807,7 @@ if __name__ == "__main__":
             for lot in LOTS:
                 lot = lot.strip()
                 print(f"Queuing lot {lot} for AI analysis...")
-                futures.append(executor.submit(process_lot, lot, rds_engine))
+                futures.append(executor.submit(process_lot, lot, rds_engine, False, args.force))
                 time.sleep(SLEEP_BETWEEN_LOTS)
 
             for future in as_completed(futures):
@@ -403,6 +826,4 @@ if __name__ == "__main__":
 
     else:
         print(f"No lot list provided — falling back to CSV detection for user {USER_ID}")
-        main(USER_ID)
-
-
+        main(USER_ID, args.force)

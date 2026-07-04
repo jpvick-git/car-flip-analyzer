@@ -315,12 +315,12 @@ def download_copart_images(lot_number):
 # PROCESS LOTS + AI LOGIC
 # --------------------------------------------------
 def process_lots_directly(lots, uid):
-    # Local import to prevent circular dependency issues
     try:
-        from ai_repair_estimator import analyze_vehicle
+        from ai_repair_estimator import analyze_vehicle, _load_vehicle_for_lot
     except ImportError:
         print("⚠️ Warning: ai_repair_estimator.py not found. AI steps will fail if run.")
-        def analyze_vehicle(v): return {}
+        analyze_vehicle = lambda v, mode="full": {}
+        _load_vehicle_for_lot = None
 
     global user_id
     user_id = uid
@@ -330,26 +330,37 @@ def process_lots_directly(lots, uid):
             for lot in lots:
                 row = conn.execute(
                     text("""
-                        SELECT * FROM user_vehicles
+                        SELECT 1 FROM user_vehicles
                         WHERE lot_number = :lot AND user_id = :uid
                         LIMIT 1
                     """),
-                    {"lot": lot, "uid": user_id}
+                    {"lot": lot, "uid": user_id},
                 ).fetchone()
 
                 if not row:
                     print(f"Lot {lot} not found; skipping.")
                     continue
 
-                v = dict(row._mapping)
-
                 # 1. DOWNLOAD & UPLOAD
                 download_copart_images(lot)
 
-                # 2. RUN AI (Locally on Windows)
+                # 2. RUN AI with local images (angle-selected, full repair + resale)
                 try:
-                    v["odometer_display"] = v.get("odometer", "Unknown")
-                    result = analyze_vehicle(v)
+                    if _load_vehicle_for_lot is None:
+                        raise RuntimeError("ai_repair_estimator not available")
+
+                    vehicle, meta_or_error = _load_vehicle_for_lot(lot, rds_engine)
+                    if not vehicle:
+                        print(f"AI skipped for lot {lot}: {meta_or_error}")
+                        continue
+
+                    print(
+                        f"Running AI for lot {lot}: "
+                        f"{meta_or_error['image_count']} images selected of "
+                        f"{meta_or_error.get('images_available', '?')} available"
+                    )
+                    vehicle.pop("keep_structured", None)
+                    result = analyze_vehicle(vehicle, mode="full")
 
                     conn.execute(
                         text("""
@@ -357,7 +368,8 @@ def process_lots_directly(lots, uid):
                             SET repair_estimate = :rep_est,
                                 resale_estimate = :res_est,
                                 repair_details = :rep_det,
-                                resale_details = :res_det
+                                resale_details = :res_det,
+                                updated_at = NOW()
                             WHERE lot_number = :lot AND user_id = :uid
                         """),
                         {
@@ -369,6 +381,7 @@ def process_lots_directly(lots, uid):
                             "uid": user_id,
                         },
                     )
+                    print(f"✅ AI updated lot {lot}")
 
                 except Exception as e:
                     print(f"AI estimation error for lot {lot}: {e}")

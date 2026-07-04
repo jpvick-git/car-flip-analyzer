@@ -1,37 +1,48 @@
 import os
 import tempfile
 import requests
-from .ai_repair_estimator import analyze_vehicle   # your full GPT engine
+from .ai_repair_estimator import analyze_vehicle
 
 
-# ----------------------------------------------------
-# Helper: run analyze_vehicle safely
-# ----------------------------------------------------
-def run_ai(vehicle: dict):
+def run_ai(vehicle: dict, mode: str = "full"):
     try:
-        result = analyze_vehicle(vehicle)
+        result = analyze_vehicle(vehicle, mode=mode)
+        response = {}
 
-        return {
-            "repair_estimate": int(result.get("repair_estimate") or 1500),
-            "repair_details": result.get("repair_details") or "No repair details available.",
-            "resale_estimate": int(result.get("resale_estimate") or 5000),
-            "resale_details": result.get("resale_details") or "No resale details available.",
-        }
+        if mode in ("full", "repair"):
+            response["repair_estimate"] = int(result.get("repair_estimate") or 1500)
+            response["repair_details"] = result.get("repair_details") or "No repair details available."
+
+        if mode in ("full", "resale"):
+            response["resale_estimate"] = int(result.get("resale_estimate") or 5000)
+            response["resale_details"] = result.get("resale_details") or "No resale details available."
+
+        return response
 
     except Exception as e:
         print("AI wrapper failure:", e)
-        return {
+        fallback = {
             "repair_estimate": 1500,
             "repair_details": "AI error — using fallback repair cost.",
             "resale_estimate": 5000,
             "resale_details": "AI error — using fallback resale estimate.",
         }
+        if mode == "repair":
+            return {k: fallback[k] for k in ("repair_estimate", "repair_details")}
+        if mode == "resale":
+            return {k: fallback[k] for k in ("resale_estimate", "resale_details")}
+        return fallback
 
 
-# ----------------------------------------------------
-# Estimate repair cost using first image (optional)
-# ----------------------------------------------------
-async def estimate_repair_cost(image_url: str | None):
+async def estimate_repair_cost(
+    image_url: str | None,
+    year: int | str | None = None,
+    make: str | None = None,
+    model: str | None = None,
+    damage_description: str = "",
+    odometer: str | int | None = None,
+    title_code: str = "Unknown",
+):
     local_path = None
 
     try:
@@ -48,32 +59,43 @@ async def estimate_repair_cost(image_url: str | None):
 
     vehicle = {
         "images": [local_path] if local_path else [],
-        "year": None,
-        "make": None,
-        "model": None,
-        "damage_description": "",
+        "year": year,
+        "make": make,
+        "model": model,
+        "damage_description": damage_description,
         "lot_number": "manual",
-        "odometer": "Unknown",
-        "title_code": "Unknown",
+        "odometer": odometer or "Unknown",
+        "title_code": title_code,
     }
 
-    return run_ai(vehicle)
+    return run_ai(vehicle, mode="repair")
 
 
-# ----------------------------------------------------
-# Estimate resale value without images
-# ----------------------------------------------------
-async def estimate_resale_value(year: int | None, make: str | None,
-                                model: str | None, mileage: int | None):
+async def estimate_resale_value(
+    year: int | None,
+    make: str | None,
+    model: str | None,
+    mileage: int | None,
+    damage_description: str = "",
+    title_code: str = "Clean",
+    repair_estimate: int | None = None,
+    repair_details: str | None = None,
+):
     vehicle = {
         "images": [],
         "year": year,
         "make": make,
         "model": model,
-        "damage_description": "",
+        "damage_description": damage_description,
         "lot_number": "manual",
         "odometer": mileage or "Unknown",
-        "title_code": "Clean",
+        "title_code": title_code,
     }
 
-    return run_ai(vehicle)
+    if repair_estimate is not None or repair_details:
+        vehicle["repair_context"] = {
+            "repair_estimate": repair_estimate,
+            "repair_details": repair_details,
+        }
+
+    return run_ai(vehicle, mode="resale")

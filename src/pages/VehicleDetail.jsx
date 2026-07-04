@@ -5,6 +5,23 @@ import { ArrowLeft, Wrench, DollarSign, X, ChevronLeft, ChevronRight } from "luc
 
 const API = process.env.REACT_APP_API_BASE_URL ?? "";
 
+function calcMaxBid(car, margin) {
+  const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
+  const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
+  const taxRate = Number(car.avg_tax_rate || 0);
+  const titleFee = Number(car.title_fee || 0);
+  const m = Number(margin) / 100;
+  const divisor = 1 + 0.075 + taxRate / 100;
+  let bid = (resale * (1 - m) - titleFee - repair) / divisor;
+  if (isNaN(bid) || bid < 0) bid = 0;
+  bid = Math.round(bid);
+  const buyerFee = Math.round(bid * 0.075);
+  const taxAmt = Math.round(bid * (taxRate / 100));
+  const totalCost = bid + buyerFee + taxAmt + titleFee + repair;
+  const profit = Math.round(resale - totalCost);
+  return { bid, buyerFee, taxAmt, titleFee, repair, totalCost, profit, resale };
+}
+
 export default function VehicleDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -12,7 +29,8 @@ export default function VehicleDetail() {
   const [car, setCar] = useState(null);
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [lightbox, setLightbox] = useState(null); // index of open image
+  const [margin, setMargin] = useState(15);
+  const [lightbox, setLightbox] = useState(null);
 
   const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
 
@@ -48,11 +66,15 @@ export default function VehicleDetail() {
   }, [lightbox, images.length]);
 
   if (loading)
-    return <div className="flex justify-center items-center h-screen text-gray-500">Loading…</div>;
+    return (
+      <div className="flex justify-center items-center h-screen" style={{ background: "#f3f4f6" }}>
+        <p className="text-gray-500">Loading…</p>
+      </div>
+    );
 
   if (!car)
     return (
-      <div className="flex flex-col items-center justify-center h-screen gap-4">
+      <div className="flex flex-col items-center justify-center h-screen gap-4" style={{ background: "#f3f4f6" }}>
         <p className="text-gray-500">Vehicle not found.</p>
         <button onClick={() => navigate("/")} className="text-blue-600 underline">
           Back to Dashboard
@@ -60,11 +82,12 @@ export default function VehicleDetail() {
       </div>
     );
 
-  const repairCost = Number(car.repair_estimate || car.ai_repair_estimate || 0);
-  const resaleVal = Number(car.resale_estimate || car.ai_resale_estimate || 0);
+  const { bid, buyerFee, taxAmt, titleFee, repair, totalCost, profit, resale } = calcMaxBid(car, margin);
+  const odometer = Number(car.odometer);
 
   return (
-    <div className="min-h-screen bg-gray-100" style={{ background: "#f3f4f6" }}>
+    <div className="min-h-screen" style={{ background: "#f3f4f6" }}>
+
       {/* Header bar */}
       <div className="bg-white border-b px-6 py-4 flex items-center gap-4 sticky top-0 z-10 shadow-sm">
         <button
@@ -80,66 +103,121 @@ export default function VehicleDetail() {
         </h1>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
 
-        {/* Vehicle Info */}
-        <div className="bg-white rounded-2xl shadow p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-3">
+        {/* ── PHOTO STRIP ─────────────────────────────────────── */}
+        {images.length > 0 && (
+          <div className="bg-white rounded-2xl shadow p-4">
+            <p className="text-sm font-medium text-gray-500 mb-3">Photos ({images.length})</p>
+            <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
+              {images.map((src, i) => (
+                <div
+                  key={i}
+                  className="flex-shrink-0 w-56 h-40 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:opacity-90 hover:ring-2 hover:ring-blue-500 transition"
+                  onClick={() => setLightbox(i)}
+                >
+                  <img src={src} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── VEHICLE INFO + FINANCIALS ────────────────────────── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+          {/* Left — vehicle details */}
+          <div className="bg-white rounded-2xl shadow p-6 space-y-3">
             <h2 className="text-2xl font-bold text-gray-800">
               {car.year} {car.make} {car.model}
             </h2>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm text-gray-600">
-              {car.lot_number && <><span className="font-medium text-gray-800">Lot #</span><span>{car.lot_number}</span></>}
-              {car.vin && <><span className="font-medium text-gray-800">VIN</span><span className="font-mono text-xs">{car.vin}</span></>}
-              {car.sale_name && <><span className="font-medium text-gray-800">Location</span><span>{car.sale_name}</span></>}
-              {car.sale_date && <><span className="font-medium text-gray-800">Sale Date</span><span>{new Date(car.sale_date).toLocaleDateString()}</span></>}
-              {car.odometer && <><span className="font-medium text-gray-800">Odometer</span><span>{Number(car.odometer).toLocaleString()} mi</span></>}
-              {car.title_code && <><span className="font-medium text-gray-800">Title</span><span>{car.title_code}</span></>}
-              {car.engine_type && <><span className="font-medium text-gray-800">Engine</span><span>{car.engine_type}</span></>}
-              {car.damage_description && <><span className="font-medium text-gray-800">Damage</span><span>{car.damage_description}</span></>}
-            </div>
-          </div>
-
-          {/* Financials */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-orange-50 rounded-xl p-4 text-center">
-                <div className="flex items-center justify-center gap-1 text-orange-600 mb-1">
-                  <Wrench size={16} />
-                  <span className="text-sm font-medium">Est. Repair</span>
-                </div>
-                <p className="text-2xl font-bold text-orange-700">
-                  ${repairCost.toLocaleString()}
-                </p>
-              </div>
-              <div className="bg-green-50 rounded-xl p-4 text-center">
-                <div className="flex items-center justify-center gap-1 text-green-600 mb-1">
-                  <DollarSign size={16} />
-                  <span className="text-sm font-medium">Est. Resale</span>
-                </div>
-                <p className="text-2xl font-bold text-green-700">
-                  ${resaleVal.toLocaleString()}
-                </p>
-              </div>
-            </div>
-            <div className="bg-blue-50 rounded-xl p-4 text-center">
-              <p className="text-sm font-medium text-blue-600 mb-1">Max Bid (15% margin)</p>
-              <p className="text-3xl font-bold text-blue-700">${car.maxBid?.toLocaleString() ?? "—"}</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-gray-600">
+              {car.lot_number && <><span className="font-semibold text-gray-800">Lot #</span><span>{car.lot_number}</span></>}
+              {car.vin && <><span className="font-semibold text-gray-800">VIN</span><span className="font-mono text-xs break-all">{car.vin}</span></>}
+              {car.sale_name && <><span className="font-semibold text-gray-800">Location</span><span>{car.sale_name}</span></>}
+              {car.sale_date && <><span className="font-semibold text-gray-800">Sale Date</span><span>{new Date(car.sale_date).toLocaleDateString()}</span></>}
+              {!isNaN(odometer) && odometer > 0 && <><span className="font-semibold text-gray-800">Odometer</span><span>{odometer.toLocaleString()} mi</span></>}
+              {car.title_code && <><span className="font-semibold text-gray-800">Title</span><span>{car.title_code}</span></>}
+              {car.engine_type && <><span className="font-semibold text-gray-800">Engine</span><span>{car.engine_type}</span></>}
+              {car.damage_description && <><span className="font-semibold text-gray-800">Damage</span><span>{car.damage_description}</span></>}
             </div>
             {car.lot_url && (
               <a
                 href={car.lot_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block text-center bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium"
+                className="inline-block mt-2 text-center bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition text-sm font-medium"
               >
                 View on Copart →
               </a>
             )}
           </div>
+
+          {/* Right — financials */}
+          <div className="bg-white rounded-2xl shadow p-6 space-y-4">
+
+            {/* Repair / Resale */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-orange-50 rounded-xl p-4 text-center">
+                <div className="flex items-center justify-center gap-1 text-orange-600 mb-1">
+                  <Wrench size={15} />
+                  <span className="text-xs font-semibold uppercase tracking-wide">Est. Repair</span>
+                </div>
+                <p className="text-2xl font-bold text-orange-700">${repair.toLocaleString()}</p>
+              </div>
+              <div className="bg-green-50 rounded-xl p-4 text-center">
+                <div className="flex items-center justify-center gap-1 text-green-600 mb-1">
+                  <DollarSign size={15} />
+                  <span className="text-xs font-semibold uppercase tracking-wide">Est. Resale</span>
+                </div>
+                <p className="text-2xl font-bold text-green-700">${resale.toLocaleString()}</p>
+              </div>
+            </div>
+
+            {/* Margin slider */}
+            <div className="space-y-1">
+              <div className="flex justify-between items-center text-sm">
+                <span className="font-semibold text-gray-700">Desired Margin</span>
+                <span className="font-bold text-blue-600">{margin}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={40}
+                value={margin}
+                onChange={(e) => setMargin(Number(e.target.value))}
+                className="w-full accent-blue-600"
+              />
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>0%</span><span>40%</span>
+              </div>
+            </div>
+
+            {/* Max Bid */}
+            <div className="bg-blue-50 rounded-xl p-4 text-center">
+              <p className="text-xs font-semibold text-blue-500 uppercase tracking-wide mb-1">
+                Max Bid ({margin}% margin)
+              </p>
+              <p className="text-4xl font-extrabold text-blue-700">${bid.toLocaleString()}</p>
+            </div>
+
+            {/* Cost breakdown */}
+            <div className="text-xs text-gray-500 space-y-0.5 border-t pt-3">
+              <div className="flex justify-between"><span>Buyer Fee (7.5%)</span><span>${buyerFee.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span>Tax</span><span>${taxAmt.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span>Title Fee</span><span>${titleFee.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span>Repairs</span><span>${repair.toLocaleString()}</span></div>
+              <div className="flex justify-between font-semibold text-gray-700 border-t mt-1 pt-1">
+                <span>Total Cost</span><span>${totalCost.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between font-semibold text-green-700">
+                <span>Profit</span><span>${profit.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* AI Details */}
+        {/* ── AI DETAILS ───────────────────────────────────────── */}
         {(car.repair_details || car.resale_details) && (
           <div className="bg-white rounded-2xl shadow p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             {car.repair_details && (
@@ -156,41 +234,14 @@ export default function VehicleDetail() {
             )}
           </div>
         )}
-
-        {/* Photo Gallery */}
-        <div className="bg-white rounded-2xl shadow p-6">
-          <h3 className="font-semibold text-gray-800 mb-4">
-            Photos ({images.length})
-          </h3>
-          {images.length === 0 ? (
-            <p className="text-gray-400 text-sm">No photos available yet.</p>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {images.map((src, i) => (
-                <div
-                  key={i}
-                  className="aspect-video bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition hover:ring-2 hover:ring-blue-500"
-                  onClick={() => setLightbox(i)}
-                >
-                  <img
-                    src={src}
-                    alt={`Photo ${i + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* Lightbox */}
+      {/* ── LIGHTBOX ─────────────────────────────────────────── */}
       {lightbox !== null && (
         <div
           className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
           onClick={() => setLightbox(null)}
         >
-          {/* Close */}
           <button
             className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
             onClick={() => setLightbox(null)}
@@ -198,7 +249,6 @@ export default function VehicleDetail() {
             <X size={32} />
           </button>
 
-          {/* Prev */}
           <button
             className="absolute left-4 text-white hover:text-gray-300 z-10 bg-black/40 rounded-full p-2"
             onClick={(e) => { e.stopPropagation(); setLightbox((lightbox - 1 + images.length) % images.length); }}
@@ -206,7 +256,6 @@ export default function VehicleDetail() {
             <ChevronLeft size={32} />
           </button>
 
-          {/* Image */}
           <img
             src={images[lightbox]}
             alt={`Photo ${lightbox + 1}`}
@@ -214,7 +263,6 @@ export default function VehicleDetail() {
             onClick={(e) => e.stopPropagation()}
           />
 
-          {/* Next */}
           <button
             className="absolute right-4 text-white hover:text-gray-300 z-10 bg-black/40 rounded-full p-2"
             onClick={(e) => { e.stopPropagation(); setLightbox((lightbox + 1) % images.length); }}
@@ -222,8 +270,7 @@ export default function VehicleDetail() {
             <ChevronRight size={32} />
           </button>
 
-          {/* Counter */}
-          <div className="absolute bottom-4 text-white text-sm">
+          <div className="absolute bottom-4 text-white text-sm bg-black/40 px-3 py-1 rounded-full">
             {lightbox + 1} / {images.length}
           </div>
         </div>

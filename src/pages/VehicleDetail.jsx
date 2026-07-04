@@ -233,6 +233,19 @@ export default function VehicleDetail() {
                 <p className="text-5xl font-extrabold text-blue-700">${bid.toLocaleString()}</p>
               </div>
 
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm font-medium text-gray-700">
+                  <span>Desired Margin</span>
+                  <span className="text-blue-600 font-bold">{margin}%</span>
+                </div>
+                <input
+                  type="range" min={0} max={40} value={margin}
+                  onChange={(e) => setMargin(Number(e.target.value))}
+                  className="w-full accent-blue-600"
+                />
+                <div className="flex justify-between text-xs text-gray-400"><span>0%</span><span>40%</span></div>
+              </div>
+
               {/* State selector */}
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700">Purchase State</label>
@@ -251,19 +264,6 @@ export default function VehicleDetail() {
                 {stateData && (
                   <p className="text-xs text-gray-400">{stateData.notes}</p>
                 )}
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between text-sm font-medium text-gray-700">
-                  <span>Desired Margin</span>
-                  <span className="text-blue-600 font-bold">{margin}%</span>
-                </div>
-                <input
-                  type="range" min={0} max={40} value={margin}
-                  onChange={(e) => setMargin(Number(e.target.value))}
-                  className="w-full accent-blue-600"
-                />
-                <div className="flex justify-between text-xs text-gray-400"><span>0%</span><span>40%</span></div>
               </div>
 
               <div className="text-sm text-gray-500 space-y-1 border-t pt-3">

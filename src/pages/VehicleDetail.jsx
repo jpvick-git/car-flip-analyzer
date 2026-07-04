@@ -30,6 +30,7 @@ export default function VehicleDetail() {
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [margin, setMargin] = useState(15);
+  const [activePhoto, setActivePhoto] = useState(0);
   const [lightbox, setLightbox] = useState(null);
 
   const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
@@ -105,18 +106,54 @@ export default function VehicleDetail() {
 
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
 
-        {/* ── PHOTO STRIP ─────────────────────────────────────── */}
+        {/* ── PHOTO GALLERY ────────────────────────────────────── */}
         {images.length > 0 && (
-          <div className="bg-white rounded-2xl shadow p-4">
-            <p className="text-sm font-medium text-gray-500 mb-3">Photos ({images.length})</p>
-            <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
+          <div className="bg-white rounded-2xl shadow overflow-hidden">
+            {/* Main photo */}
+            <div
+              className="relative w-full bg-black cursor-zoom-in"
+              style={{ height: "420px" }}
+              onClick={() => setLightbox(activePhoto)}
+            >
+              <img
+                src={images[activePhoto]}
+                alt={`Photo ${activePhoto + 1}`}
+                className="w-full h-full object-contain"
+              />
+              {/* Counter badge */}
+              <div className="absolute bottom-3 right-3 bg-black/60 text-white text-sm px-3 py-1 rounded-full flex items-center gap-1">
+                <span>🖼</span>
+                <span>{activePhoto + 1}/{images.length}</span>
+              </div>
+              {/* Prev/Next on main image */}
+              {images.length > 1 && (
+                <>
+                  <button
+                    className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition"
+                    onClick={(e) => { e.stopPropagation(); setActivePhoto((activePhoto - 1 + images.length) % images.length); }}
+                  >
+                    <ChevronLeft size={24} />
+                  </button>
+                  <button
+                    className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition"
+                    onClick={(e) => { e.stopPropagation(); setActivePhoto((activePhoto + 1) % images.length); }}
+                  >
+                    <ChevronRight size={24} />
+                  </button>
+                </>
+              )}
+            </div>
+            {/* Thumbnail strip */}
+            <div className="flex gap-2 overflow-x-auto p-3 bg-gray-50" style={{ scrollbarWidth: "thin" }}>
               {images.map((src, i) => (
                 <div
                   key={i}
-                  className="flex-shrink-0 w-56 h-40 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:opacity-90 hover:ring-2 hover:ring-blue-500 transition"
-                  onClick={() => setLightbox(i)}
+                  onClick={() => setActivePhoto(i)}
+                  className={`flex-shrink-0 w-24 h-16 rounded-lg overflow-hidden cursor-pointer transition border-2 ${
+                    i === activePhoto ? "border-blue-500 opacity-100" : "border-transparent opacity-60 hover:opacity-90"
+                  }`}
                 >
-                  <img src={src} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                  <img src={src} alt={`Thumb ${i + 1}`} className="w-full h-full object-cover" />
                 </div>
               ))}
             </div>

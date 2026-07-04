@@ -5,8 +5,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from sqlalchemy import text
+from passlib.context import CryptContext
 from db import engine
-from auth import hash_password
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password[:72])
 
 DEMO_EMAIL = os.getenv("DEMO_EMAIL", "demo@carflipanalyzer.com")
 DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "DemoView2026!")

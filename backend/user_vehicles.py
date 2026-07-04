@@ -63,6 +63,21 @@ async def upload_user_file(file: UploadFile = File(...), current_user: dict = De
         raise HTTPException(status_code=500, detail=str(e))
 
 # --------------------------------------------------------------
+# GET SINGLE VEHICLE
+# --------------------------------------------------------------
+@router.get("/vehicle/{vehicle_id}")
+def get_vehicle(vehicle_id: int, current_user: dict = Depends(get_current_user)):
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
+            {"id": vehicle_id, "uid": current_user["id"]}
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    return dict(row._mapping)
+
+
+# --------------------------------------------------------------
 # GET ALL IMAGES FOR A VEHICLE
 # --------------------------------------------------------------
 @router.get("/vehicle/{vehicle_id}/images")

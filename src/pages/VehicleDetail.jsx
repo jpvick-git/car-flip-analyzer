@@ -19,20 +19,15 @@ export default function VehicleDetail() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [vehiclesRes, imagesRes] = await Promise.all([
-          axios.get(`${API}/api/get_vehicles`, { headers }),
+        const [carRes, imagesRes] = await Promise.all([
+          axios.get(`${API}/api/vehicle/${id}`, { headers }),
           axios.get(`${API}/api/vehicle/${id}/images`, { headers }),
         ]);
-
-        const list = Array.isArray(vehiclesRes.data)
-          ? vehiclesRes.data
-          : vehiclesRes.data.vehicles || [];
-
-        const found = list.find((v) => String(v.id) === String(id));
-        setCar(found || null);
+        setCar(carRes.data);
         setImages(imagesRes.data.images || []);
       } catch (err) {
         console.error(err);
+        setCar(null);
       } finally {
         setLoading(false);
       }

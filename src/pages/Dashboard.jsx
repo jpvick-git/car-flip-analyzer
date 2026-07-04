@@ -1,7 +1,19 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { Wrench, DollarSign } from "lucide-react";
+import {
+  Wrench,
+  DollarSign,
+  X,
+  MapPin,
+  Calendar,
+  Hash,
+  ArrowRight,
+  TrendingUp,
+  TrendingDown,
+  ExternalLink,
+  Car,
+} from "lucide-react";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 //  ADD VEHICLE MODAL (ManualVehicleModal)
@@ -130,20 +142,25 @@ function ManualVehicleModal({ API, close, reload }) {
     }
   };
 
+  const fieldClass =
+    "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:bg-slate-50 disabled:text-slate-400";
+  const summaryClass =
+    "cursor-pointer select-none pb-3 text-xs font-semibold uppercase tracking-wider text-slate-500";
+
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl text-black max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-semibold mb-4">Add Vehicle</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 text-slate-900 shadow-2xl">
+        <h2 className="mb-5 text-xl font-bold tracking-tight text-slate-900">Add Vehicle</h2>
 
         {/* SECTIONS */}
-        <details className="mb-4" open>
-          <summary className="font-semibold pb-2">Vehicle Info</summary>
+        <details className="mb-4 border-b border-slate-100 pb-4" open>
+          <summary className={summaryClass}>Vehicle Info</summary>
 
           <select
             name="year"
             value={form.year}
             onChange={update}
-            className="w-full border rounded-lg p-2 mb-3"
+            className={`mb-3 ${fieldClass}`}
           >
             <option value="">Select Year</option>
             {years.map((y) => (
@@ -158,7 +175,7 @@ function ManualVehicleModal({ API, close, reload }) {
             value={form.make}
             onChange={update}
             disabled={!makes.length}
-            className="w-full border rounded-lg p-2 mb-3"
+            className={`mb-3 ${fieldClass}`}
           >
             <option value="">Select Make</option>
             {makes.map((m) => (
@@ -173,7 +190,7 @@ function ManualVehicleModal({ API, close, reload }) {
             value={form.model}
             onChange={update}
             disabled={!models.length}
-            className="w-full border rounded-lg p-2 mb-3"
+            className={`mb-3 ${fieldClass}`}
           >
             <option value="">Select Model</option>
             {models.map((m) => (
@@ -188,7 +205,7 @@ function ManualVehicleModal({ API, close, reload }) {
             value={form.trim}
             onChange={update}
             disabled={!trims.length}
-            className="w-full border rounded-lg p-2 mb-3"
+            className={fieldClass}
           >
             <option value="">Select Trim</option>
             {trims.map((t, i) => (
@@ -199,8 +216,8 @@ function ManualVehicleModal({ API, close, reload }) {
           </select>
         </details>
 
-        <details className="mb-4" open>
-          <summary className="font-semibold pb-2">Vehicle Details</summary>
+        <details className="mb-4 border-b border-slate-100 pb-4" open>
+          <summary className={summaryClass}>Vehicle Details</summary>
 
           {[
             ["mileage", "Mileage"],
@@ -217,14 +234,14 @@ function ManualVehicleModal({ API, close, reload }) {
               name={key}
               value={form[key]}
               onChange={update}
-              className="w-full border rounded-lg p-2 mb-3"
+              className={`mb-3 ${fieldClass}`}
               placeholder={label}
             />
           ))}
         </details>
 
-        <details className="mb-4" open>
-          <summary className="font-semibold pb-2">Photos</summary>
+        <details className="mb-5" open>
+          <summary className={summaryClass}>Photos</summary>
           {[
             ["front_image", "Front"],
             ["driver_image", "Driver Side"],
@@ -234,25 +251,28 @@ function ManualVehicleModal({ API, close, reload }) {
             ["dash_image", "Dash"],
           ].map(([key, label]) => (
             <div key={key} className="mb-3">
-              <label className="font-medium">{label}</label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">{label}</label>
               <input
                 type="file"
                 accept="image/*"
                 onChange={(e) =>
                   setImages({ ...images, [key]: e.target.files[0] })
                 }
-                className="w-full border p-2 rounded"
+                className="w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-slate-800"
               />
             </div>
           ))}
         </details>
 
         <div className="flex justify-end gap-2">
-          <button className="px-4 py-2 bg-gray-300 rounded" onClick={close}>
+          <button
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            onClick={close}
+          >
             Cancel
           </button>
           <button
-            className="px-4 py-2 bg-green-600 text-white rounded"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
             onClick={submit}
           >
             Save
@@ -277,26 +297,27 @@ function CSVUploadModal({
   if (!showCSVModal) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white p-6 rounded-xl w-full max-w-md text-black shadow-xl">
-        <h2 className="text-xl font-semibold mb-4">Upload CSV</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 text-slate-900 shadow-2xl">
+        <h2 className="mb-1 text-xl font-bold tracking-tight text-slate-900">Upload CSV</h2>
+        <p className="mb-5 text-sm text-slate-500">Import a batch of vehicles from a Copart export.</p>
 
         <input
           type="file"
           accept=".csv"
           onChange={(e) => setUploadFile(e.target.files[0])}
-          className="w-full border p-2 rounded mb-4"
+          className="mb-5 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-slate-800"
         />
 
         <div className="flex justify-end gap-2">
           <button
-            className="px-4 py-2 bg-gray-300 rounded"
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             onClick={() => setShowCSVModal(false)}
           >
             Cancel
           </button>
           <button
-            className="px-4 py-2 bg-blue-600 text-white rounded"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
             onClick={uploadUserFile}
           >
             Upload
@@ -453,24 +474,30 @@ export default function Dashboard({
 
   if (loading)
     return (
-      <div className="flex justify-center items-center h-screen">
-        Loading…
+      <div className="flex h-screen items-center justify-center bg-slate-100">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
+          <p className="text-sm font-medium text-slate-500">Loading vehicles…</p>
+        </div>
       </div>
     );
 
   if (error)
     return (
-      <div className="flex justify-center items-center h-screen text-red-600">
-        {error}
+      <div className="flex h-screen flex-col items-center justify-center gap-2 bg-slate-100 px-6 text-center">
+        <p className="text-lg font-semibold text-slate-700">Something went wrong</p>
+        <p className="text-sm text-red-600">{error}</p>
       </div>
     );
 
+  const visibleCars = downloading ? cars.filter((car) => car.image_url) : cars;
+
   return (
-    <main className="p-6 bg-gray-50 min-h-screen">
+    <main className="min-h-screen bg-slate-100">
 
       {downloading && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 text-sm font-medium">
-          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+        <div className="fixed top-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-blue-600 px-6 py-3 text-sm font-medium text-white shadow-lg">
+          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
           </svg>
@@ -496,84 +523,126 @@ export default function Dashboard({
         uploadUserFile={uploadUserFile}
       />
 
-      {/* GRID */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {(downloading ? cars.filter((car) => car.image_url) : cars).map((car) => (
-          <div
-            key={car.id}
-            className="bg-white border rounded-xl shadow hover:shadow-lg transition"
-          >
-            <div className="relative">
-              <img
-                src={car.image_url || "https://placehold.co/400x250?text=No+Image"}
-                className="w-full h-56 object-cover"
-                alt=""
-              />
-              <div className="absolute top-3 left-3 bg-blue-600 text-white text-xs px-3 py-1 rounded-full">
-                {car.damage_description || "Unknown Damage"}
-              </div>
-            </div>
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
 
-            <div className="p-4 space-y-2">
-              <h2 className="text-lg font-semibold">
-                {car.year} {car.make} {car.model}
-              </h2>
-
-              <p className="text-sm text-gray-500">Lot #: {car.lot_number || "Manual"}</p>
-              <p className="text-sm text-gray-500">
-                Location: {car.sale_name || car.location || "N/A"}
-              </p>
-              <p className="text-sm text-gray-500">
-                Sale Date:{" "}
-                {car.sale_date
-                  ? new Date(car.sale_date).toLocaleDateString()
-                  : "N/A"}
-              </p>
-
-              {/* Repairs / Resale */}
-              <div className="flex items-center justify-between pt-2 border-t">
-                <div className="flex items-center space-x-1">
-                  <Wrench size={16} />
-                  <span>Repair:</span>
-                  <input
-                    type="number"
-                    value={car.repair_estimate || car.ai_repair_estimate || 0}
-                    onChange={(e) =>
-                      updateCarValue(car.id, "repair_estimate", Number(e.target.value))
-                    }
-                    className="w-20 border rounded px-2 py-1"
-                  />
-                </div>
-
-                <div className="flex items-center space-x-1">
-                  <DollarSign size={16} />
-                  <span>Resale:</span>
-                  <input
-                    type="number"
-                    value={car.resale_estimate || car.ai_resale_estimate || 0}
-                    onChange={(e) =>
-                      updateCarValue(car.id, "resale_estimate", Number(e.target.value))
-                    }
-                    className="w-20 border rounded px-2 py-1"
-                  />
-                </div>
-              </div>
-
-              {/* Max Bid */}
-              <div className="mt-2">
-                <span className="font-medium">Max Bid:</span>{" "}
-                ${car.max_bid?.toLocaleString()}
-              </div>
-
-              <button
-                className="mt-4 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"
-                onClick={() => navigate(`/vehicle/${car.id}`)}
-              >
-                View Details
-              </button>
-            </div>
+        {/* PAGE HEADER */}
+        <div className="mb-6 flex items-end justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Vehicle Inventory</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {cars.length} {cars.length === 1 ? "vehicle" : "vehicles"} in your pipeline
+            </p>
           </div>
-        ))}
+        </div>
+
+        {/* GRID */}
+        {visibleCars.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white py-20 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+              <Car size={22} />
+            </div>
+            <p className="text-base font-semibold text-slate-700">No vehicles yet</p>
+            <p className="mt-1 text-sm text-slate-500">Add a vehicle or upload a CSV to get started.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {visibleCars.map((car) => (
+              <div
+                key={car.id}
+                className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <div className="relative">
+                  <img
+                    src={car.image_url || "https://placehold.co/400x250?text=No+Image"}
+                    className="h-52 w-full object-cover"
+                    alt=""
+                  />
+                  <span className="absolute left-3 top-3 rounded-full bg-black/70 px-3 py-1 text-xs font-medium text-white backdrop-blur">
+                    {car.damage_description || "Unknown Damage"}
+                  </span>
+                </div>
+
+                <div className="flex flex-1 flex-col p-5">
+                  <h2 className="text-lg font-bold tracking-tight text-slate-900">
+                    {car.year} {car.make} {car.model}
+                  </h2>
+
+                  <div className="mt-2 space-y-1.5 text-sm text-slate-500">
+                    <p className="flex items-center gap-2">
+                      <Hash size={13} className="shrink-0 text-slate-400" />
+                      Lot {car.lot_number || "Manual"}
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <MapPin size={13} className="shrink-0 text-slate-400" />
+                      {car.sale_name || car.location || "N/A"}
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <Calendar size={13} className="shrink-0 text-slate-400" />
+                      {car.sale_date
+                        ? new Date(car.sale_date).toLocaleDateString()
+                        : "N/A"}
+                    </p>
+                  </div>
+
+                  {/* Repairs / Resale */}
+                  <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
+                    <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
+                      <div className="mb-1 flex items-center gap-1.5 text-amber-600">
+                        <Wrench size={13} />
+                        <span className="text-[11px] font-semibold uppercase tracking-wide">Repair</span>
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        <span className="text-sm font-bold text-amber-700">$</span>
+                        <input
+                          type="number"
+                          value={car.repair_estimate || car.ai_repair_estimate || 0}
+                          onChange={(e) =>
+                            updateCarValue(car.id, "repair_estimate", Number(e.target.value))
+                          }
+                          className="w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-amber-700 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                      <div className="mb-1 flex items-center gap-1.5 text-emerald-600">
+                        <DollarSign size={13} />
+                        <span className="text-[11px] font-semibold uppercase tracking-wide">Resale</span>
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        <span className="text-sm font-bold text-emerald-700">$</span>
+                        <input
+                          type="number"
+                          value={car.resale_estimate || car.ai_resale_estimate || 0}
+                          onChange={(e) =>
+                            updateCarValue(car.id, "resale_estimate", Number(e.target.value))
+                          }
+                          className="w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-emerald-700 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Max Bid */}
+                  <div className="mt-3 flex items-baseline justify-between rounded-xl bg-blue-50 px-4 py-3">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-blue-600">Max Bid</span>
+                    <span className="text-2xl font-extrabold tabular-nums text-blue-700">
+                      ${car.max_bid?.toLocaleString()}
+                    </span>
+                  </div>
+
+                  <button
+                    className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 active:scale-[0.99]"
+                    onClick={() => navigate(`/vehicle/${car.id}`)}
+                  >
+                    View Details
+                    <ArrowRight size={15} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
 {/* DETAILS MODAL */}
@@ -582,80 +651,92 @@ export default function Dashboard({
     cars.find((c) => c.id === selectedCar.id) || selectedCar;
 
   const live = calculateCarWithMargin(activeCar, tempMargin);
+  const profitPositive = live.profit >= 0;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl relative text-black overflow-y-auto max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+      <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 text-slate-900 shadow-2xl">
         <button
           onClick={() => setSelectedCar(null)}
-          className="absolute top-3 right-3 text-2xl text-gray-600 hover:text-black"
+          aria-label="Close"
+          className="absolute right-4 top-4 rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
         >
-          ✕
+          <X size={20} />
         </button>
 
-        <h2 className="text-xl font-semibold mb-2">
+        <h2 className="pr-8 text-xl font-bold tracking-tight text-slate-900">
           {activeCar.year} {activeCar.make} {activeCar.model}
         </h2>
 
-        <p className="text-gray-700 mb-1">
-          <strong>Lot:</strong> {activeCar.lot_number || "Manual"}
-        </p>
-
-        <p className="text-gray-700 mb-1">
-          <strong>Location:</strong>{" "}
-          {activeCar.sale_name || activeCar.location || "N/A"}
-        </p>
-
-        <hr className="my-3" />
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
+          <span className="flex items-center gap-1.5">
+            <Hash size={13} className="text-slate-400" />
+            Lot {activeCar.lot_number || "Manual"}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <MapPin size={13} className="text-slate-400" />
+            {activeCar.sale_name || activeCar.location || "N/A"}
+          </span>
+        </div>
 
         {/* REPAIR & RESALE */}
-        <div className="flex justify-between mb-3">
-          <div className="flex items-center space-x-1">
-            <Wrench size={16} />
-            <span>Repair:</span>
-            <input
-              type="number"
-              value={
-                activeCar.repair_estimate ||
-                activeCar.ai_repair_estimate ||
-                0
-              }
-              onChange={(e) =>
-                updateCarValue(
-                  activeCar.id,
-                  "repair_estimate",
-                  Number(e.target.value)
-                )
-              }
-              className="w-24 border rounded px-2 py-1"
-            />
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
+            <div className="mb-1 flex items-center gap-1.5 text-amber-600">
+              <Wrench size={13} />
+              <span className="text-[11px] font-semibold uppercase tracking-wide">Repair</span>
+            </div>
+            <div className="flex items-center gap-0.5">
+              <span className="text-sm font-bold text-amber-700">$</span>
+              <input
+                type="number"
+                value={
+                  activeCar.repair_estimate ||
+                  activeCar.ai_repair_estimate ||
+                  0
+                }
+                onChange={(e) =>
+                  updateCarValue(
+                    activeCar.id,
+                    "repair_estimate",
+                    Number(e.target.value)
+                  )
+                }
+                className="w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-amber-700 focus:outline-none"
+              />
+            </div>
           </div>
 
-          <div className="flex items-center space-x-1">
-            <DollarSign size={16} />
-            <span>Resale:</span>
-            <input
-              type="number"
-              value={
-                activeCar.resale_estimate ||
-                activeCar.ai_resale_estimate ||
-                0
-              }
-              onChange={(e) =>
-                updateCarValue(
-                  activeCar.id,
-                  "resale_estimate",
-                  Number(e.target.value)
-                )
-              }
-              className="w-24 border rounded px-2 py-1"
-            />
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+            <div className="mb-1 flex items-center gap-1.5 text-emerald-600">
+              <DollarSign size={13} />
+              <span className="text-[11px] font-semibold uppercase tracking-wide">Resale</span>
+            </div>
+            <div className="flex items-center gap-0.5">
+              <span className="text-sm font-bold text-emerald-700">$</span>
+              <input
+                type="number"
+                value={
+                  activeCar.resale_estimate ||
+                  activeCar.ai_resale_estimate ||
+                  0
+                }
+                onChange={(e) =>
+                  updateCarValue(
+                    activeCar.id,
+                    "resale_estimate",
+                    Number(e.target.value)
+                  )
+                }
+                className="w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-emerald-700 focus:outline-none"
+              />
+            </div>
           </div>
         </div>
 
         {/* MARGIN */}
-        <div className="flex items-center space-x-2 mb-3">
-          <span className="font-medium">Desired Margin:</span>
+        <div className="mt-4 flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-700">Desired Margin:</span>
           <input
             type="number"
             value={tempMargin}
@@ -666,64 +747,90 @@ export default function Dashboard({
               if (val > 90) val = 90;
               setTempMargin(val);
             }}
-            className="w-20 border rounded px-2 py-1"
+            className="w-20 rounded-lg border border-slate-300 px-3 py-1.5 text-sm tabular-nums focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
           />
-          <span>%</span>
+          <span className="text-sm text-slate-500">%</span>
         </div>
 
         {/* CALCULATED VALUES */}
-        <div className="text-lg font-bold mb-2">
-          Max Bid: ${live.max_bid.toLocaleString()}
+        <div className="mt-4 rounded-xl bg-slate-50 p-4">
+          <div className="mb-3 flex items-baseline justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-blue-600">Max Bid</span>
+            <span className="text-3xl font-extrabold tabular-nums text-slate-900">
+              ${live.max_bid.toLocaleString()}
+            </span>
+          </div>
+
+          <div className="space-y-1.5 border-t border-slate-200 pt-3 text-sm text-slate-500">
+            <div className="flex justify-between">
+              <span>Buyer Fee (7.5%)</span>
+              <span className="tabular-nums text-slate-700">${live.buyer_fee.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Tax ({activeCar.avg_tax_rate}%)</span>
+              <span className="tabular-nums text-slate-700">${live.tax_amount_calc.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Title Fee</span>
+              <span className="tabular-nums text-slate-700">${Number(activeCar.title_fee).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Repairs</span>
+              <span className="tabular-nums text-slate-700">${Number(activeCar.repair_estimate || 0).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between border-t border-slate-200 pt-2 font-semibold text-slate-900">
+              <span>Total Cost</span>
+              <span className="tabular-nums">${live.total_cost.toLocaleString()}</span>
+            </div>
+          </div>
         </div>
 
-        <div className="text-sm text-gray-700 space-y-1">
-          <p>Buyer Fee (7.5%): ${live.buyer_fee.toLocaleString()}</p>
-          <p>
-            Tax ({activeCar.avg_tax_rate}%): $
-            {live.tax_amount_calc.toLocaleString()}
-          </p>
-          <p>Title Fee: ${Number(activeCar.title_fee).toLocaleString()}</p>
-          <p>
-            Repairs: $
-            {Number(activeCar.repair_estimate || 0).toLocaleString()}
-          </p>
+        {/* PROFIT / MARGIN */}
+        <div
+          className={`mt-3 flex items-center justify-between rounded-xl border px-4 py-3 ${
+            profitPositive ? "border-emerald-100 bg-emerald-50" : "border-red-100 bg-red-50"
+          }`}
+        >
+          <span className={`flex items-center gap-1.5 text-sm font-semibold ${profitPositive ? "text-emerald-700" : "text-red-700"}`}>
+            {profitPositive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+            Profit
+          </span>
+          <span className={`text-lg font-bold tabular-nums ${profitPositive ? "text-emerald-700" : "text-red-700"}`}>
+            ${live.profit.toLocaleString()}
+            <span className="ml-2 text-xs font-medium text-slate-400">({live.margin_actual}%)</span>
+          </span>
         </div>
 
-        <hr className="my-3" />
+        {/* DESCRIPTIONS */}
+        <div className="mt-5 space-y-4">
+          <div>
+            <p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <Wrench size={13} className="text-amber-500" /> Repair Details
+            </p>
+            <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">
+              {activeCar.repair_details || "No repair details available."}
+            </p>
+          </div>
 
-        <p>
-          <strong>Total Cost:</strong> ${live.total_cost.toLocaleString()}
-        </p>
-        <p>
-          <strong>Profit:</strong> ${live.profit.toLocaleString()}
-        </p>
-        <p>
-          <strong>Margin:</strong> {live.margin_actual}%
-        </p>
-
-        <hr className="my-3" />
-
-        {/* FIXED DESCRIPTION SECTION */}
-        <div>
-          <p className="font-semibold mb-1">Repair Details:</p>
-          <p className="text-sm text-gray-700 whitespace-pre-line mb-3">
-            {activeCar.repair_details || "No repair details available."}
-          </p>
-
-          <p className="font-semibold mb-1">Resale Details:</p>
-          <p className="text-sm text-gray-700 whitespace-pre-line">
-            {activeCar.resale_details || "No resale details available."}
-          </p>
+          <div>
+            <p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <DollarSign size={13} className="text-emerald-500" /> Resale Details
+            </p>
+            <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">
+              {activeCar.resale_details || "No resale details available."}
+            </p>
+          </div>
         </div>
 
         {activeCar.listing_url && (
           <a
             href={activeCar.listing_url}
-            className="text-blue-600 underline mt-4 inline-block"
+            className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700"
             target="_blank"
             rel="noopener noreferrer"
           >
-            Open Listing →
+            Open Listing
+            <ExternalLink size={14} />
           </a>
         )}
       </div>

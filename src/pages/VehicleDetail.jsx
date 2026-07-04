@@ -54,7 +54,6 @@ export default function VehicleDetail() {
     fetchData();
   }, [id]);
 
-  // Keyboard navigation for lightbox
   useEffect(() => {
     if (lightbox === null) return;
     const handler = (e) => {
@@ -77,195 +76,202 @@ export default function VehicleDetail() {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4" style={{ background: "#f3f4f6" }}>
         <p className="text-gray-500">Vehicle not found.</p>
-        <button onClick={() => navigate("/")} className="text-blue-600 underline">
-          Back to Dashboard
-        </button>
+        <button onClick={() => navigate("/")} className="text-blue-600 underline">Back to Dashboard</button>
       </div>
     );
 
   const { bid, buyerFee, taxAmt, titleFee, repair, totalCost, profit, resale } = calcMaxBid(car, margin);
   const odometer = Number(car.odometer);
 
+  const details = [
+    car.vin          && ["VIN",         car.vin],
+    car.lot_number   && ["Lot #",        car.lot_number],
+    car.title_code   && ["Title",        car.title_code],
+    !isNaN(odometer) && odometer > 0 && ["Odometer", `${odometer.toLocaleString()} mi`],
+    car.engine_type  && ["Engine",       car.engine_type],
+    car.transmission && ["Transmission", car.transmission],
+    car.fuel_type    && ["Fuel",         car.fuel_type],
+    car.drive_train  && ["Drivetrain",   car.drive_train],
+    car.sale_name    && ["Location",     car.sale_name],
+    car.sale_date    && ["Sale Date",    new Date(car.sale_date).toLocaleDateString()],
+    car.damage_description && ["Damage", car.damage_description],
+  ].filter(Boolean);
+
   return (
     <div className="min-h-screen" style={{ background: "#f3f4f6" }}>
 
-      {/* Header bar */}
-      <div className="bg-white border-b px-6 py-4 flex items-center gap-4 sticky top-0 z-10 shadow-sm">
+      {/* ── TOP BAR ── */}
+      <div className="bg-white border-b px-6 py-3 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
         <button
           onClick={() => navigate("/")}
           className="flex items-center gap-2 text-gray-600 hover:text-black transition"
         >
-          <ArrowLeft size={20} />
-          <span className="font-medium">Back to Dashboard</span>
+          <ArrowLeft size={18} />
+          <span className="font-medium text-sm">Back to Dashboard</span>
         </button>
         <span className="text-gray-300">|</span>
-        <h1 className="text-lg font-semibold text-gray-800">
-          {car.year} {car.make} {car.model}
-        </h1>
+        <div>
+          <span className="font-bold text-gray-900">{car.year} {car.make} {car.model}</span>
+          {car.lot_number && <span className="ml-3 text-sm text-gray-500">Lot: {car.lot_number}</span>}
+          {car.sale_name  && <span className="ml-3 text-sm text-blue-600 font-medium">{car.sale_name}</span>}
+        </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 py-6">
 
-        {/* ── PHOTO GALLERY ────────────────────────────────────── */}
-        {images.length > 0 && (
-          <div className="bg-white rounded-2xl shadow overflow-hidden">
-            {/* Main photo */}
-            <div
-              className="relative w-full bg-black cursor-zoom-in"
-              style={{ height: "420px" }}
-              onClick={() => setLightbox(activePhoto)}
-            >
-              <img
-                src={images[activePhoto]}
-                alt={`Photo ${activePhoto + 1}`}
-                className="w-full h-full object-contain"
-              />
-              {/* Counter badge */}
-              <div className="absolute bottom-3 right-3 bg-black/60 text-white text-sm px-3 py-1 rounded-full flex items-center gap-1">
-                <span>🖼</span>
-                <span>{activePhoto + 1}/{images.length}</span>
-              </div>
-              {/* Prev/Next on main image */}
-              {images.length > 1 && (
-                <>
-                  <button
-                    className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition"
-                    onClick={(e) => { e.stopPropagation(); setActivePhoto((activePhoto - 1 + images.length) % images.length); }}
-                  >
-                    <ChevronLeft size={24} />
-                  </button>
-                  <button
-                    className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition"
-                    onClick={(e) => { e.stopPropagation(); setActivePhoto((activePhoto + 1) % images.length); }}
-                  >
-                    <ChevronRight size={24} />
-                  </button>
-                </>
-              )}
-            </div>
-            {/* Thumbnail strip */}
-            <div className="flex gap-2 overflow-x-auto p-3 bg-gray-50" style={{ scrollbarWidth: "thin" }}>
-              {images.map((src, i) => (
+        {/* ── MAIN ROW: Photo Left | Bid+Details Right ── */}
+        <div className="flex flex-col lg:flex-row gap-6">
+
+          {/* LEFT — Photo gallery */}
+          <div className="lg:w-[55%] space-y-2">
+            {images.length > 0 ? (
+              <>
+                {/* Main photo */}
                 <div
-                  key={i}
-                  onClick={() => setActivePhoto(i)}
-                  className={`flex-shrink-0 w-24 h-16 rounded-lg overflow-hidden cursor-pointer transition border-2 ${
-                    i === activePhoto ? "border-blue-500 opacity-100" : "border-transparent opacity-60 hover:opacity-90"
-                  }`}
+                  className="relative bg-black rounded-xl overflow-hidden cursor-zoom-in"
+                  style={{ height: "380px" }}
+                  onClick={() => setLightbox(activePhoto)}
                 >
-                  <img src={src} alt={`Thumb ${i + 1}`} className="w-full h-full object-cover" />
+                  <img
+                    src={images[activePhoto]}
+                    alt={`Photo ${activePhoto + 1}`}
+                    className="w-full h-full object-contain"
+                  />
+                  <div className="absolute bottom-3 right-3 bg-black/60 text-white text-xs px-2 py-1 rounded-full">
+                    🖼 {activePhoto + 1}/{images.length}
+                  </div>
+                  {images.length > 1 && (
+                    <>
+                      <button
+                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/75 text-white rounded-full p-1.5 transition"
+                        onClick={(e) => { e.stopPropagation(); setActivePhoto((activePhoto - 1 + images.length) % images.length); }}
+                      ><ChevronLeft size={20} /></button>
+                      <button
+                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/75 text-white rounded-full p-1.5 transition"
+                        onClick={(e) => { e.stopPropagation(); setActivePhoto((activePhoto + 1) % images.length); }}
+                      ><ChevronRight size={20} /></button>
+                    </>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── VEHICLE INFO + FINANCIALS ────────────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-          {/* Left — vehicle details */}
-          <div className="bg-white rounded-2xl shadow p-6 space-y-3">
-            <h2 className="text-2xl font-bold text-gray-800">
-              {car.year} {car.make} {car.model}
-            </h2>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-gray-600">
-              {car.lot_number && <><span className="font-semibold text-gray-800">Lot #</span><span>{car.lot_number}</span></>}
-              {car.vin && <><span className="font-semibold text-gray-800">VIN</span><span className="font-mono text-xs break-all">{car.vin}</span></>}
-              {car.sale_name && <><span className="font-semibold text-gray-800">Location</span><span>{car.sale_name}</span></>}
-              {car.sale_date && <><span className="font-semibold text-gray-800">Sale Date</span><span>{new Date(car.sale_date).toLocaleDateString()}</span></>}
-              {!isNaN(odometer) && odometer > 0 && <><span className="font-semibold text-gray-800">Odometer</span><span>{odometer.toLocaleString()} mi</span></>}
-              {car.title_code && <><span className="font-semibold text-gray-800">Title</span><span>{car.title_code}</span></>}
-              {car.engine_type && <><span className="font-semibold text-gray-800">Engine</span><span>{car.engine_type}</span></>}
-              {car.damage_description && <><span className="font-semibold text-gray-800">Damage</span><span>{car.damage_description}</span></>}
-            </div>
-            {car.lot_url && (
-              <a
-                href={car.lot_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block mt-2 text-center bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition text-sm font-medium"
-              >
-                View on Copart →
-              </a>
+                {/* Thumbnail grid */}
+                <div className="grid gap-1.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))" }}>
+                  {images.map((src, i) => (
+                    <div
+                      key={i}
+                      onClick={() => setActivePhoto(i)}
+                      className={`h-16 rounded-lg overflow-hidden cursor-pointer border-2 transition ${
+                        i === activePhoto ? "border-blue-500" : "border-transparent opacity-70 hover:opacity-100"
+                      }`}
+                    >
+                      <img src={src} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="bg-white rounded-xl h-64 flex items-center justify-center text-gray-400">
+                No photos available
+              </div>
             )}
           </div>
 
-          {/* Right — financials */}
-          <div className="bg-white rounded-2xl shadow p-6 space-y-4">
+          {/* RIGHT — Bid + Vehicle Details */}
+          <div className="lg:w-[45%] space-y-4">
 
             {/* Repair / Resale */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-orange-50 rounded-xl p-4 text-center">
-                <div className="flex items-center justify-center gap-1 text-orange-600 mb-1">
-                  <Wrench size={15} />
+              <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 text-center">
+                <div className="flex items-center justify-center gap-1 text-orange-500 mb-1">
+                  <Wrench size={14} />
                   <span className="text-xs font-semibold uppercase tracking-wide">Est. Repair</span>
                 </div>
                 <p className="text-2xl font-bold text-orange-700">${repair.toLocaleString()}</p>
               </div>
-              <div className="bg-green-50 rounded-xl p-4 text-center">
+              <div className="bg-green-50 border border-green-100 rounded-xl p-4 text-center">
                 <div className="flex items-center justify-center gap-1 text-green-600 mb-1">
-                  <DollarSign size={15} />
+                  <DollarSign size={14} />
                   <span className="text-xs font-semibold uppercase tracking-wide">Est. Resale</span>
                 </div>
                 <p className="text-2xl font-bold text-green-700">${resale.toLocaleString()}</p>
               </div>
             </div>
 
-            {/* Margin slider */}
-            <div className="space-y-1">
-              <div className="flex justify-between items-center text-sm">
-                <span className="font-semibold text-gray-700">Desired Margin</span>
-                <span className="font-bold text-blue-600">{margin}%</span>
+            {/* Max Bid + Margin */}
+            <div className="bg-white rounded-xl border p-5 space-y-4">
+              <div className="text-center">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Max Bid</p>
+                <p className="text-5xl font-extrabold text-blue-700">${bid.toLocaleString()}</p>
               </div>
-              <input
-                type="range"
-                min={0}
-                max={40}
-                value={margin}
-                onChange={(e) => setMargin(Number(e.target.value))}
-                className="w-full accent-blue-600"
-              />
-              <div className="flex justify-between text-xs text-gray-400">
-                <span>0%</span><span>40%</span>
+
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm font-medium text-gray-700">
+                  <span>Desired Margin</span>
+                  <span className="text-blue-600 font-bold">{margin}%</span>
+                </div>
+                <input
+                  type="range" min={0} max={40} value={margin}
+                  onChange={(e) => setMargin(Number(e.target.value))}
+                  className="w-full accent-blue-600"
+                />
+                <div className="flex justify-between text-xs text-gray-400"><span>0%</span><span>40%</span></div>
               </div>
+
+              <div className="text-sm text-gray-500 space-y-1 border-t pt-3">
+                <div className="flex justify-between"><span>Buyer Fee (7.5%)</span><span>${buyerFee.toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Tax</span><span>${taxAmt.toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Title Fee</span><span>${titleFee.toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Repairs</span><span>${repair.toLocaleString()}</span></div>
+                <div className="flex justify-between font-semibold text-gray-800 border-t pt-1 mt-1">
+                  <span>Total Cost</span><span>${totalCost.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-semibold text-green-700">
+                  <span>Profit</span><span>${profit.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {car.lot_url && (
+                <a
+                  href={car.lot_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-center bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-semibold text-sm transition"
+                >
+                  View on Copart →
+                </a>
+              )}
             </div>
 
-            {/* Max Bid */}
-            <div className="bg-blue-50 rounded-xl p-4 text-center">
-              <p className="text-xs font-semibold text-blue-500 uppercase tracking-wide mb-1">
-                Max Bid ({margin}% margin)
-              </p>
-              <p className="text-4xl font-extrabold text-blue-700">${bid.toLocaleString()}</p>
-            </div>
-
-            {/* Cost breakdown */}
-            <div className="text-xs text-gray-500 space-y-0.5 border-t pt-3">
-              <div className="flex justify-between"><span>Buyer Fee (7.5%)</span><span>${buyerFee.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span>Tax</span><span>${taxAmt.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span>Title Fee</span><span>${titleFee.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span>Repairs</span><span>${repair.toLocaleString()}</span></div>
-              <div className="flex justify-between font-semibold text-gray-700 border-t mt-1 pt-1">
-                <span>Total Cost</span><span>${totalCost.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between font-semibold text-green-700">
-                <span>Profit</span><span>${profit.toLocaleString()}</span>
+            {/* Vehicle Details */}
+            <div className="bg-white rounded-xl border p-5">
+              <h3 className="font-semibold text-gray-800 mb-3 text-sm uppercase tracking-wide">Vehicle Details</h3>
+              <div className="space-y-2">
+                {details.map(([label, value]) => (
+                  <div key={label} className="flex justify-between text-sm border-b border-gray-50 pb-1.5">
+                    <span className="text-gray-500">{label}</span>
+                    <span className="font-medium text-gray-800 text-right max-w-[60%]">{value}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
 
-        {/* ── AI DETAILS ───────────────────────────────────────── */}
+        {/* ── AI DETAILS BELOW ── */}
         {(car.repair_details || car.resale_details) && (
-          <div className="bg-white rounded-2xl shadow p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             {car.repair_details && (
-              <div>
-                <h3 className="font-semibold text-gray-800 mb-2">Repair Details</h3>
+              <div className="bg-white rounded-xl border p-5">
+                <h3 className="font-semibold text-gray-800 mb-3 text-sm uppercase tracking-wide flex items-center gap-2">
+                  <Wrench size={14} className="text-orange-500" /> Repair Details
+                </h3>
                 <p className="text-sm text-gray-600 leading-relaxed">{car.repair_details}</p>
               </div>
             )}
             {car.resale_details && (
-              <div>
-                <h3 className="font-semibold text-gray-800 mb-2">Resale Details</h3>
+              <div className="bg-white rounded-xl border p-5">
+                <h3 className="font-semibold text-gray-800 mb-3 text-sm uppercase tracking-wide flex items-center gap-2">
+                  <DollarSign size={14} className="text-green-600" /> Resale Details
+                </h3>
                 <p className="text-sm text-gray-600 leading-relaxed">{car.resale_details}</p>
               </div>
             )}
@@ -273,40 +279,26 @@ export default function VehicleDetail() {
         )}
       </div>
 
-      {/* ── LIGHTBOX ─────────────────────────────────────────── */}
+      {/* ── LIGHTBOX ── */}
       {lightbox !== null && (
-        <div
-          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
-          onClick={() => setLightbox(null)}
-        >
-          <button
-            className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
-            onClick={() => setLightbox(null)}
-          >
+        <div className="fixed inset-0 bg-black/92 z-50 flex items-center justify-center" onClick={() => setLightbox(null)}>
+          <button className="absolute top-4 right-4 text-white hover:text-gray-300" onClick={() => setLightbox(null)}>
             <X size={32} />
           </button>
-
           <button
-            className="absolute left-4 text-white hover:text-gray-300 z-10 bg-black/40 rounded-full p-2"
+            className="absolute left-4 bg-black/40 text-white rounded-full p-2 hover:bg-black/60"
             onClick={(e) => { e.stopPropagation(); setLightbox((lightbox - 1 + images.length) % images.length); }}
-          >
-            <ChevronLeft size={32} />
-          </button>
-
+          ><ChevronLeft size={30} /></button>
           <img
             src={images[lightbox]}
-            alt={`Photo ${lightbox + 1}`}
-            className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+            alt=""
+            className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg"
             onClick={(e) => e.stopPropagation()}
           />
-
           <button
-            className="absolute right-4 text-white hover:text-gray-300 z-10 bg-black/40 rounded-full p-2"
+            className="absolute right-4 bg-black/40 text-white rounded-full p-2 hover:bg-black/60"
             onClick={(e) => { e.stopPropagation(); setLightbox((lightbox + 1) % images.length); }}
-          >
-            <ChevronRight size={32} />
-          </button>
-
+          ><ChevronRight size={30} /></button>
           <div className="absolute bottom-4 text-white text-sm bg-black/40 px-3 py-1 rounded-full">
             {lightbox + 1} / {images.length}
           </div>

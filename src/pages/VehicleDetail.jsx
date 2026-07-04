@@ -11,7 +11,6 @@ import {
   ChevronDown,
   MapPin,
   Calendar,
-  Hash,
   TrendingUp,
   TrendingDown,
   Maximize2,
@@ -145,7 +144,7 @@ export default function VehicleDetail() {
 
       {/* ── STICKY NAV ── */}
       <nav className="sticky top-0 z-20 border-b border-white/10 bg-slate-900/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-7xl items-center px-4 py-3 sm:px-6">
           <button
             onClick={() => navigate("/")}
             className="group flex items-center gap-2 text-sm font-medium text-slate-300 transition hover:text-white"
@@ -153,12 +152,6 @@ export default function VehicleDetail() {
             <ArrowLeft size={18} className="transition group-hover:-translate-x-0.5" />
             <span>Back to Dashboard</span>
           </button>
-          {car.lot_number && (
-            <span className="hidden items-center gap-1.5 text-xs font-medium text-slate-400 sm:inline-flex">
-              <Hash size={13} />
-              Lot {car.lot_number}
-            </span>
-          )}
         </div>
       </nav>
 
@@ -167,54 +160,40 @@ export default function VehicleDetail() {
         <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-blue-600/20 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-24 left-1/3 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
         <div className="relative mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div className="min-w-0">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                {car.title_code && (
-                  <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200">
-                    {car.title_code}
-                  </span>
-                )}
-                {car.sale_name && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-slate-200">
-                    <MapPin size={13} className="text-blue-400" />
-                    {car.sale_name}
-                  </span>
-                )}
-                {car.sale_date && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-slate-200">
-                    <Calendar size={13} className="text-blue-400" />
-                    {new Date(car.sale_date).toLocaleDateString()}
-                  </span>
-                )}
-              </div>
-              <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
-                {car.year} {car.make} {car.model}
-              </h1>
-              {car.lot_number && (
-                <p className="mt-2 text-sm text-slate-400">
-                  Lot <span className="font-semibold text-slate-200">{car.lot_number}</span>
-                  {car.vin && <span className="ml-3 font-mono text-slate-500">{car.vin}</span>}
-                </p>
-              )}
-            </div>
+          <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
+            {car.year} {car.make} {car.model}
+          </h1>
 
-            {/* At-a-glance chips */}
-            <div className="flex shrink-0 gap-3">
-              <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-center backdrop-blur">
-                <div className="mb-0.5 flex items-center justify-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-amber-300">
-                  <Wrench size={12} /> Repair
-                </div>
-                <p className="text-xl font-bold tabular-nums text-amber-200">${repair.toLocaleString()}</p>
-              </div>
-              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-center backdrop-blur">
-                <div className="mb-0.5 flex items-center justify-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-300">
-                  <DollarSign size={12} /> Resale
-                </div>
-                <p className="text-xl font-bold tabular-nums text-emerald-200">${resale.toLocaleString()}</p>
-              </div>
-            </div>
+          {/* Title / location / date pills — below the name */}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {car.title_code && (
+              <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200">
+                {car.title_code}
+              </span>
+            )}
+            {car.sale_name && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-slate-200">
+                <MapPin size={13} className="text-blue-400" />
+                {car.sale_name}
+              </span>
+            )}
+            {car.sale_date && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-slate-200">
+                <Calendar size={13} className="text-blue-400" />
+                {new Date(car.sale_date).toLocaleDateString()}
+              </span>
+            )}
           </div>
+
+          {(car.lot_number || car.vin) && (
+            <p className="mt-3 text-sm text-slate-400">
+              {car.lot_number && (
+                <>Lot <span className="font-semibold text-slate-200">{car.lot_number}</span></>
+              )}
+              {car.lot_number && car.vin && <span className="mx-2 text-slate-600">·</span>}
+              {car.vin && <span className="font-mono text-slate-500">{car.vin}</span>}
+            </p>
+          )}
         </div>
       </header>
 
@@ -222,7 +201,7 @@ export default function VehicleDetail() {
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
 
-          {/* LEFT — Gallery + details */}
+          {/* LEFT — Gallery + details + analysis */}
           <div className="space-y-6 lg:col-span-7">
 
             {/* Gallery */}
@@ -342,11 +321,11 @@ export default function VehicleDetail() {
             )}
           </div>
 
-          {/* RIGHT — Bidding card (sticky) */}
+          {/* RIGHT — Bidding rail (sticky) */}
           <div className="lg:col-span-5">
             <div className="space-y-4 lg:sticky lg:top-20">
 
-              {/* Repair / Resale */}
+              {/* Repair / Resale — the only place these appear */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-center">
                   <div className="mb-1 flex items-center justify-center gap-1.5 text-amber-600">

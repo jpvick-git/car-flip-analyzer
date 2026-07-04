@@ -1,4 +1,5 @@
 import os
+import threading
 import pandas as pd
 import requests
 from fastapi import APIRouter, UploadFile, Depends, Request
@@ -165,19 +166,24 @@ async def upload_file(
             print("Lots needing images:", lots_to_download)
 
             if lots_to_download:
-                print("Sending trigger to internal proxy:", INTERNAL_TRIGGER_URL)
-                
-                # Send to localhost (backend_api.py), which proxies to Windows
-                resp = requests.post(
-                    INTERNAL_TRIGGER_URL,
-                    json={
-                        "user_id": user["id"],
-                        "copart_lots": lots_to_download,
-                        "ai_lots": []
-                    },
-                    timeout=30
-                )
-                print("Trigger response:", resp.status_code)
+                print("Firing trigger in background for lots:", lots_to_download)
+
+                def fire_trigger():
+                    try:
+                        resp = requests.post(
+                            INTERNAL_TRIGGER_URL,
+                            json={
+                                "user_id": user["id"],
+                                "copart_lots": lots_to_download,
+                                "ai_lots": []
+                            },
+                            timeout=300
+                        )
+                        print("Trigger response:", resp.status_code)
+                    except Exception as e:
+                        print("Trigger error:", e)
+
+                threading.Thread(target=fire_trigger, daemon=True).start()
 
         except Exception as e:
             print("Downloader trigger failed:", e)

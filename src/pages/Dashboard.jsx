@@ -467,12 +467,12 @@ export default function Dashboard({
     <main className="p-6 bg-gray-50 min-h-screen">
 
       {downloading && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 text-sm font-medium animate-pulse">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 text-sm font-medium">
           <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
           </svg>
-          Downloading images from Copart…
+          Downloading images… ({cars.filter((c) => c.image_url).length} of {cars.length} ready)
         </div>
       )}
 
@@ -496,7 +496,7 @@ export default function Dashboard({
 
       {/* GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {cars.map((car) => (
+        {(downloading ? cars.filter((car) => car.image_url) : cars).map((car) => (
           <div
             key={car.id}
             className="bg-white border rounded-xl shadow hover:shadow-lg transition"

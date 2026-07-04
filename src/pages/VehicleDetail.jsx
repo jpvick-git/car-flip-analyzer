@@ -116,7 +116,7 @@ export default function VehicleDetail() {
     <div className="min-h-screen" style={{ background: "#f3f4f6" }}>
 
       {/* ── TOP BAR ── */}
-      <div className="bg-white border-b px-6 py-3 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
+      <div className="bg-white border-b px-6 py-3 sticky top-0 z-10 shadow-sm">
         <button
           onClick={() => navigate("/")}
           className="flex items-center gap-2 text-gray-600 hover:text-black transition"
@@ -124,12 +124,6 @@ export default function VehicleDetail() {
           <ArrowLeft size={18} />
           <span className="font-medium text-sm">Back to Dashboard</span>
         </button>
-        <span className="text-gray-300">|</span>
-        <div>
-          <span className="font-bold text-gray-900">{car.year} {car.make} {car.model}</span>
-          {car.lot_number && <span className="ml-3 text-sm text-gray-500">Lot: {car.lot_number}</span>}
-          {car.sale_name  && <span className="ml-3 text-sm text-blue-600 font-medium">{car.sale_name}</span>}
-        </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
@@ -207,6 +201,18 @@ export default function VehicleDetail() {
 
           {/* RIGHT — Bid + Vehicle Details */}
           <div className="lg:w-[45%] space-y-4">
+
+            {/* Car name + location */}
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {car.year} {car.make} {car.model}
+              </h1>
+              <div className="flex flex-wrap items-center gap-3 mt-1 text-sm">
+                {car.lot_number && <span className="text-gray-500">Lot: <span className="font-medium text-gray-700">{car.lot_number}</span></span>}
+                {car.sale_name  && <span className="text-blue-600 font-semibold">{car.sale_name}</span>}
+                {car.sale_date  && <span className="text-gray-400">Sale: {new Date(car.sale_date).toLocaleDateString()}</span>}
+              </div>
+            </div>
 
             {/* Repair / Resale */}
             <div className="grid grid-cols-2 gap-3">

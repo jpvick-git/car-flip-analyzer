@@ -52,7 +52,7 @@ function Layout() {
       formData.append("file", uploadFile);
 
       const response = await fetch(
-        `${process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com"}/upload_file`,
+        `${process.env.REACT_APP_API_BASE_URL || ""}/api/upload_file`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },

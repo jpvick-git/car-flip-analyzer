@@ -114,7 +114,7 @@ function ManualVehicleModal({ API, close, reload }) {
         if (images[k]) fd.append(k, images[k]);
       });
 
-      await axios.post(`${API}/add_manual_vehicle`, fd, {
+      await axios.post(`${API}/api/add_manual_vehicle`, fd, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
           "Content-Type": "multipart/form-data",
@@ -367,7 +367,7 @@ export default function Dashboard({
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await axios.get(`${API}/get_vehicles`, {
+        const res = await axios.get(`${API}/api/get_vehicles`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         });
 

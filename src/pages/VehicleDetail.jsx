@@ -173,6 +173,21 @@ export default function VehicleDetail() {
                 No photos available
               </div>
             )}
+
+            {/* Vehicle Details — fills remaining left column space */}
+            {details.length > 0 && (
+              <div className="bg-white rounded-xl border p-5">
+                <h3 className="font-semibold text-gray-800 mb-3 text-sm uppercase tracking-wide">Vehicle Details</h3>
+                <div className="space-y-2">
+                  {details.map(([label, value]) => (
+                    <div key={label} className="flex justify-between text-sm border-b border-gray-50 pb-1.5 last:border-0">
+                      <span className="text-gray-500">{label}</span>
+                      <span className="font-medium text-gray-800 text-right max-w-[60%]">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* RIGHT — Bid + Vehicle Details */}
@@ -241,18 +256,6 @@ export default function VehicleDetail() {
               )}
             </div>
 
-            {/* Vehicle Details */}
-            <div className="bg-white rounded-xl border p-5">
-              <h3 className="font-semibold text-gray-800 mb-3 text-sm uppercase tracking-wide">Vehicle Details</h3>
-              <div className="space-y-2">
-                {details.map(([label, value]) => (
-                  <div key={label} className="flex justify-between text-sm border-b border-gray-50 pb-1.5">
-                    <span className="text-gray-500">{label}</span>
-                    <span className="font-medium text-gray-800 text-right max-w-[60%]">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
 

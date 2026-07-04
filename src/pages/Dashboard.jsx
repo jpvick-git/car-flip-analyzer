@@ -326,7 +326,7 @@ export default function Dashboard({
   const [error, setError] = useState(null);
 
   const API =
-    process.env.REACT_APP_API_BASE_URL || "https://api.carflipanalyzer.com";
+    process.env.REACT_APP_API_BASE_URL ?? "";
 
   // MAX BID CALC
   const calculateCarWithMargin = (car, marginInput) => {

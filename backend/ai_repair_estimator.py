@@ -24,8 +24,8 @@ DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", os.path.join(BASE_DIR, "downloads"))
 
 MAX_WORKERS = 3
 SLEEP_BETWEEN_LOTS = 2.0
-MAX_IMAGES = int(os.getenv("AI_MAX_IMAGES", "8"))
-IMAGE_DETAIL = os.getenv("AI_IMAGE_DETAIL", "low")
+MAX_IMAGES = int(os.getenv("AI_MAX_IMAGES", "12"))
+IMAGE_DETAIL = os.getenv("AI_IMAGE_DETAIL", "high")
 REPAIR_MODEL = os.getenv("AI_REPAIR_MODEL", "gpt-4o")
 RESALE_MODEL = os.getenv("AI_RESALE_MODEL", "gpt-4.1-mini")
 
@@ -865,7 +865,7 @@ if __name__ == "__main__":
         print(f"Download dir: {DOWNLOAD_DIR}")
         print(f"AI config: MAX_IMAGES={MAX_IMAGES}, detail={IMAGE_DETAIL}, angle_selection=on")
         env_cap = os.getenv("AI_MAX_IMAGES")
-        print(f"  AI_MAX_IMAGES env: {env_cap if env_cap else 'not set (default 8)'}")
+        print(f"  AI_MAX_IMAGES env: {env_cap if env_cap else 'not set (default 12)'}")
         print(f"Lots: {', '.join(LOTS)}")
 
         done = failed = 0

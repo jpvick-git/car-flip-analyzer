@@ -154,31 +154,6 @@ export default function VehicleDetail() {
   const profitPositive = profit >= 0;
   const marginFill = (margin / 40) * 100;
 
-  const costBreakdown = (
-    <div className="space-y-2 rounded-xl bg-slate-50 p-4 text-sm">
-      <div className="flex justify-between text-slate-500">
-        <span>Buyer Fee (7.5%)</span>
-        <span className="tabular-nums text-slate-700">{formatCurrency(buyerFee)}</span>
-      </div>
-      <div className="flex justify-between text-slate-500">
-        <span>Tax ({taxRate}%)</span>
-        <span className="tabular-nums text-slate-700">{formatCurrency(taxAmt)}</span>
-      </div>
-      <div className="flex justify-between text-slate-500">
-        <span>Title Fee</span>
-        <span className="tabular-nums text-slate-700">{formatCurrency(titleFee)}</span>
-      </div>
-      <div className="flex justify-between text-slate-500">
-        <span>Repairs</span>
-        <span className="tabular-nums text-slate-700">{formatCurrency(repair)}</span>
-      </div>
-      <div className="mt-1 flex justify-between border-t border-slate-200 pt-2 font-semibold text-slate-900">
-        <span>Total Cost</span>
-        <span className="tabular-nums">{formatCurrency(totalCost)}</span>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
 
@@ -332,45 +307,38 @@ export default function VehicleDetail() {
               </section>
             )}
 
-            {/* Repair Analysis */}
-            {(car.repair_details || car.repair_breakdown) && (
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-600">
-                    <Wrench size={13} />
-                  </span>
-                  Repair Analysis
-                </h3>
-                <RepairBreakdown
-                  car={car}
-                  apiBase={API}
-                  readOnly={isDemo}
-                  onTotalChange={setRepairTotal}
-                />
-              </section>
+            {/* AI Details */}
+            {(car.repair_details || car.repair_breakdown || car.resale_details) && (
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {(car.repair_details || car.repair_breakdown) && (
+                  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-600">
+                        <Wrench size={13} />
+                      </span>
+                      Repair Analysis
+                    </h3>
+                    <RepairBreakdown
+                      car={car}
+                      apiBase={API}
+                      readOnly={isDemo}
+                      onTotalChange={setRepairTotal}
+                    />
+                  </section>
+                )}
+                {car.resale_details && (
+                  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-emerald-600">
+                        <DollarSign size={13} />
+                      </span>
+                      Resale Analysis
+                    </h3>
+                    <p className="text-sm leading-relaxed text-slate-600">{car.resale_details}</p>
+                  </section>
+                )}
+              </div>
             )}
-
-            {/* Cost breakdown — above Platform Reliability */}
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Cost Breakdown
-              </h3>
-              {costBreakdown}
-            </section>
-
-            <KnownIssuesCard
-              car={car}
-              apiBase={API}
-              readOnly={isDemo}
-              onUpdate={(data) =>
-                setCar((prev) => ({
-                  ...prev,
-                  reliability_summary: data.reliability_summary,
-                  known_issues: data.known_issues,
-                  wear_items: data.wear_items,
-                }))
-              }
-            />
           </div>
 
           {/* RIGHT — Bidding rail (sticky) */}
@@ -395,17 +363,19 @@ export default function VehicleDetail() {
                 </div>
               </div>
 
-              {car.resale_details && (
-                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-emerald-600">
-                      <DollarSign size={13} />
-                    </span>
-                    Resale Analysis
-                  </h3>
-                  <p className="text-sm leading-relaxed text-slate-600">{car.resale_details}</p>
-                </section>
-              )}
+              <KnownIssuesCard
+                car={car}
+                apiBase={API}
+                readOnly={isDemo}
+                onUpdate={(data) =>
+                  setCar((prev) => ({
+                    ...prev,
+                    reliability_summary: data.reliability_summary,
+                    known_issues: data.known_issues,
+                    wear_items: data.wear_items,
+                  }))
+                }
+              />
 
               {/* Bid card */}
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-200/60">
@@ -463,6 +433,30 @@ export default function VehicleDetail() {
                     {stateData && (
                       <p className="mt-1.5 text-xs text-slate-400">{stateData.notes}</p>
                     )}
+                  </div>
+
+                  {/* Cost breakdown */}
+                  <div className="space-y-2 rounded-xl bg-slate-50 p-4 text-sm">
+                    <div className="flex justify-between text-slate-500">
+                      <span>Buyer Fee (7.5%)</span>
+                      <span className="tabular-nums text-slate-700">{formatCurrency(buyerFee)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500">
+                      <span>Tax ({taxRate}%)</span>
+                      <span className="tabular-nums text-slate-700">{formatCurrency(taxAmt)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500">
+                      <span>Title Fee</span>
+                      <span className="tabular-nums text-slate-700">{formatCurrency(titleFee)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500">
+                      <span>Repairs</span>
+                      <span className="tabular-nums text-slate-700">{formatCurrency(repair)}</span>
+                    </div>
+                    <div className="mt-1 flex justify-between border-t border-slate-200 pt-2 font-semibold text-slate-900">
+                      <span>Total Cost</span>
+                      <span className="tabular-nums">{formatCurrency(totalCost)}</span>
+                    </div>
                   </div>
 
                   {/* Profit highlight */}

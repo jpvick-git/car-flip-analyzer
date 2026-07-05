@@ -19,7 +19,7 @@ export default function RepairBreakdown({
     const parsed = parseRepairItems(car);
     setItems(parsed);
     onTotalChange?.(sumRepairItems(parsed));
-  }, [car?.id, car?.repair_breakdown, onTotalChange]);
+  }, [car?.id, car?.repair_breakdown, car?.repair_details, onTotalChange]);
 
   const persist = (nextItems) => {
     if (readOnly || !car?.id) return;
@@ -54,7 +54,11 @@ export default function RepairBreakdown({
     });
   };
 
-  if (!items.length) {
+  const summary = String(car.repair_details || "").trim();
+  const hasSummary = summary.length > 0;
+  const hasItems = items.length > 0;
+
+  if (!hasSummary && !hasItems) {
     return (
       <p className={`text-sm leading-relaxed text-slate-600 ${className}`}>
         No repair items identified.
@@ -62,8 +66,8 @@ export default function RepairBreakdown({
     );
   }
 
-  return (
-    <ul className={`space-y-2 ${className}`}>
+  const itemList = hasItems ? (
+    <ul className="space-y-2">
       {items.map((item, index) => (
         <li
           key={`${car?.id || "car"}-repair-${index}`}
@@ -84,5 +88,16 @@ export default function RepairBreakdown({
         <span className="tabular-nums">{formatCurrency(sumRepairItems(items))}</span>
       </li>
     </ul>
+  ) : null;
+
+  return (
+    <div
+      className={`${hasSummary && hasItems ? "grid gap-4 md:grid-cols-2 md:items-start" : ""} ${className}`}
+    >
+      {hasSummary && (
+        <p className="text-sm leading-relaxed text-slate-600">{summary}</p>
+      )}
+      {itemList}
+    </div>
   );
 }

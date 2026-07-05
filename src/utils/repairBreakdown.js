@@ -13,17 +13,8 @@ export function parseRepairItems(car) {
           }));
       }
     } catch {
-      // fall through to legacy parsing
+      // fall through
     }
-  }
-
-  if (car.repair_details) {
-    return [
-      {
-        description: String(car.repair_details).trim(),
-        cost: Math.max(0, Number(car.repair_estimate) || 0),
-      },
-    ];
   }
 
   return [];

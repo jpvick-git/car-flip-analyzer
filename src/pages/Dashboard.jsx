@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import RepairBreakdown from "../components/RepairBreakdown";
 import CurrencyInput from "../components/CurrencyInput";
-import { formatCurrency } from "../utils/formatCurrency";
+import { formatCurrency, parseCurrencyInput } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
 import { calculateFlipMetrics } from "../utils/flipCalculator";
 import { useFlipMetrics } from "../utils/useFlipMetrics";
@@ -526,8 +526,10 @@ function isCarReady(car) {
   if (!car.image_url) return false;
   if (car.lot_number) {
     const repairSet =
-      car.repair_estimate != null && car.repair_estimate !== "";
-    const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
+      car.repair_estimate != null && String(car.repair_estimate).trim() !== "";
+    const resale = parseCurrencyInput(
+      car.resale_estimate ?? car.ai_resale_estimate ?? 0
+    );
     return repairSet && resale > 0;
   }
   // Manual entries: image is enough
@@ -627,12 +629,7 @@ export default function Dashboard({
       }
     }, 5000);
 
-    const timeout = setTimeout(() => setDownloading(false), 5 * 60 * 1000);
-
-    return () => {
-      clearInterval(interval);
-      clearTimeout(timeout);
-    };
+    return () => clearInterval(interval);
   }, [downloading]);
 
   // Start polling after CSV upload

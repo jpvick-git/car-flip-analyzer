@@ -19,7 +19,7 @@ export default function RepairBreakdown({
     const parsed = parseRepairItems(car);
     setItems(parsed);
     onTotalChange?.(sumRepairItems(parsed));
-  }, [car?.id, car?.repair_breakdown, car?.repair_details, car?.repair_estimate, onTotalChange]);
+  }, [car?.id, car?.repair_breakdown, onTotalChange]);
 
   const persist = (nextItems) => {
     if (readOnly || !car?.id) return;

@@ -19,6 +19,7 @@ import {
 import RepairBreakdown from "../components/RepairBreakdown";
 import CurrencyInput from "../components/CurrencyInput";
 import { formatCurrency } from "../utils/formatCurrency";
+import { calculateFlipMetrics } from "../utils/flipCalculator";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 //  ADD VEHICLE MODAL (ManualVehicleModal)
@@ -380,36 +381,22 @@ export default function Dashboard({
 
   // MAX BID CALC
   const calculateCarWithMargin = (car, marginInput) => {
-    const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
-    const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
-    const taxRate = Number(car.avg_tax_rate || 0);
-    const titleFee = Number(car.title_fee || 0);
-    const margin = Number(marginInput) / 100;
-
-    const divisor = 1 + 0.075 + taxRate / 100;
-    let bid = (resale * (1 - margin) - titleFee - repair) / divisor;
-
-    if (isNaN(bid) || bid < 0) bid = 0;
-    bid = Math.round(bid);
-
-    const buyerFee = bid * 0.075;
-    const taxAmt = bid * (taxRate / 100);
+    const metrics = calculateFlipMetrics({
+      resale: car.resale_estimate || car.ai_resale_estimate || 0,
+      repair: car.repair_estimate || car.ai_repair_estimate || 0,
+      marginPercent: marginInput,
+      taxRate: car.avg_tax_rate || 0,
+      titleFee: car.title_fee || 0,
+    });
 
     return {
       ...car,
-      max_bid: bid,
-      buyer_fee: Math.round(buyerFee),
-      tax_amount_calc: Math.round(taxAmt),
-      total_cost: Math.round(bid + buyerFee + taxAmt + titleFee + repair),
-      profit: Math.round(resale - (bid + buyerFee + taxAmt + titleFee + repair)),
-      margin_actual: resale
-        ? Number(
-            (((resale - (bid + buyerFee + taxAmt + titleFee + repair)) /
-              resale) *
-              100
-            ).toFixed(1)
-          )
-        : 0,
+      max_bid: metrics.bid,
+      buyer_fee: metrics.buyerFee,
+      tax_amount_calc: metrics.taxAmt,
+      total_cost: metrics.totalCost,
+      profit: metrics.profit,
+      margin_actual: metrics.marginActual,
     };
   };
 

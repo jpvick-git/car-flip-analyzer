@@ -21,6 +21,7 @@ import RepairBreakdown from "../components/RepairBreakdown";
 import KnownIssuesCard from "../components/KnownIssuesCard";
 import { parseRepairItems } from "../utils/repairBreakdown";
 import { formatCurrency } from "../utils/formatCurrency";
+import { formatVehicleTitle } from "../utils/vehicleName";
 import { useFlipMetrics } from "../utils/useFlipMetrics";
 
 const API = process.env.REACT_APP_API_BASE_URL ?? "";
@@ -175,7 +176,7 @@ export default function VehicleDetail() {
         <div className="pointer-events-none absolute -bottom-24 left-1/3 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
         <div className="relative mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
           <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
-            {car.year} {car.make} {car.model}
+            {formatVehicleTitle(car)}
           </h1>
 
           {/* Title / location / date pills — below the name */}

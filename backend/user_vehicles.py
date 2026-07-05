@@ -9,6 +9,7 @@ from sqlalchemy import text
 from .db import get_engine
 from .auth import get_current_user, get_vehicle_owner_id, require_not_demo
 from .ai_estimator import run_ai
+from .copart_utils import enrich_vehicle
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
@@ -64,7 +65,7 @@ def get_vehicles(current_user: dict = Depends(get_current_user)):
 
         vehicles = []
         for row in rows:
-            vehicles.append(dict(row._mapping))
+            vehicles.append(enrich_vehicle(dict(row._mapping)))
         return vehicles
 
     except Exception as e:
@@ -103,7 +104,7 @@ def get_vehicle(vehicle_id: int, current_user: dict = Depends(get_current_user))
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Vehicle not found")
-    return dict(row._mapping)
+    return enrich_vehicle(dict(row._mapping))
 
 
 @router.patch("/vehicle/{vehicle_id}/repair")

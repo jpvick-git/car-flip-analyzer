@@ -101,10 +101,6 @@ export default function Login() {
           Login
         </button>
 
-        <p className="mt-4 text-center text-xs text-gray-400">
-          Demo: demo@carflipanalyzer.com / DemoView2026!
-        </p>
-
         {status && (
           <p className="text-center text-sm text-gray-600 mt-4">{status}</p>
         )}

@@ -19,6 +19,7 @@ import {
 import RepairBreakdown from "../components/RepairBreakdown";
 import CurrencyInput from "../components/CurrencyInput";
 import { formatCurrency } from "../utils/formatCurrency";
+import { formatVehicleTitle } from "../utils/vehicleName";
 import { calculateFlipMetrics } from "../utils/flipCalculator";
 import { useFlipMetrics } from "../utils/useFlipMetrics";
 
@@ -371,7 +372,7 @@ function VehicleDetailModal({
         </button>
 
         <h2 className="pr-8 text-xl font-bold tracking-tight text-slate-900">
-          {car.year} {car.make} {car.model}
+          {formatVehicleTitle(car)}
         </h2>
 
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
@@ -816,7 +817,7 @@ export default function Dashboard({
 
                 <div className="flex flex-1 flex-col p-5">
                   <h2 className="text-lg font-bold tracking-tight text-slate-900">
-                    {car.year} {car.make} {car.model}
+                    {formatVehicleTitle(car)}
                   </h2>
 
                   <div className="mt-2 space-y-1.5 text-sm text-slate-500">
@@ -895,7 +896,7 @@ export default function Dashboard({
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
               Are you sure you want to delete the{" "}
               <span className="font-semibold text-slate-800">
-                {carToDelete.year} {carToDelete.make} {carToDelete.model}
+                {formatVehicleTitle(carToDelete)}
               </span>
               ? This action is permanent and cannot be undone.
             </p>

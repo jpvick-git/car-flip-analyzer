@@ -6,6 +6,7 @@ from fastapi import APIRouter, UploadFile, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from .auth import get_current_user, require_not_demo
+from .copart_utils import resolve_make_model
 from .db import get_engine
 
 router = APIRouter()
@@ -83,15 +84,21 @@ async def upload_file(
                     {"uid": user["id"], "lot": lot_number},
                 ).fetchone()
 
+                lot_url = getval(row, "Lot URL")
+                csv_year = getval(row, "Year")
+                csv_make = getval(row, "Make")
+                csv_model = getval(row, "Model")
+                make, model = resolve_make_model(lot_url, csv_make, csv_model, csv_year)
+
                 values = {
                     "user_id": user["id"],
                     "lot_number": lot_number,
-                    "lot_url": getval(row, "Lot URL"),
+                    "lot_url": lot_url,
                     "est_retail_value": getval(row, "Est. Retail value"),
                     "sale_date": getval(row, "Sale date"),
-                    "year": getval(row, "Year"),
-                    "make": getval(row, "Make"),
-                    "model": getval(row, "Model"),
+                    "year": csv_year,
+                    "make": make or csv_make,
+                    "model": model or csv_model,
                     "engine_type": getval(row, "Engine type"),
                     "cylinders": getval(row, "Cylinders"),
                     "vin": getval(row, "VIN"),

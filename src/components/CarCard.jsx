@@ -1,12 +1,15 @@
 import { Wrench, DollarSign } from "lucide-react";
 import CurrencyInput from "./CurrencyInput";
 import { formatCurrency } from "../utils/formatCurrency";
+import { formatVehicleTitle, resolveVehicleName } from "../utils/vehicleName";
 
 export default function CarCard({
   car,
   setSelectedCar,
   onUpdateValues,
 }) {
+  const { make, model } = resolveVehicleName(car);
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
       
@@ -14,7 +17,7 @@ export default function CarCard({
       <div className="relative">
         <img
           src={car.image_url || "https://placehold.co/400x250?text=No+Image"}
-          alt={`${car.make} ${car.model}`}
+          alt={`${make} ${model}`}
           className="w-full h-56 object-cover"
         />
         <div className="absolute top-3 left-3 bg-blue-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
@@ -25,7 +28,7 @@ export default function CarCard({
       {/* Info Section */}
       <div className="p-4 space-y-2">
         <h2 className="text-lg font-semibold text-gray-900">
-          {car.year} {car.make} {car.model}
+          {formatVehicleTitle(car)}
         </h2>
 
         <p className="text-sm text-gray-500">Lot #: {car.lot_number}</p>

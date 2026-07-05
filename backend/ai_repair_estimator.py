@@ -59,17 +59,26 @@ Rules:
 6. List parts_to_replace only for visibly damaged or missing components.
 7. "Conservative" means do not invent damage — NOT cheap estimates. When damage is visible, err slightly HIGH on cost rather than low.
 8. Each repair_items cost is ALL-IN (part + labor + paint/blend + clips/hardware). Never quote parts-only prices.
+9. Classify the vehicle into a tier from year/make/model, then apply that tier's multiplier to base pricing and labor rates below.
 
-Pricing guidance (typical US body shop, per line item, all-in):
-- Bumper cover replace + paint: economy car $900–1,400; sport/luxury (WRX, BMW, etc.) $1,200–2,000+.
-- Missing bumper exposing reinforcement/foam/brackets: add separate line items for reinforcement bar, energy absorber, mounting brackets, and sensors if visible — typically $300–900+ combined before paint.
-- Fender/quarter panel replace + paint: $800–1,800+ per panel depending on vehicle.
+Vehicle tier multipliers (apply to base parts+paint pricing below, then use realistic labor rate for the tier):
+- Economy (Toyota, Honda, Hyundai, Kia, Nissan, mainstream Ford/Chevy): baseline pricing, ~$65-75/hr labor.
+- Mainstream sport/turbo (Subaru WRX/STI, Mazdaspeed, Civic Si, mainstream Mustang/Camaro): baseline x1.15-1.3, ~$70-85/hr labor.
+- Entry luxury/German (BMW 3-series, Audi A4/Q5, Mercedes C-class): baseline x1.5-2, ~$100-140/hr labor, OEM-preferred parts.
+- Land Rover/Range Rover, high-end German (BMW 5/7/X5+, Mercedes E/S/GLE+), other low-parts-availability luxury: baseline x2-3+, ~$130-180/hr labor, flag air suspension/aluminum panels/ADAS calibration if body region affected.
+- Exotic/limited-production: flag for manual review — do not auto-price.
+
+Base pricing guidance (economy tier, typical US body shop, per line item, all-in — multiply by tier above):
+- Bumper cover replace + paint: $900–1,400.
+- Missing bumper exposing reinforcement/foam/brackets: add separate line items for reinforcement bar, energy absorber, mounting brackets, and sensors if visible — typically $300–900+ combined before paint (tier-adjusted).
+- Fender/quarter panel replace + paint: $800–1,800+ per panel.
 - Headlight/taillight assembly: $250–700+ installed.
 - Hood/trunk replace + paint: $900–2,500+.
 - Paint-only blend on one panel: $400–800+.
 - Frame/unibody kinks or gap issues visible in photos: flag as structural concern and add $500–3,000+ if repair (not replace) is plausible from photos alone.
 
 When a bumper is missing, torn off, or hanging: do NOT price only a cover. Include visible behind-bumper components and full refinish.
+For WRX/STI and similar mainstream sport models, use the Mainstream sport/turbo tier — not economy baseline.
 
 Return JSON with this exact structure:
 {
@@ -94,10 +103,11 @@ Return JSON with this exact structure:
 }
 
 Rules for repair_items:
-9. List each distinct visible repair as its own line item with description (include photo reference when possible) and all-in cost in USD.
-10. repair_estimate MUST equal the sum of all repair_items costs.
-11. If no visible damage, use repair_items: [] and repair_estimate: 0.
-12. Multiple damaged regions (e.g. front AND rear) must each have their own line items — never combine into one low bumper-only total.
+10. List each distinct visible repair as its own line item with description (include photo reference when possible) and all-in cost in USD.
+11. repair_estimate MUST equal the sum of all repair_items costs.
+12. If no visible damage, use repair_items: [] and repair_estimate: 0.
+13. Multiple damaged regions (e.g. front AND rear) must each have their own line items — never combine into one low bumper-only total.
+14. Mention the vehicle tier used (e.g. "Mainstream sport/turbo") briefly in repair_details when tier affects pricing.
 """
 
 RESALE_SYSTEM_PROMPT = (

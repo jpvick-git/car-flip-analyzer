@@ -309,9 +309,9 @@ export default function VehicleDetail() {
 
             {/* AI Details */}
             {(car.repair_details || car.repair_breakdown || car.resale_details) && (
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 {(car.repair_details || car.repair_breakdown) && (
-                  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                       <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-600">
                         <Wrench size={13} />
@@ -327,7 +327,7 @@ export default function VehicleDetail() {
                   </section>
                 )}
                 {car.resale_details && (
-                  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                       <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-emerald-600">
                         <DollarSign size={13} />

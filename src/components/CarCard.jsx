@@ -1,4 +1,6 @@
 import { Wrench, DollarSign } from "lucide-react";
+import CurrencyInput from "./CurrencyInput";
+import { formatCurrency } from "../utils/formatCurrency";
 
 export default function CarCard({
   car,
@@ -45,34 +47,26 @@ export default function CarCard({
           {/* Repair */}
           <div className="flex items-center space-x-1 text-gray-700">
             <Wrench size={16} />
-            <span className="text-sm font-medium">Repair: $</span>
-
-            <input
-              type="number"
-              className="w-20 border border-gray-300 rounded-md px-1 py-0.5 text-sm text-black"
+            <span className="text-sm font-medium">Repair:</span>
+            <CurrencyInput
               value={car.repair_estimate}
-              onChange={(e) =>
-                onUpdateValues(car.id, {
-                  repair_estimate: Number(e.target.value),
-                })
+              onChange={(value) =>
+                onUpdateValues(car.id, { repair_estimate: value })
               }
+              inputClassName="w-24 border border-gray-300 rounded-md px-1 py-0.5 text-sm text-black"
             />
           </div>
 
           {/* Resale */}
           <div className="flex items-center space-x-1 text-gray-700">
             <DollarSign size={16} />
-            <span className="text-sm font-medium">Resale: $</span>
-
-            <input
-              type="number"
-              className="w-24 border border-gray-300 rounded-md px-1 py-0.5 text-sm text-black"
+            <span className="text-sm font-medium">Resale:</span>
+            <CurrencyInput
               value={car.resale_estimate}
-              onChange={(e) =>
-                onUpdateValues(car.id, {
-                  resale_estimate: Number(e.target.value),
-                })
+              onChange={(value) =>
+                onUpdateValues(car.id, { resale_estimate: value })
               }
+              inputClassName="w-28 border border-gray-300 rounded-md px-1 py-0.5 text-sm text-black"
             />
           </div>
         </div>
@@ -80,9 +74,7 @@ export default function CarCard({
         {/* Max Bid Row */}
         <div className="flex items-center space-x-1 mt-3 text-gray-800">
           <span className="font-semibold text-sm">Max Bid:</span>
-          <span className="text-sm">
-            ${car.max_bid?.toLocaleString() || 0}
-          </span>
+          <span className="text-sm">{formatCurrency(car.max_bid)}</span>
         </div>
 
         {/* Footer Buttons */}

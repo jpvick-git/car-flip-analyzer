@@ -17,6 +17,8 @@ import {
   Trash2,
 } from "lucide-react";
 import RepairBreakdown from "../components/RepairBreakdown";
+import CurrencyInput from "../components/CurrencyInput";
+import { formatCurrency } from "../utils/formatCurrency";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 //  ADD VEHICLE MODAL (ManualVehicleModal)
@@ -671,18 +673,12 @@ export default function Dashboard({
                         <Wrench size={13} />
                         <span className="text-[11px] font-semibold uppercase tracking-wide">Repair</span>
                       </div>
-                      <div className="flex items-center gap-0.5">
-                        <span className="text-sm font-bold text-amber-700">$</span>
-                        <input
-                          type="number"
-                          readOnly={isDemo}
-                          value={car.repair_estimate || car.ai_repair_estimate || 0}
-                          onChange={(e) =>
-                            updateCarValue(car.id, "repair_estimate", Number(e.target.value))
-                          }
-                          className={`w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-amber-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
-                        />
-                      </div>
+                      <CurrencyInput
+                        readOnly={isDemo}
+                        value={car.repair_estimate || car.ai_repair_estimate || 0}
+                        onChange={(value) => updateCarValue(car.id, "repair_estimate", value)}
+                        inputClassName={`w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-amber-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
+                      />
                     </div>
 
                     <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
@@ -690,18 +686,12 @@ export default function Dashboard({
                         <DollarSign size={13} />
                         <span className="text-[11px] font-semibold uppercase tracking-wide">Resale</span>
                       </div>
-                      <div className="flex items-center gap-0.5">
-                        <span className="text-sm font-bold text-emerald-700">$</span>
-                        <input
-                          type="number"
-                          readOnly={isDemo}
-                          value={car.resale_estimate || car.ai_resale_estimate || 0}
-                          onChange={(e) =>
-                            updateCarValue(car.id, "resale_estimate", Number(e.target.value))
-                          }
-                          className={`w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-emerald-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
-                        />
-                      </div>
+                      <CurrencyInput
+                        readOnly={isDemo}
+                        value={car.resale_estimate || car.ai_resale_estimate || 0}
+                        onChange={(value) => updateCarValue(car.id, "resale_estimate", value)}
+                        inputClassName={`w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-emerald-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
+                      />
                     </div>
                   </div>
 
@@ -709,7 +699,7 @@ export default function Dashboard({
                   <div className="mt-3 flex items-baseline justify-between rounded-xl bg-blue-50 px-4 py-3">
                     <span className="text-xs font-semibold uppercase tracking-wide text-blue-600">Max Bid</span>
                     <span className="text-2xl font-extrabold tabular-nums text-blue-700">
-                      ${car.max_bid?.toLocaleString()}
+                      {formatCurrency(car.max_bid)}
                     </span>
                   </div>
 
@@ -802,25 +792,17 @@ export default function Dashboard({
               <Wrench size={13} />
               <span className="text-[11px] font-semibold uppercase tracking-wide">Repair</span>
             </div>
-            <div className="flex items-center gap-0.5">
-              <span className="text-sm font-bold text-amber-700">$</span>
-              <input
-                type="number"
-                value={
-                  activeCar.repair_estimate ||
-                  activeCar.ai_repair_estimate ||
-                  0
-                }
-                onChange={(e) =>
-                  updateCarValue(
-                    activeCar.id,
-                    "repair_estimate",
-                    Number(e.target.value)
-                  )
-                }
-                className="w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-amber-700 focus:outline-none"
-              />
-            </div>
+            <CurrencyInput
+              value={
+                activeCar.repair_estimate ||
+                activeCar.ai_repair_estimate ||
+                0
+              }
+              onChange={(value) =>
+                updateCarValue(activeCar.id, "repair_estimate", value)
+              }
+              inputClassName="w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-amber-700 focus:outline-none"
+            />
           </div>
 
           <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
@@ -828,25 +810,17 @@ export default function Dashboard({
               <DollarSign size={13} />
               <span className="text-[11px] font-semibold uppercase tracking-wide">Resale</span>
             </div>
-            <div className="flex items-center gap-0.5">
-              <span className="text-sm font-bold text-emerald-700">$</span>
-              <input
-                type="number"
-                value={
-                  activeCar.resale_estimate ||
-                  activeCar.ai_resale_estimate ||
-                  0
-                }
-                onChange={(e) =>
-                  updateCarValue(
-                    activeCar.id,
-                    "resale_estimate",
-                    Number(e.target.value)
-                  )
-                }
-                className="w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-emerald-700 focus:outline-none"
-              />
-            </div>
+            <CurrencyInput
+              value={
+                activeCar.resale_estimate ||
+                activeCar.ai_resale_estimate ||
+                0
+              }
+              onChange={(value) =>
+                updateCarValue(activeCar.id, "resale_estimate", value)
+              }
+              inputClassName="w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-emerald-700 focus:outline-none"
+            />
           </div>
         </div>
 
@@ -873,30 +847,30 @@ export default function Dashboard({
           <div className="mb-3 flex items-baseline justify-between">
             <span className="text-xs font-semibold uppercase tracking-wide text-blue-600">Max Bid</span>
             <span className="text-3xl font-extrabold tabular-nums text-slate-900">
-              ${live.max_bid.toLocaleString()}
+              {formatCurrency(live.max_bid)}
             </span>
           </div>
 
           <div className="space-y-1.5 border-t border-slate-200 pt-3 text-sm text-slate-500">
             <div className="flex justify-between">
               <span>Buyer Fee (7.5%)</span>
-              <span className="tabular-nums text-slate-700">${live.buyer_fee.toLocaleString()}</span>
+              <span className="tabular-nums text-slate-700">{formatCurrency(live.buyer_fee)}</span>
             </div>
             <div className="flex justify-between">
               <span>Tax ({activeCar.avg_tax_rate}%)</span>
-              <span className="tabular-nums text-slate-700">${live.tax_amount_calc.toLocaleString()}</span>
+              <span className="tabular-nums text-slate-700">{formatCurrency(live.tax_amount_calc)}</span>
             </div>
             <div className="flex justify-between">
               <span>Title Fee</span>
-              <span className="tabular-nums text-slate-700">${Number(activeCar.title_fee).toLocaleString()}</span>
+              <span className="tabular-nums text-slate-700">{formatCurrency(activeCar.title_fee)}</span>
             </div>
             <div className="flex justify-between">
               <span>Repairs</span>
-              <span className="tabular-nums text-slate-700">${Number(activeCar.repair_estimate || 0).toLocaleString()}</span>
+              <span className="tabular-nums text-slate-700">{formatCurrency(activeCar.repair_estimate || 0)}</span>
             </div>
             <div className="flex justify-between border-t border-slate-200 pt-2 font-semibold text-slate-900">
               <span>Total Cost</span>
-              <span className="tabular-nums">${live.total_cost.toLocaleString()}</span>
+              <span className="tabular-nums">{formatCurrency(live.total_cost)}</span>
             </div>
           </div>
         </div>
@@ -912,7 +886,7 @@ export default function Dashboard({
             Profit
           </span>
           <span className={`text-lg font-bold tabular-nums ${profitPositive ? "text-emerald-700" : "text-red-700"}`}>
-            ${live.profit.toLocaleString()}
+            {formatCurrency(live.profit)}
             <span className="ml-2 text-xs font-medium text-slate-400">({live.margin_actual}%)</span>
           </span>
         </div>

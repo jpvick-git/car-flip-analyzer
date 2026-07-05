@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
+import CurrencyInput from "./CurrencyInput";
+import { formatCurrency } from "../utils/formatCurrency";
 import { parseRepairItems, sumRepairItems } from "../utils/repairBreakdown";
 
 export default function RepairBreakdown({
@@ -70,23 +72,17 @@ export default function RepairBreakdown({
         >
           <span className="mt-2 text-slate-400">•</span>
           <p className="flex-1 text-sm leading-relaxed text-slate-600">{item.description}</p>
-          <div className="flex shrink-0 items-center gap-1">
-            <span className="text-sm text-slate-400">$</span>
-            <input
-              type="number"
-              min="0"
-              step="1"
-              readOnly={readOnly}
-              value={item.cost}
-              onChange={(e) => updateItem(index, "cost", e.target.value)}
-              className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
-            />
-          </div>
+          <CurrencyInput
+            readOnly={readOnly}
+            value={item.cost}
+            onChange={(value) => updateItem(index, "cost", value)}
+            inputClassName="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
+          />
         </li>
       ))}
       <li className="flex items-center justify-between pt-1 text-sm font-semibold text-slate-700">
         <span>Total repair</span>
-        <span className="tabular-nums">${sumRepairItems(items).toLocaleString()}</span>
+        <span className="tabular-nums">{formatCurrency(sumRepairItems(items))}</span>
       </li>
     </ul>
   );

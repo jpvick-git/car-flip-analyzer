@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import RepairBreakdown from "../components/RepairBreakdown";
 import { parseRepairItems } from "../utils/repairBreakdown";
+import { formatCurrency } from "../utils/formatCurrency";
 
 const API = process.env.REACT_APP_API_BASE_URL ?? "";
 
@@ -350,14 +351,14 @@ export default function VehicleDetail() {
                     <Wrench size={14} />
                     <span className="text-[11px] font-semibold uppercase tracking-wide">Est. Repair</span>
                   </div>
-                  <p className="text-2xl font-bold tabular-nums text-amber-700">${repair.toLocaleString()}</p>
+                  <p className="text-2xl font-bold tabular-nums text-amber-700">{formatCurrency(repair)}</p>
                 </div>
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-center">
                   <div className="mb-1 flex items-center justify-center gap-1.5 text-emerald-600">
                     <DollarSign size={14} />
                     <span className="text-[11px] font-semibold uppercase tracking-wide">Est. Resale</span>
                   </div>
-                  <p className="text-2xl font-bold tabular-nums text-emerald-700">${resale.toLocaleString()}</p>
+                  <p className="text-2xl font-bold tabular-nums text-emerald-700">{formatCurrency(resale)}</p>
                 </div>
               </div>
 
@@ -368,7 +369,7 @@ export default function VehicleDetail() {
                 <div className="border-b border-slate-100 bg-gradient-to-b from-white to-slate-50 px-6 py-7 text-center">
                   <p className="mb-1 text-xs font-semibold uppercase tracking-[0.15em] text-blue-600">Your Max Bid</p>
                   <p className="text-5xl font-extrabold tracking-tight tabular-nums text-slate-900 sm:text-6xl">
-                    ${bid.toLocaleString()}
+                    {formatCurrency(bid)}
                   </p>
                   <p className="mt-2 text-xs text-slate-400">
                     at <span className="font-semibold text-slate-500">{margin}%</span> target margin
@@ -407,7 +408,7 @@ export default function VehicleDetail() {
                         <option value="">— Use vehicle defaults —</option>
                         {states.map((s) => (
                           <option key={s.state_code} value={s.state_code}>
-                            {s.state_name} ({s.state_code}) — Tax: {s.avg_tax_rate}% | Title: ${Number(s.title_fee).toLocaleString()}
+                            {s.state_name} ({s.state_code}) — Tax: {s.avg_tax_rate}% | Title: {formatCurrency(s.title_fee)}
                           </option>
                         ))}
                       </select>
@@ -422,23 +423,23 @@ export default function VehicleDetail() {
                   <div className="space-y-2 rounded-xl bg-slate-50 p-4 text-sm">
                     <div className="flex justify-between text-slate-500">
                       <span>Buyer Fee (7.5%)</span>
-                      <span className="tabular-nums text-slate-700">${buyerFee.toLocaleString()}</span>
+                      <span className="tabular-nums text-slate-700">{formatCurrency(buyerFee)}</span>
                     </div>
                     <div className="flex justify-between text-slate-500">
                       <span>Tax ({taxRate}%)</span>
-                      <span className="tabular-nums text-slate-700">${taxAmt.toLocaleString()}</span>
+                      <span className="tabular-nums text-slate-700">{formatCurrency(taxAmt)}</span>
                     </div>
                     <div className="flex justify-between text-slate-500">
                       <span>Title Fee</span>
-                      <span className="tabular-nums text-slate-700">${titleFee.toLocaleString()}</span>
+                      <span className="tabular-nums text-slate-700">{formatCurrency(titleFee)}</span>
                     </div>
                     <div className="flex justify-between text-slate-500">
                       <span>Repairs</span>
-                      <span className="tabular-nums text-slate-700">${repair.toLocaleString()}</span>
+                      <span className="tabular-nums text-slate-700">{formatCurrency(repair)}</span>
                     </div>
                     <div className="mt-1 flex justify-between border-t border-slate-200 pt-2 font-semibold text-slate-900">
                       <span>Total Cost</span>
-                      <span className="tabular-nums">${totalCost.toLocaleString()}</span>
+                      <span className="tabular-nums">{formatCurrency(totalCost)}</span>
                     </div>
                   </div>
 
@@ -455,7 +456,7 @@ export default function VehicleDetail() {
                       Estimated Profit
                     </span>
                     <span className={`text-lg font-bold tabular-nums ${profitPositive ? "text-emerald-700" : "text-red-700"}`}>
-                      ${profit.toLocaleString()}
+                      {formatCurrency(profit)}
                     </span>
                   </div>
 

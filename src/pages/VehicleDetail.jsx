@@ -20,22 +20,9 @@ import {
 import RepairBreakdown from "../components/RepairBreakdown";
 import { parseRepairItems } from "../utils/repairBreakdown";
 import { formatCurrency } from "../utils/formatCurrency";
-import { calculateFlipMetrics } from "../utils/flipCalculator";
+import { useFlipMetrics } from "../utils/useFlipMetrics";
 
 const API = process.env.REACT_APP_API_BASE_URL ?? "";
-
-function calcMaxBid(car, margin, overrideTaxRate, overrideTitleFee) {
-  const taxRate = overrideTaxRate !== null ? overrideTaxRate : Number(car.avg_tax_rate || 0);
-  const titleFee = overrideTitleFee !== null ? overrideTitleFee : Number(car.title_fee || 0);
-
-  return calculateFlipMetrics({
-    resale: car.resale_estimate || car.ai_resale_estimate || 0,
-    repair: car.repair_estimate || car.ai_repair_estimate || 0,
-    marginPercent: margin,
-    taxRate,
-    titleFee,
-  });
-}
 
 export default function VehicleDetail() {
   const { id } = useParams();
@@ -98,6 +85,30 @@ export default function VehicleDetail() {
     return () => window.removeEventListener("keydown", handler);
   }, [lightbox, images.length]);
 
+  const stateData = states.find((s) => s.state_code === selectedState) || null;
+  const overrideTax = stateData ? Number(stateData.avg_tax_rate) : null;
+  const overrideTitle = stateData ? Number(stateData.title_fee) : null;
+
+  const {
+    bid,
+    buyerFee,
+    taxAmt,
+    titleFee,
+    repair,
+    totalCost,
+    profit,
+    resale,
+    taxRate,
+    marginActual,
+  } = useFlipMetrics({
+    carId: car?.id ?? id,
+    resale: car?.resale_estimate || car?.ai_resale_estimate || 0,
+    repair: repairTotal,
+    marginPercent: margin,
+    taxRate: overrideTax !== null ? overrideTax : Number(car?.avg_tax_rate || 0),
+    titleFee: overrideTitle !== null ? overrideTitle : Number(car?.title_fee || 0),
+  });
+
   if (loading)
     return (
       <div className="flex justify-center items-center h-screen bg-slate-100">
@@ -122,11 +133,6 @@ export default function VehicleDetail() {
       </div>
     );
 
-  const stateData = states.find((s) => s.state_code === selectedState) || null;
-  const overrideTax = stateData ? Number(stateData.avg_tax_rate) : null;
-  const overrideTitle = stateData ? Number(stateData.title_fee) : null;
-  const { bid, buyerFee, taxAmt, titleFee, repair, totalCost, profit, resale, taxRate, marginActual } =
-    calcMaxBid({ ...car, repair_estimate: repairTotal }, margin, overrideTax, overrideTitle);
   const odometer = Number(car.odometer);
 
   const details = [
@@ -365,8 +371,8 @@ export default function VehicleDetail() {
                     {formatCurrency(bid)}
                   </p>
                   <p className="mt-2 text-xs text-slate-400">
-                    at <span className="font-semibold text-slate-500">{margin}%</span> target margin
-                    · higher repair → lower max bid · profit stays ~{margin}% of resale
+                    max bid set at <span className="font-semibold text-slate-500">{margin}%</span> margin
+                    · profit updates when you edit repair costs
                   </p>
                 </div>
 

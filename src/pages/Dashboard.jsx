@@ -20,6 +20,7 @@ import RepairBreakdown from "../components/RepairBreakdown";
 import CurrencyInput from "../components/CurrencyInput";
 import { formatCurrency } from "../utils/formatCurrency";
 import { calculateFlipMetrics } from "../utils/flipCalculator";
+import { useFlipMetrics } from "../utils/useFlipMetrics";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 //  ADD VEHICLE MODAL (ManualVehicleModal)
@@ -329,6 +330,188 @@ function CSVUploadModal({
             Upload
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+//  VEHICLE DETAIL MODAL
+///////////////////////////////////////////////////////////////////////////////////////////
+
+function VehicleDetailModal({
+  car,
+  tempMargin,
+  setTempMargin,
+  onClose,
+  onUpdateCarValue,
+  apiBase,
+  isDemo,
+}) {
+  const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
+  const metrics = useFlipMetrics({
+    carId: car.id,
+    resale: car.resale_estimate || car.ai_resale_estimate || 0,
+    repair,
+    marginPercent: tempMargin,
+    taxRate: car.avg_tax_rate || 0,
+    titleFee: car.title_fee || 0,
+  });
+  const profitPositive = metrics.profit >= 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+      <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 text-slate-900 shadow-2xl">
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-4 top-4 rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+        >
+          <X size={20} />
+        </button>
+
+        <h2 className="pr-8 text-xl font-bold tracking-tight text-slate-900">
+          {car.year} {car.make} {car.model}
+        </h2>
+
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
+          <span className="flex items-center gap-1.5">
+            <Hash size={13} className="text-slate-400" />
+            Lot {car.lot_number || "Manual"}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <MapPin size={13} className="text-slate-400" />
+            {car.sale_name || car.location || "N/A"}
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
+            <div className="mb-1 flex items-center gap-1.5 text-amber-600">
+              <Wrench size={13} />
+              <span className="text-[11px] font-semibold uppercase tracking-wide">Repair</span>
+            </div>
+            <CurrencyInput
+              value={repair}
+              onChange={(value) => onUpdateCarValue(car.id, "repair_estimate", value)}
+              inputClassName="w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-amber-700 focus:outline-none"
+            />
+          </div>
+
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+            <div className="mb-1 flex items-center gap-1.5 text-emerald-600">
+              <DollarSign size={13} />
+              <span className="text-[11px] font-semibold uppercase tracking-wide">Resale</span>
+            </div>
+            <CurrencyInput
+              value={car.resale_estimate || car.ai_resale_estimate || 0}
+              onChange={(value) => onUpdateCarValue(car.id, "resale_estimate", value)}
+              inputClassName="w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-emerald-700 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-700">Desired Margin:</span>
+          <input
+            type="number"
+            value={tempMargin}
+            onChange={(e) => {
+              let val = Number(e.target.value);
+              if (isNaN(val)) val = 0;
+              if (val < 0) val = 0;
+              if (val > 90) val = 90;
+              setTempMargin(val);
+            }}
+            className="w-20 rounded-lg border border-slate-300 px-3 py-1.5 text-sm tabular-nums focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          />
+          <span className="text-sm text-slate-500">%</span>
+        </div>
+
+        <div className="mt-4 rounded-xl bg-slate-50 p-4">
+          <div className="mb-1 flex items-baseline justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-blue-600">Max Bid</span>
+            <span className="text-3xl font-extrabold tabular-nums text-slate-900">
+              {formatCurrency(metrics.bid)}
+            </span>
+          </div>
+          <p className="mb-3 text-xs text-slate-400">
+            set at {tempMargin}% margin · profit updates when repair costs change
+          </p>
+
+          <div className="space-y-1.5 border-t border-slate-200 pt-3 text-sm text-slate-500">
+            <div className="flex justify-between">
+              <span>Buyer Fee (7.5%)</span>
+              <span className="tabular-nums text-slate-700">{formatCurrency(metrics.buyerFee)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Tax ({car.avg_tax_rate || 0}%)</span>
+              <span className="tabular-nums text-slate-700">{formatCurrency(metrics.taxAmt)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Title Fee</span>
+              <span className="tabular-nums text-slate-700">{formatCurrency(car.title_fee)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Repairs</span>
+              <span className="tabular-nums text-slate-700">{formatCurrency(metrics.repair)}</span>
+            </div>
+            <div className="flex justify-between border-t border-slate-200 pt-2 font-semibold text-slate-900">
+              <span>Total Cost</span>
+              <span className="tabular-nums">{formatCurrency(metrics.totalCost)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div
+          className={`mt-3 flex items-center justify-between rounded-xl border px-4 py-3 ${
+            profitPositive ? "border-emerald-100 bg-emerald-50" : "border-red-100 bg-red-50"
+          }`}
+        >
+          <span className={`flex items-center gap-1.5 text-sm font-semibold ${profitPositive ? "text-emerald-700" : "text-red-700"}`}>
+            {profitPositive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+            Estimated Profit
+          </span>
+          <span className={`text-lg font-bold tabular-nums ${profitPositive ? "text-emerald-700" : "text-red-700"}`}>
+            {formatCurrency(metrics.profit)}
+            <span className="ml-2 text-xs font-medium text-slate-400">({metrics.marginActual}%)</span>
+          </span>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          <div>
+            <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <Wrench size={13} className="text-amber-500" /> Repair Details
+            </p>
+            <RepairBreakdown
+              car={car}
+              apiBase={apiBase}
+              readOnly={isDemo}
+              onTotalChange={(total) => onUpdateCarValue(car.id, "repair_estimate", total)}
+            />
+          </div>
+
+          <div>
+            <p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <DollarSign size={13} className="text-emerald-500" /> Resale Details
+            </p>
+            <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">
+              {car.resale_details || "No resale details available."}
+            </p>
+          </div>
+        </div>
+
+        {car.listing_url && (
+          <a
+            href={car.listing_url}
+            className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open Listing
+            <ExternalLink size={14} />
+          </a>
+        )}
       </div>
     </div>
   );
@@ -738,187 +921,17 @@ export default function Dashboard({
         </div>
       )}
 
-{/* DETAILS MODAL */}
-{selectedCar && (() => {
-  const activeCar =
-    cars.find((c) => c.id === selectedCar.id) || selectedCar;
-
-  const live = calculateCarWithMargin(activeCar, tempMargin);
-  const profitPositive = live.profit >= 0;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-      <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 text-slate-900 shadow-2xl">
-        <button
-          onClick={() => setSelectedCar(null)}
-          aria-label="Close"
-          className="absolute right-4 top-4 rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-        >
-          <X size={20} />
-        </button>
-
-        <h2 className="pr-8 text-xl font-bold tracking-tight text-slate-900">
-          {activeCar.year} {activeCar.make} {activeCar.model}
-        </h2>
-
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
-          <span className="flex items-center gap-1.5">
-            <Hash size={13} className="text-slate-400" />
-            Lot {activeCar.lot_number || "Manual"}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <MapPin size={13} className="text-slate-400" />
-            {activeCar.sale_name || activeCar.location || "N/A"}
-          </span>
-        </div>
-
-        {/* REPAIR & RESALE */}
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
-            <div className="mb-1 flex items-center gap-1.5 text-amber-600">
-              <Wrench size={13} />
-              <span className="text-[11px] font-semibold uppercase tracking-wide">Repair</span>
-            </div>
-            <CurrencyInput
-              value={
-                activeCar.repair_estimate ||
-                activeCar.ai_repair_estimate ||
-                0
-              }
-              onChange={(value) =>
-                updateCarValue(activeCar.id, "repair_estimate", value)
-              }
-              inputClassName="w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-amber-700 focus:outline-none"
-            />
-          </div>
-
-          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
-            <div className="mb-1 flex items-center gap-1.5 text-emerald-600">
-              <DollarSign size={13} />
-              <span className="text-[11px] font-semibold uppercase tracking-wide">Resale</span>
-            </div>
-            <CurrencyInput
-              value={
-                activeCar.resale_estimate ||
-                activeCar.ai_resale_estimate ||
-                0
-              }
-              onChange={(value) =>
-                updateCarValue(activeCar.id, "resale_estimate", value)
-              }
-              inputClassName="w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-emerald-700 focus:outline-none"
-            />
-          </div>
-        </div>
-
-        {/* MARGIN */}
-        <div className="mt-4 flex items-center gap-2">
-          <span className="text-sm font-medium text-slate-700">Desired Margin:</span>
-          <input
-            type="number"
-            value={tempMargin}
-            onChange={(e) => {
-              let val = Number(e.target.value);
-              if (isNaN(val)) val = 0;
-              if (val < 0) val = 0;
-              if (val > 90) val = 90;
-              setTempMargin(val);
-            }}
-            className="w-20 rounded-lg border border-slate-300 px-3 py-1.5 text-sm tabular-nums focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-          />
-          <span className="text-sm text-slate-500">%</span>
-        </div>
-
-        {/* CALCULATED VALUES */}
-        <div className="mt-4 rounded-xl bg-slate-50 p-4">
-          <div className="mb-3 flex items-baseline justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-blue-600">Max Bid</span>
-            <span className="text-3xl font-extrabold tabular-nums text-slate-900">
-              {formatCurrency(live.max_bid)}
-            </span>
-          </div>
-
-          <div className="space-y-1.5 border-t border-slate-200 pt-3 text-sm text-slate-500">
-            <div className="flex justify-between">
-              <span>Buyer Fee (7.5%)</span>
-              <span className="tabular-nums text-slate-700">{formatCurrency(live.buyer_fee)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Tax ({activeCar.avg_tax_rate}%)</span>
-              <span className="tabular-nums text-slate-700">{formatCurrency(live.tax_amount_calc)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Title Fee</span>
-              <span className="tabular-nums text-slate-700">{formatCurrency(activeCar.title_fee)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Repairs</span>
-              <span className="tabular-nums text-slate-700">{formatCurrency(activeCar.repair_estimate || 0)}</span>
-            </div>
-            <div className="flex justify-between border-t border-slate-200 pt-2 font-semibold text-slate-900">
-              <span>Total Cost</span>
-              <span className="tabular-nums">{formatCurrency(live.total_cost)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* PROFIT / MARGIN */}
-        <div
-          className={`mt-3 flex items-center justify-between rounded-xl border px-4 py-3 ${
-            profitPositive ? "border-emerald-100 bg-emerald-50" : "border-red-100 bg-red-50"
-          }`}
-        >
-          <span className={`flex items-center gap-1.5 text-sm font-semibold ${profitPositive ? "text-emerald-700" : "text-red-700"}`}>
-            {profitPositive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-            Profit
-          </span>
-          <span className={`text-lg font-bold tabular-nums ${profitPositive ? "text-emerald-700" : "text-red-700"}`}>
-            {formatCurrency(live.profit)}
-            <span className="ml-2 text-xs font-medium text-slate-400">({live.margin_actual}%)</span>
-          </span>
-        </div>
-
-        {/* DESCRIPTIONS */}
-        <div className="mt-5 space-y-4">
-          <div>
-            <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              <Wrench size={13} className="text-amber-500" /> Repair Details
-            </p>
-            <RepairBreakdown
-              car={activeCar}
-              apiBase={API}
-              readOnly={isDemo}
-              onTotalChange={(total) =>
-                updateCarValue(activeCar.id, "repair_estimate", total)
-              }
-            />
-          </div>
-
-          <div>
-            <p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              <DollarSign size={13} className="text-emerald-500" /> Resale Details
-            </p>
-            <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">
-              {activeCar.resale_details || "No resale details available."}
-            </p>
-          </div>
-        </div>
-
-        {activeCar.listing_url && (
-          <a
-            href={activeCar.listing_url}
-            className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Open Listing
-            <ExternalLink size={14} />
-          </a>
-        )}
-      </div>
-    </div>
-  );
-})()}
+      {selectedCar && (
+        <VehicleDetailModal
+          car={cars.find((c) => c.id === selectedCar.id) || selectedCar}
+          tempMargin={tempMargin}
+          setTempMargin={setTempMargin}
+          onClose={() => setSelectedCar(null)}
+          onUpdateCarValue={updateCarValue}
+          apiBase={API}
+          isDemo={isDemo}
+        />
+      )}
 
 
     </main>

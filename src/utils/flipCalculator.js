@@ -5,6 +5,7 @@ export function calculateFlipMetrics({
   taxRate = 0,
   titleFee = 0,
   buyerFeeRate = 0.075,
+  fixedBid = null,
 }) {
   const resaleNum = Math.max(0, Number(resale) || 0);
   const repairNum = Math.max(0, Number(repair) || 0);
@@ -14,30 +15,35 @@ export function calculateFlipMetrics({
   const feeMultiplier = 1 + buyerFeeRate + tax / 100;
 
   const targetProfit = Math.round(resaleNum * margin);
-  const targetTotalCost = resaleNum - targetProfit;
-  const bidBudget = targetTotalCost - title - repairNum;
 
   let bid = 0;
-  if (bidBudget > 0) {
-    const estimate = Math.round(bidBudget / feeMultiplier);
-    let bestBid = estimate;
-    let bestScore = Infinity;
+  if (fixedBid !== null && fixedBid !== undefined && fixedBid >= 0) {
+    bid = Math.round(fixedBid);
+  } else {
+    const targetTotalCost = resaleNum - targetProfit;
+    const bidBudget = targetTotalCost - title - repairNum;
 
-    for (let candidate = Math.max(0, estimate - 3); candidate <= estimate + 3; candidate++) {
-      const buyerFee = Math.round(candidate * buyerFeeRate);
-      const taxAmt = Math.round(candidate * (tax / 100));
-      const totalCost = candidate + buyerFee + taxAmt + title + repairNum;
-      const profit = resaleNum - totalCost;
-      const score =
-        Math.abs(totalCost - targetTotalCost) * 10 + Math.abs(profit - targetProfit);
+    if (bidBudget > 0) {
+      const estimate = Math.round(bidBudget / feeMultiplier);
+      let bestBid = estimate;
+      let bestScore = Infinity;
 
-      if (score < bestScore) {
-        bestScore = score;
-        bestBid = candidate;
+      for (let candidate = Math.max(0, estimate - 3); candidate <= estimate + 3; candidate++) {
+        const buyerFee = Math.round(candidate * buyerFeeRate);
+        const taxAmt = Math.round(candidate * (tax / 100));
+        const totalCost = candidate + buyerFee + taxAmt + title + repairNum;
+        const profit = resaleNum - totalCost;
+        const score =
+          Math.abs(totalCost - targetTotalCost) * 10 + Math.abs(profit - targetProfit);
+
+        if (score < bestScore) {
+          bestScore = score;
+          bestBid = candidate;
+        }
       }
-    }
 
-    bid = bestBid;
+      bid = bestBid;
+    }
   }
 
   const buyerFee = Math.round(bid * buyerFeeRate);
@@ -59,4 +65,40 @@ export function calculateFlipMetrics({
     targetProfit,
     marginActual,
   };
+}
+
+/** Max bid for target margin — recalculate when margin/resale/tax/title change, not repair edits. */
+export function calculateMaxBidForMargin({
+  resale,
+  repair,
+  marginPercent,
+  taxRate = 0,
+  titleFee = 0,
+}) {
+  return calculateFlipMetrics({
+    resale,
+    repair,
+    marginPercent,
+    taxRate,
+    titleFee,
+  }).bid;
+}
+
+/** Profit at a fixed bid when user edits repair costs manually. */
+export function calculateMetricsAtBid({
+  resale,
+  repair,
+  bid,
+  marginPercent,
+  taxRate = 0,
+  titleFee = 0,
+}) {
+  return calculateFlipMetrics({
+    resale,
+    repair,
+    marginPercent,
+    taxRate,
+    titleFee,
+    fixedBid: bid,
+  });
 }

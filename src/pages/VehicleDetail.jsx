@@ -18,6 +18,7 @@ import {
   Images,
 } from "lucide-react";
 import RepairBreakdown from "../components/RepairBreakdown";
+import KnownIssuesCard from "../components/KnownIssuesCard";
 import { parseRepairItems } from "../utils/repairBreakdown";
 import { formatCurrency } from "../utils/formatCurrency";
 import { useFlipMetrics } from "../utils/useFlipMetrics";
@@ -360,6 +361,20 @@ export default function VehicleDetail() {
                   <p className="text-2xl font-bold tabular-nums text-emerald-700">{formatCurrency(resale)}</p>
                 </div>
               </div>
+
+              <KnownIssuesCard
+                car={car}
+                apiBase={API}
+                readOnly={isDemo}
+                onUpdate={(data) =>
+                  setCar((prev) => ({
+                    ...prev,
+                    reliability_summary: data.reliability_summary,
+                    known_issues: data.known_issues,
+                    wear_items: data.wear_items,
+                  }))
+                }
+              />
 
               {/* Bid card */}
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-200/60">

@@ -17,6 +17,11 @@ def run_ai(vehicle: dict, mode: str = "full"):
             response["resale_estimate"] = int(result.get("resale_estimate") or 5000)
             response["resale_details"] = result.get("resale_details") or "No resale details available."
 
+        if mode in ("full", "known_issues"):
+            response["reliability_summary"] = result.get("reliability_summary") or "No reliability summary available."
+            response["known_issues"] = result.get("known_issues") or []
+            response["wear_items"] = result.get("wear_items") or []
+
         return response
 
     except Exception as e:
@@ -26,11 +31,16 @@ def run_ai(vehicle: dict, mode: str = "full"):
             "repair_details": "AI error — using fallback repair cost.",
             "resale_estimate": 5000,
             "resale_details": "AI error — using fallback resale estimate.",
+            "reliability_summary": "AI error — no reliability summary available.",
+            "known_issues": [],
+            "wear_items": [],
         }
         if mode == "repair":
             return {k: fallback[k] for k in ("repair_estimate", "repair_details")}
         if mode == "resale":
             return {k: fallback[k] for k in ("resale_estimate", "resale_details")}
+        if mode == "known_issues":
+            return {k: fallback[k] for k in ("reliability_summary", "known_issues", "wear_items")}
         return fallback
 
 

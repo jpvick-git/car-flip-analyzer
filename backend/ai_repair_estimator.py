@@ -59,26 +59,17 @@ Rules:
 6. List parts_to_replace only for visibly damaged or missing components.
 7. "Conservative" means do not invent damage — NOT cheap estimates. When damage is visible, err slightly HIGH on cost rather than low.
 8. Each repair_items cost is ALL-IN (part + labor + paint/blend + clips/hardware). Never quote parts-only prices.
-9. Classify the vehicle into a tier from year/make/model, then apply that tier's multiplier to base pricing and labor rates below.
 
-Vehicle tier multipliers (apply to base parts+paint pricing below, then use realistic labor rate for the tier):
-- Economy (Toyota, Honda, Hyundai, Kia, Nissan, mainstream Ford/Chevy): baseline pricing, ~$65-75/hr labor.
-- Mainstream sport/turbo (Subaru WRX/STI, Mazdaspeed, Civic Si, mainstream Mustang/Camaro): baseline x1.15-1.3, ~$70-85/hr labor.
-- Entry luxury/German (BMW 3-series, Audi A4/Q5, Mercedes C-class): baseline x1.5-2, ~$100-140/hr labor, OEM-preferred parts.
-- Land Rover/Range Rover, high-end German (BMW 5/7/X5+, Mercedes E/S/GLE+), other low-parts-availability luxury: baseline x2-3+, ~$130-180/hr labor, flag air suspension/aluminum panels/ADAS calibration if body region affected.
-- Exotic/limited-production: flag for manual review — do not auto-price.
-
-Base pricing guidance (economy tier, typical US body shop, per line item, all-in — multiply by tier above):
-- Bumper cover replace + paint: $900–1,400.
-- Missing bumper exposing reinforcement/foam/brackets: add separate line items for reinforcement bar, energy absorber, mounting brackets, and sensors if visible — typically $300–900+ combined before paint (tier-adjusted).
-- Fender/quarter panel replace + paint: $800–1,800+ per panel.
+Pricing guidance (typical US body shop, per line item, all-in):
+- Bumper cover replace + paint: economy car $900–1,400; sport/luxury (WRX, BMW, etc.) $1,200–2,000+.
+- Missing bumper exposing reinforcement/foam/brackets: add separate line items for reinforcement bar, energy absorber, mounting brackets, and sensors if visible — typically $300–900+ combined before paint.
+- Fender/quarter panel replace + paint: $800–1,800+ per panel depending on vehicle.
 - Headlight/taillight assembly: $250–700+ installed.
 - Hood/trunk replace + paint: $900–2,500+.
 - Paint-only blend on one panel: $400–800+.
 - Frame/unibody kinks or gap issues visible in photos: flag as structural concern and add $500–3,000+ if repair (not replace) is plausible from photos alone.
 
 When a bumper is missing, torn off, or hanging: do NOT price only a cover. Include visible behind-bumper components and full refinish.
-For WRX/STI and similar mainstream sport models, use the Mainstream sport/turbo tier — not economy baseline.
 
 Return JSON with this exact structure:
 {
@@ -103,11 +94,10 @@ Return JSON with this exact structure:
 }
 
 Rules for repair_items:
-10. List each distinct visible repair as its own line item with description (include photo reference when possible) and all-in cost in USD.
-11. repair_estimate MUST equal the sum of all repair_items costs.
-12. If no visible damage, use repair_items: [] and repair_estimate: 0.
-13. Multiple damaged regions (e.g. front AND rear) must each have their own line items — never combine into one low bumper-only total.
-14. Mention the vehicle tier used (e.g. "Mainstream sport/turbo") briefly in repair_details when tier affects pricing.
+9. List each distinct visible repair as its own line item with description (include photo reference when possible) and all-in cost in USD.
+10. repair_estimate MUST equal the sum of all repair_items costs.
+11. If no visible damage, use repair_items: [] and repair_estimate: 0.
+12. Multiple damaged regions (e.g. front AND rear) must each have their own line items — never combine into one low bumper-only total.
 """
 
 RESALE_SYSTEM_PROMPT = (
@@ -128,6 +118,53 @@ Return JSON with this exact structure:
 {
   "resale_estimate": 0,
   "resale_details": "2-4 sentence wholesale value rationale"
+}
+"""
+
+KNOWN_ISSUES_SYSTEM_PROMPT = (
+    "You are an experienced independent mechanic and long-term ownership researcher. "
+    "You report ONLY widely-documented, well-known reliability issues, common wear items, "
+    "and maintenance patterns for a specific year/make/model/engine combination — the kind "
+    "of things that show up repeatedly in owner forums, CarComplaints.com, NHTSA complaints, "
+    "or manufacturer TSBs. You are not analyzing this specific vehicle's condition or photos — "
+    "you have no visibility into whether THIS car has these issues, only what is typical for "
+    "this generation of vehicle. You clearly separate 'known to happen on this platform' from "
+    "'definitely wrong with this car.'"
+)
+
+KNOWN_ISSUES_RULES = """
+Rules:
+1. Only include issues you have reasonably high confidence are real, well-documented patterns for
+   this specific year/make/model/engine/trim — not generic wear-and-tear that applies to all cars.
+2. If you are not confident about a specific claim (exact TSB number, exact failure mileage, exact
+   cost), say so in plain language rather than inventing false precision. It is fine to give a range
+   or say "commonly reported in the X-X mile range" rather than a single invented number.
+3. Split findings into two categories:
+   - "known_issues": documented reliability problems / failure patterns for this platform
+     (e.g. "ringland failure on high-mileage/modified FA20DIT engines", "air suspension compressor
+     failure", "CVT overheating/failure").
+   - "wear_items": normal maintenance/wear items that are due or coming due around this mileage
+     for this platform (e.g. clutch, struts/shocks, timing belt/chain interval, spark plugs, battery).
+4. For each item include: typical mileage or age range it tends to appear, a rough cost range if
+   repaired at a competent independent shop (not dealer, not DIY), and a one-line description of
+   why it matters for a buyer.
+5. Do NOT include collision-related repairs — that is handled elsewhere. This is about pre-existing
+   platform-level risk, independent of any accident damage.
+6. Do NOT factor these into any repair or resale dollar total. This is buyer-diligence information only.
+7. If this platform has an unusually strong or unusually poor reliability reputation overall, say so
+   in "reliability_summary" in one or two sentences.
+8. If you have low confidence about this specific year/model/engine combination (e.g. unfamiliar
+   trim, very new model, or region-specific variant), say so explicitly rather than guessing.
+
+Return JSON with this exact structure:
+{
+  "reliability_summary": "1-2 sentence overall reputation for this platform",
+  "known_issues": [
+    {"issue": "Ringland/piston failure on modified or high-boost FA20DIT engines", "typical_mileage": "any mileage if tuned; 80k+ if stock", "cost_range": "$3,000-6,000 (engine rebuild/replace)", "confidence": "high"}
+  ],
+  "wear_items": [
+    {"item": "Clutch (manual)", "typical_mileage": "60k-90k depending on driving style", "cost_range": "$800-1,400 installed", "confidence": "high"}
+  ]
 }
 """
 
@@ -535,14 +572,61 @@ def analyze_vehicle_resale(vehicle: dict, repair_result: dict | None = None) -> 
     }
 
 
+def analyze_vehicle_known_issues(vehicle: dict) -> dict:
+    """
+    Text-only, platform-level reliability lookup — no images, no odometer/title math.
+    Purely 'what does this year/make/model/engine tend to need or fail at' — informational
+    only, never rolled into repair_estimate or resale_estimate.
+    """
+    lot_number = vehicle.get("lot_number", "unknown")
+    year = vehicle.get("year") or "Unknown"
+    make = vehicle.get("make") or "Unknown"
+    model = vehicle.get("model") or "Unknown"
+    odometer_display = vehicle.get("odometer", "Unknown")
+
+    user_prompt = (
+        f"{KNOWN_ISSUES_RULES.strip()}\n\n"
+        f"Vehicle: {year} {make} {model}\n"
+        f"Current odometer: {odometer_display} miles "
+        f"(use this to judge which wear items are already due vs. still ahead)."
+    )
+
+    response = client.chat.completions.create(
+        model=RESALE_MODEL,  # cheap text-only model; no vision needed for this call
+        messages=[
+            {"role": "system", "content": KNOWN_ISSUES_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+    usage = _log_token_usage("known_issues", response)
+
+    raw = response.choices[0].message.content.strip()
+    fallback = {
+        "reliability_summary": "Unable to generate reliability summary.",
+        "known_issues": [],
+        "wear_items": [],
+    }
+    parsed = _parse_json_response(raw, lot_number, fallback)
+
+    return {
+        "reliability_summary": parsed.get("reliability_summary") or fallback["reliability_summary"],
+        "known_issues": parsed.get("known_issues") or [],
+        "wear_items": parsed.get("wear_items") or [],
+        "_usage": [usage],
+    }
+
+
 def analyze_vehicle(vehicle, mode: str = "full") -> dict:
     """
     Analyze a vehicle with AI.
 
     mode:
-      - "full": repair (if photos) + resale
+      - "full": repair (if photos) + resale + known_issues
       - "repair": vision repair only
       - "resale": text resale only
+      - "known_issues": text platform-reliability lookup only (no photos, no odometer/title math)
     """
     mode = vehicle.get("mode", mode)
     result = {}
@@ -568,6 +652,11 @@ def analyze_vehicle(vehicle, mode: str = "full") -> dict:
         resale_result = analyze_vehicle_resale(vehicle, repair_context)
         usages.extend(resale_result.pop("_usage", []))
         result.update(resale_result)
+
+    if mode in ("full", "known_issues"):
+        known_issues_result = analyze_vehicle_known_issues(vehicle)
+        usages.extend(known_issues_result.pop("_usage", []))
+        result.update(known_issues_result)
 
     if usages:
         result["_usage"] = usages
@@ -658,6 +747,11 @@ def _print_dry_run_result(lot, meta, ai_result):
     print(f"Repair details:   {ai_result.get('repair_details')}")
     print(f"Resale estimate:  {ai_result.get('resale_estimate')}")
     print(f"Resale details:   {ai_result.get('resale_details')}")
+    print(f"Reliability:      {ai_result.get('reliability_summary')}")
+    known = ai_result.get("known_issues") or []
+    wear = ai_result.get("wear_items") or []
+    if known or wear:
+        print(f"Known issues:     {len(known)}  |  Wear items: {len(wear)}")
 
     if structured and structured.get("regions"):
         print("-" * 72)
@@ -739,6 +833,9 @@ def process_lot(lot, rds_engine, dry_run=False, force=False):
                         repair_breakdown = :repair_breakdown,
                         resale_estimate = :resale_estimate,
                         resale_details = :resale_details,
+                        reliability_summary = :reliability_summary,
+                        known_issues = :known_issues,
+                        wear_items = :wear_items,
                         updated_at = NOW()
                     WHERE lot_number = :lot;
                 """),
@@ -749,6 +846,9 @@ def process_lot(lot, rds_engine, dry_run=False, force=False):
                     "repair_breakdown": ai_result.get("repair_breakdown", "[]"),
                     "resale_estimate": ai_result.get("resale_estimate"),
                     "resale_details": ai_result.get("resale_details"),
+                    "reliability_summary": ai_result.get("reliability_summary"),
+                    "known_issues": json.dumps(ai_result.get("known_issues") or []),
+                    "wear_items": json.dumps(ai_result.get("wear_items") or []),
                 },
             )
 
@@ -875,7 +975,7 @@ if __name__ == "__main__":
         print(f"Download dir: {DOWNLOAD_DIR}")
         print(f"AI config: MAX_IMAGES={MAX_IMAGES}, detail={IMAGE_DETAIL}, angle_selection=on")
         env_cap = os.getenv("AI_MAX_IMAGES")
-        print(f"  AI_MAX_IMAGES env: {env_cap if env_cap else 'not set (default 12)'}")
+        print(f"  AI_MAX_IMAGES env: {env_cap if env_cap else 'not set (default 8)'}")
         print(f"Lots: {', '.join(LOTS)}")
 
         done = failed = 0

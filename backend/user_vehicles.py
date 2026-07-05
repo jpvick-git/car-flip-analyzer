@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from .db import get_engine
 from .auth import get_current_user, get_vehicle_owner_id, require_not_demo
+from .ai_estimator import run_ai
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
@@ -18,14 +19,18 @@ DOWNLOAD_DIR = "/opt/carflip/backend/downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 
-def _ensure_repair_breakdown_column():
+def _ensure_schema_columns():
     with engine.begin() as conn:
-        conn.execute(
-            text("ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS repair_breakdown TEXT")
-        )
+        for stmt in (
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS repair_breakdown TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS reliability_summary TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS known_issues TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS wear_items TEXT",
+        ):
+            conn.execute(text(stmt))
 
 
-_ensure_repair_breakdown_column()
+_ensure_schema_columns()
 
 
 class RepairItem(BaseModel):
@@ -137,6 +142,71 @@ def update_vehicle_repair(
     return {
         "repair_estimate": total,
         "repair_breakdown": items,
+    }
+
+
+@router.post("/vehicle/{vehicle_id}/known_issues")
+def refresh_vehicle_known_issues(
+    vehicle_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Re-run platform reliability lookup (text-only, no photos)."""
+    require_not_demo(current_user)
+    owner_id = get_vehicle_owner_id(current_user)
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("""
+                SELECT year, make, model, odometer, lot_number
+                FROM user_vehicles
+                WHERE id = :id AND user_id = :uid
+            """),
+            {"id": vehicle_id, "uid": owner_id},
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+
+    vehicle = {
+        "images": [],
+        "year": row.year,
+        "make": row.make,
+        "model": row.model,
+        "odometer": row.odometer or "Unknown",
+        "lot_number": row.lot_number or str(vehicle_id),
+        "damage_description": "",
+        "title_code": "Unknown",
+    }
+
+    result = run_ai(vehicle, mode="known_issues")
+    known_issues_json = json.dumps(result.get("known_issues") or [])
+    wear_items_json = json.dumps(result.get("wear_items") or [])
+
+    with engine.begin() as conn:
+        updated = conn.execute(
+            text("""
+                UPDATE user_vehicles
+                SET reliability_summary = :summary,
+                    known_issues = :known_issues,
+                    wear_items = :wear_items,
+                    updated_at = NOW()
+                WHERE id = :id AND user_id = :uid
+            """),
+            {
+                "summary": result.get("reliability_summary"),
+                "known_issues": known_issues_json,
+                "wear_items": wear_items_json,
+                "id": vehicle_id,
+                "uid": owner_id,
+            },
+        )
+        if updated.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Vehicle not found")
+
+    return {
+        "reliability_summary": result.get("reliability_summary"),
+        "known_issues": result.get("known_issues") or [],
+        "wear_items": result.get("wear_items") or [],
     }
 
 

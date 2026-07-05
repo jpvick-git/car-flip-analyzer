@@ -44,7 +44,9 @@ client = OpenAI(api_key=openai_key)
 REPAIR_SYSTEM_PROMPT = (
     "You are an experienced automotive appraiser and body shop estimator. "
     "You inspect vehicle photos and report only damage you can see. "
-    "You never assume or invent damage that is not visible in the photos."
+    "You never assume or invent damage that is not visible in the photos. "
+    "When damage IS visible, you price repairs at realistic US body-shop out-the-door rates "
+    "(parts + labor + paint + related hardware) — not DIY, not parts-only, not auction flip shortcuts."
 )
 
 REPAIR_RULES = """
@@ -55,7 +57,19 @@ Rules:
 4. If photos show a clean vehicle, report minimal or zero repair cost.
 5. Do not invent crumpled panels, broken lights, deployed airbags, or missing parts unless clearly visible.
 6. List parts_to_replace only for visibly damaged or missing components.
-7. Estimate repair cost conservatively (parts + labor + paint).
+7. "Conservative" means do not invent damage — NOT cheap estimates. When damage is visible, err slightly HIGH on cost rather than low.
+8. Each repair_items cost is ALL-IN (part + labor + paint/blend + clips/hardware). Never quote parts-only prices.
+
+Pricing guidance (typical US body shop, per line item, all-in):
+- Bumper cover replace + paint: economy car $900–1,400; sport/luxury (WRX, BMW, etc.) $1,200–2,000+.
+- Missing bumper exposing reinforcement/foam/brackets: add separate line items for reinforcement bar, energy absorber, mounting brackets, and sensors if visible — typically $300–900+ combined before paint.
+- Fender/quarter panel replace + paint: $800–1,800+ per panel depending on vehicle.
+- Headlight/taillight assembly: $250–700+ installed.
+- Hood/trunk replace + paint: $900–2,500+.
+- Paint-only blend on one panel: $400–800+.
+- Frame/unibody kinks or gap issues visible in photos: flag as structural concern and add $500–3,000+ if repair (not replace) is plausible from photos alone.
+
+When a bumper is missing, torn off, or hanging: do NOT price only a cover. Include visible behind-bumper components and full refinish.
 
 Return JSON with this exact structure:
 {
@@ -72,16 +86,18 @@ Return JSON with this exact structure:
   "labor_hours": 0,
   "interior_notes": "",
   "repair_items": [
-    {"description": "Front bumper replacement (Photo 4)", "cost": 350}
+    {"description": "Rear bumper cover, reinforcement, absorber, brackets — replace + paint (Photo 8)", "cost": 1850},
+    {"description": "Front bumper cover — replace + paint (Photo 1)", "cost": 1350}
   ],
-  "repair_estimate": 350,
+  "repair_estimate": 3200,
   "repair_details": "2-4 sentence summary citing photo evidence"
 }
 
 Rules for repair_items:
-8. List each visible repair as its own line item with description (include photo reference when possible) and cost in USD.
-9. repair_estimate MUST equal the sum of all repair_items costs.
-10. If no visible damage, use repair_items: [] and repair_estimate: 0.
+9. List each distinct visible repair as its own line item with description (include photo reference when possible) and all-in cost in USD.
+10. repair_estimate MUST equal the sum of all repair_items costs.
+11. If no visible damage, use repair_items: [] and repair_estimate: 0.
+12. Multiple damaged regions (e.g. front AND rear) must each have their own line items — never combine into one low bumper-only total.
 """
 
 RESALE_SYSTEM_PROMPT = (

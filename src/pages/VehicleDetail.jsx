@@ -373,6 +373,7 @@ export default function VehicleDetail() {
                   </p>
                   <p className="mt-2 text-xs text-slate-400">
                     at <span className="font-semibold text-slate-500">{margin}%</span> target margin
+                    · max bid adjusts when repair changes
                   </p>
                 </div>
 
@@ -454,6 +455,7 @@ export default function VehicleDetail() {
                     <span className={`flex items-center gap-1.5 text-sm font-semibold ${profitPositive ? "text-emerald-700" : "text-red-700"}`}>
                       {profitPositive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
                       Estimated Profit
+                      <span className="ml-1 text-xs font-normal text-slate-400">(at {margin}% margin)</span>
                     </span>
                     <span className={`text-lg font-bold tabular-nums ${profitPositive ? "text-emerald-700" : "text-red-700"}`}>
                       {formatCurrency(profit)}

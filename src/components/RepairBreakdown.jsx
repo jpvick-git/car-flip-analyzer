@@ -16,12 +16,10 @@ export default function RepairBreakdown({
   const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
 
   useEffect(() => {
-    setItems(parseRepairItems(car));
-  }, [car?.id, car?.repair_breakdown, car?.repair_details, car?.repair_estimate]);
-
-  useEffect(() => {
-    onTotalChange?.(sumRepairItems(items));
-  }, [items, onTotalChange]);
+    const parsed = parseRepairItems(car);
+    setItems(parsed);
+    onTotalChange?.(sumRepairItems(parsed));
+  }, [car?.id, car?.repair_breakdown, car?.repair_details, car?.repair_estimate, onTotalChange]);
 
   const persist = (nextItems) => {
     if (readOnly || !car?.id) return;
@@ -50,6 +48,7 @@ export default function RepairBreakdown({
             }
           : item
       );
+      onTotalChange?.(sumRepairItems(next));
       persist(next);
       return next;
     });

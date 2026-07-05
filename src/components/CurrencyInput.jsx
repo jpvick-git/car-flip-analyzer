@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { formatCurrency, parseCurrencyInput } from "../utils/formatCurrency";
+import { formatCurrency, normalizeDigitInput, parseCurrencyInput } from "../utils/formatCurrency";
 
 export default function CurrencyInput({
   value,
@@ -14,7 +14,7 @@ export default function CurrencyInput({
 
   useEffect(() => {
     if (!focused) {
-      setDraft(String(amount || ""));
+      setDraft(amount ? String(amount) : "");
     }
   }, [amount, focused]);
 
@@ -22,34 +22,30 @@ export default function CurrencyInput({
     return <span className={className}>{formatCurrency(amount)}</span>;
   }
 
-  const handleFocus = () => {
+  const handleFocus = (e) => {
     setFocused(true);
-    setDraft(String(amount || ""));
+    setDraft(amount ? String(amount) : "");
+    requestAnimationFrame(() => e.target.select());
   };
 
   const handleBlur = () => {
     setFocused(false);
     const parsed = parseCurrencyInput(draft);
     onChange?.(parsed);
+    setDraft(parsed ? String(parsed) : "");
   };
 
   const handleChange = (e) => {
-    const digits = e.target.value.replace(/[^\d]/g, "");
-    setDraft(digits);
-    onChange?.(parseCurrencyInput(digits));
+    const normalized = normalizeDigitInput(e.target.value);
+    setDraft(normalized);
+    onChange?.(parseCurrencyInput(normalized));
   };
-
-  const displayValue = focused
-    ? draft
-      ? `$${Number(draft).toLocaleString("en-US")}`
-      : ""
-    : formatCurrency(amount);
 
   return (
     <input
       type="text"
       inputMode="numeric"
-      value={displayValue}
+      value={focused ? draft : formatCurrency(amount)}
       onFocus={handleFocus}
       onBlur={handleBlur}
       onChange={handleChange}

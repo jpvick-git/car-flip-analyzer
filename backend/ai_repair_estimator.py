@@ -69,6 +69,13 @@ Pricing guidance (typical US body shop, per line item, all-in):
 - Paint-only blend on one panel: $400–800+.
 - Frame/unibody kinks or gap issues visible in photos: flag as structural concern and add $500–3,000+ if repair (not replace) is plausible from photos alone.
 
+Vehicle tier multiplier — apply to the base pricing above, and use the matching labor rate:
+- Economy (Toyota, Honda, Hyundai, Kia, Nissan, mainstream Ford/Chevy/Buick): base pricing as-is, ~$65-75/hr labor.
+- Mainstream sport/turbo (Subaru WRX/STI, Mazdaspeed, Civic Si/Type R, Mustang/Camaro non-performance-trim): base x1.15-1.3, ~$70-85/hr labor.
+- Entry luxury / mainstream German (BMW 3-series, Audi A4/Q5, Mercedes C-class, Volvo, Acura, Infiniti, Lexus): base x1.5-2, ~$100-140/hr labor. Prefer OEM parts pricing over aftermarket.
+- Premium/complex luxury (Land Rover/Range Rover, BMW 5/7/X5+, Mercedes E/S/GLE/G-class+, Porsche, Audi Q7/Q8/A6+): base x2-3+, ~$130-180/hr labor, OEM parts only. If the damaged region plausibly houses air suspension components, aluminum body panels, or ADAS sensors/cameras (front bumper/grille, windshield, side mirrors), add an explicit line item or note flagging it — do not silently fold it into the bumper/panel cost.
+- Exotic / limited-production / unfamiliar platform: do not price with confidence — add a repair_items line item noting "flag for manual/specialist review" with your best-guess cost range clearly labeled as low-confidence.
+
 When a bumper is missing, torn off, or hanging: do NOT price only a cover. Include visible behind-bumper components and full refinish.
 
 Return JSON with this exact structure:
@@ -111,13 +118,23 @@ Rules:
 1. Use wholesale/auction pricing, not retail listing prices.
 2. Apply title discounts: branded/salvage titles typically 30–50% below clean-title wholesale.
 3. Mileage may vary ±10,000 miles internally; always cite the odometer value provided.
-4. Factor repair cost and severity when a repair summary is provided.
+4. Factor repair cost and severity when a repair line-item list is provided below.
 5. Be conservative — understate rather than overstate value.
+6. CRITICAL: You have NOT seen any photos of this vehicle. Your only source of truth about
+   damage is the "Known repair line items" list below (if present) and the title/odometer
+   context. Do NOT state, imply, or invent any specific damage detail that is not literally
+   present in that line-item list — this includes airbag deployment, frame damage, structural
+   damage, or any specific component failure. If the line-item list does not mention airbags,
+   you may not say airbags deployed. If it is empty or absent, describe the vehicle's value
+   based only on title status, mileage, and general market factors — do not speculate about
+   what kind of damage a branded title "typically" implies.
+7. It is fine, and preferred, to say "no detailed repair breakdown was available" rather than
+   filling that gap with plausible-sounding specifics.
 
 Return JSON with this exact structure:
 {
   "resale_estimate": 0,
-  "resale_details": "2-4 sentence wholesale value rationale"
+  "resale_details": "2-4 sentence wholesale value rationale, citing only line items actually provided"
 }
 """
 
@@ -178,16 +195,18 @@ def extract_lot_number(value: str) -> str:
     return match.group(0) if match else value.strip()
 
 
-# Copart zip files use {lot}_Image_N.jpg — typical gallery order below.
-# Manual uploads use the same Image_1..6 sequence (front, driver, passenger, rear, interior, dash).
-COPART_INDEX_TO_ANGLE = {
-    1: "front",
-    2: "rear",
-    3: "left",
-    4: "right",
-    5: "interior",
-    6: "dashboard",
-}
+# Copart's gallery order is NOT consistent across lots (confirmed by comparing real lots —
+# position 1 is sometimes a front shot, sometimes a 3/4 side shot; interior/engine/VIN photos
+# land at different indices per lot). A fixed index->angle map silently mislabels photos and
+# was the root cause of a prior under-estimate (damage photos got excluded from the model's
+# priority selection because they were mis-bucketed as "interior"/"dashboard").
+#
+# Fix: only trust angle labels we can detect from the FILENAME itself (works for manual
+# uploads named front/rear/left/right/etc.). For generic Copart filenames with no keyword
+# (e.g. "54558326_Image_5.jpg"), do NOT guess an angle — bucket by index only, and when a
+# subset must be chosen, spread the selection evenly across the full index range so both
+# early and late photos in the gallery get a chance (Copart's damage/3-4 detail shots can
+# land anywhere in the sequence, not just at the end).
 
 ANGLE_KEYWORDS = {
     "front": ("front", "fwd", "forward"),
@@ -225,23 +244,44 @@ def _detect_angle_from_filename(filename: str) -> str | None:
 
 
 def _classify_image(filename: str) -> tuple[str, int]:
-    """Return (angle_bucket, sort_index) for an image filename."""
+    """Return (angle_bucket, sort_index) for an image filename.
+
+    Angle is only ever set from a filename keyword match. Generic Copart-style
+    filenames with no keyword ("Image_5.jpg") return "unlabeled" rather than a
+    guessed angle — a fixed position->angle mapping does not hold across lots.
+    """
     angle = _detect_angle_from_filename(filename)
     index = _parse_image_index(filename)
 
     if angle:
         return angle, index if index is not None else 9999
-    if index is not None:
-        if index in COPART_INDEX_TO_ANGLE:
-            return COPART_INDEX_TO_ANGLE[index], index
-        if index >= 7:
-            return "detail", index
-    return "extra", index if index is not None else 9999
+    return "unlabeled", index if index is not None else 9999
+
+
+def _evenly_spread(items: list[tuple[int, str, str]], count: int) -> list[tuple[int, str, str]]:
+    """Pick `count` items spread evenly across the list rather than just the first N —
+    so a subset selection doesn't systematically favor early or late gallery positions."""
+    if count <= 0 or not items:
+        return []
+    if len(items) <= count:
+        return items
+    step = len(items) / count
+    picked, seen_idx = [], set()
+    for i in range(count):
+        idx = int(i * step)
+        while idx in seen_idx and idx < len(items) - 1:
+            idx += 1
+        seen_idx.add(idx)
+        picked.append(items[idx])
+    return picked
 
 
 def select_images_by_angle(lot_dir: str, max_images: int | None = None) -> tuple[list[dict], dict]:
     """
-    Pick diverse inspection photos instead of the first N alphabetically.
+    Pick inspection photos: filename-keyword matches (front/rear/left/etc.) get priority
+    slots since those labels are reliable; everything else ("unlabeled" — the common case
+    for raw Copart filenames) is spread evenly across the gallery rather than guessed at
+    or truncated from one end, since damage/detail shots can land anywhere in the sequence.
     Returns ([{"path", "label", "filename"}, ...], debug_info).
     """
     limit = max_images if max_images is not None else MAX_IMAGES
@@ -255,17 +295,19 @@ def select_images_by_angle(lot_dir: str, max_images: int | None = None) -> tuple
         return [], {"total_available": 0, "selected": []}
 
     buckets: dict[str, list[tuple[int, str, str]]] = {angle: [] for angle in ANGLE_PRIORITY}
-    buckets["extra"] = []
+    buckets["unlabeled"] = []
 
     for filename in files:
         angle, sort_index = _classify_image(filename)
-        target = angle if angle in buckets else "extra"
+        target = angle if angle in buckets else "unlabeled"
         buckets[target].append((sort_index, filename, os.path.join(lot_dir, filename)))
 
     selected: list[dict] = []
     selected_debug: list[str] = []
     used_paths: set[str] = set()
 
+    # Keyword-matched angles first — one photo per recognized angle, since these labels
+    # are trustworthy and we want guaranteed coverage of each side of the vehicle.
     for angle in ANGLE_PRIORITY:
         if len(selected) >= limit:
             break
@@ -277,23 +319,24 @@ def select_images_by_angle(lot_dir: str, max_images: int | None = None) -> tuple
             used_paths.add(path)
             break
 
-    if len(selected) < limit:
-        extras = sorted(
+    # Remaining slots: spread evenly across whatever's left (unlabeled + any extra
+    # keyword-matched photos beyond one-per-angle), sorted by original gallery index.
+    remaining_slots = limit - len(selected)
+    if remaining_slots > 0:
+        leftover = sorted(
             [
                 (sort_index, filename, path)
-                for angle in ANGLE_PRIORITY + ["extra"]
+                for angle in ANGLE_PRIORITY + ["unlabeled"]
                 for sort_index, filename, path in buckets.get(angle, [])
                 if path not in used_paths
             ],
             key=lambda item: item[0],
         )
-        for sort_index, filename, path in extras:
-            if len(selected) >= limit:
-                break
+        for sort_index, filename, path in _evenly_spread(leftover, remaining_slots):
             if path in used_paths:
                 continue
             angle, _ = _classify_image(filename)
-            label = angle if angle != "extra" else f"extra_{sort_index}"
+            label = angle if angle != "unlabeled" else f"photo_{sort_index}"
             selected.append({"path": path, "label": label, "filename": filename})
             selected_debug.append(f"{label}: {filename}")
             used_paths.add(path)
@@ -380,9 +423,10 @@ def _parse_json_response(raw: str, lot_number: str, fallback: dict) -> dict:
         return fallback
 
 
-def _attach_images(messages, image_entries, lot_number: str) -> None:
+def _attach_images(messages, image_entries, lot_number: str, max_images: int | None = None) -> None:
+    limit = max_images if max_images is not None else MAX_IMAGES
     valid_entries = [
-        entry for entry in image_entries[:MAX_IMAGES]
+        entry for entry in image_entries[:limit]
         if entry.get("path") and os.path.isfile(entry["path"])
     ]
     print(
@@ -532,12 +576,31 @@ def analyze_vehicle_resale(vehicle: dict, repair_result: dict | None = None) -> 
     repair_summary = ""
     if repair_result:
         estimate = repair_result.get("repair_estimate")
-        details = repair_result.get("repair_details") or ""
-        if estimate is not None or details:
+        # Pass the STRUCTURED line items, not the free-text summary — the resale model
+        # (text-only, no photo access) must not be able to elaborate beyond what the
+        # vision model actually itemized. Free-text summaries invite it to "fill in"
+        # plausible-sounding specifics (e.g. inventing airbag deployment) that were
+        # never actually costed or seen.
+        breakdown_raw = repair_result.get("repair_breakdown")
+        items = []
+        if breakdown_raw:
+            try:
+                items = json.loads(breakdown_raw) if isinstance(breakdown_raw, str) else breakdown_raw
+            except (json.JSONDecodeError, TypeError):
+                items = []
+        if estimate is not None or items:
+            if items:
+                item_lines = "\n".join(
+                    f"  - {item.get('description', 'Unknown item')}: ${item.get('cost', 0)}"
+                    for item in items
+                )
+            else:
+                item_lines = "  (no itemized breakdown available)"
             repair_summary = (
-                "\nKnown repair assessment:\n"
-                f"- Repair estimate: {estimate if estimate is not None else 'Unknown'}\n"
-                f"- Summary: {details}"
+                "\nKnown repair line items (this is the ONLY damage information you have — "
+                "do not add to it):\n"
+                f"- Repair estimate total: {estimate if estimate is not None else 'Unknown'}\n"
+                f"{item_lines}"
             )
 
     user_prompt = (
@@ -618,6 +681,74 @@ def analyze_vehicle_known_issues(vehicle: dict) -> dict:
     }
 
 
+def validate_repair_estimate(vehicle: dict, result: dict) -> dict:
+    """
+    Rule-based sanity checks — catches the two failure modes seen in practice:
+    (1) auction damage note mentions a region with no matching repair line item,
+    (2) resale narrative describes damage severity the repair line items don't support.
+    This never changes any dollar figure — it only flags for manual review.
+    """
+    reasons = []
+
+    damage_note = (vehicle.get("damage_description") or "").lower()
+    breakdown_raw = result.get("repair_breakdown")
+    items = []
+    if breakdown_raw:
+        try:
+            items = json.loads(breakdown_raw) if isinstance(breakdown_raw, str) else breakdown_raw
+        except (json.JSONDecodeError, TypeError):
+            items = []
+    item_text = " ".join(item.get("description", "") for item in items).lower()
+    repair_estimate = result.get("repair_estimate") or 0
+    resale_estimate = result.get("resale_estimate") or 0
+
+    # 1. Damage-note region vs. line items
+    region_keywords = {
+        "front": ["front"],
+        "rear": ["rear", "back"],
+        "side": ["side", "left", "right", "driver", "passenger"],
+        "roof": ["roof", "top", "rollover"],
+        "all over": ["all over", "burn", "fire", "flood"],
+    }
+    for region, keywords in region_keywords.items():
+        if any(kw in damage_note for kw in keywords):
+            if not any(kw in item_text for kw in keywords) and items:
+                reasons.append(
+                    f"Auction damage note mentions '{region}' but no repair line item references it."
+                )
+
+    # 2. Airbag/SRS mentioned in damage note or resale text, but no corresponding line item
+    resale_text = (result.get("resale_details") or "").lower()
+    airbag_terms = ["airbag", "air bag", "srs"]
+    if any(term in damage_note or term in resale_text for term in airbag_terms):
+        if not any(term in item_text for term in airbag_terms):
+            reasons.append(
+                "Airbag/SRS mentioned in damage note or resale narrative but not priced as a repair line item."
+            )
+
+    # 3. Resale narrative claiming severity/specifics not present in repair line items
+    severity_terms = ["deployed airbag", "structural damage", "frame damage", "totaled", "severe damage"]
+    for term in severity_terms:
+        if term in resale_text and term.split()[0] not in item_text:
+            reasons.append(f"Resale narrative states '{term}' — not reflected in repair line items.")
+
+    # 4. Floor check — real accident repairs rarely land under $1,500 all-in
+    if items and 0 < repair_estimate < 1500:
+        reasons.append(f"Repair estimate (${repair_estimate}) is unusually low for a listed accident lot.")
+
+    # 5. Ceiling check — repair approaching/exceeding resale value is a walk-away zone
+    if resale_estimate and repair_estimate >= resale_estimate * 0.6:
+        reasons.append(
+            f"Repair estimate (${repair_estimate}) is >=60% of resale estimate (${resale_estimate}) — "
+            "marginal or negative-margin territory."
+        )
+
+    return {
+        "needs_manual_review": bool(reasons),
+        "review_reasons": reasons,
+    }
+
+
 def analyze_vehicle(vehicle, mode: str = "full") -> dict:
     """
     Analyze a vehicle with AI.
@@ -657,6 +788,9 @@ def analyze_vehicle(vehicle, mode: str = "full") -> dict:
         known_issues_result = analyze_vehicle_known_issues(vehicle)
         usages.extend(known_issues_result.pop("_usage", []))
         result.update(known_issues_result)
+
+    if mode == "full":
+        result.update(validate_repair_estimate(vehicle, result))
 
     if usages:
         result["_usage"] = usages
@@ -753,6 +887,12 @@ def _print_dry_run_result(lot, meta, ai_result):
     if known or wear:
         print(f"Known issues:     {len(known)}  |  Wear items: {len(wear)}")
 
+    if ai_result.get("needs_manual_review"):
+        print("-" * 72)
+        print("⚠ NEEDS MANUAL REVIEW:")
+        for reason in ai_result.get("review_reasons", []):
+            print(f"  - {reason}")
+
     if structured and structured.get("regions"):
         print("-" * 72)
         print("Region flags:")
@@ -836,6 +976,8 @@ def process_lot(lot, rds_engine, dry_run=False, force=False):
                         reliability_summary = :reliability_summary,
                         known_issues = :known_issues,
                         wear_items = :wear_items,
+                        needs_manual_review = :needs_manual_review,
+                        review_reasons = :review_reasons,
                         updated_at = NOW()
                     WHERE lot_number = :lot;
                 """),
@@ -849,6 +991,8 @@ def process_lot(lot, rds_engine, dry_run=False, force=False):
                     "reliability_summary": ai_result.get("reliability_summary"),
                     "known_issues": json.dumps(ai_result.get("known_issues") or []),
                     "wear_items": json.dumps(ai_result.get("wear_items") or []),
+                    "needs_manual_review": ai_result.get("needs_manual_review", False),
+                    "review_reasons": json.dumps(ai_result.get("review_reasons") or []),
                 },
             )
 

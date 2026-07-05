@@ -22,6 +22,10 @@ def run_ai(vehicle: dict, mode: str = "full"):
             response["known_issues"] = result.get("known_issues") or []
             response["wear_items"] = result.get("wear_items") or []
 
+        if mode == "full":
+            response["needs_manual_review"] = result.get("needs_manual_review", False)
+            response["review_reasons"] = result.get("review_reasons") or []
+
         return response
 
     except Exception as e:

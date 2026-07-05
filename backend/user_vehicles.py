@@ -26,6 +26,8 @@ def _ensure_schema_columns():
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS reliability_summary TEXT",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS known_issues TEXT",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS wear_items TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS needs_manual_review BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS review_reasons TEXT",
         ):
             conn.execute(text(stmt))
 

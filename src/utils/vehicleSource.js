@@ -45,3 +45,11 @@ export function askingPrice(car) {
   const n = Number(String(raw).replace(/[^\d.]/g, ""));
   return Number.isFinite(n) && n > 0 ? n : null;
 }
+
+export function formatSaleDate(car) {
+  if (isPrivateParty(car)) return null;
+  if (!car?.sale_date) return null;
+  const d = new Date(car.sale_date);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString();
+}

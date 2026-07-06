@@ -78,4 +78,11 @@ def normalize_vehicle(vehicle: dict) -> dict:
     if not out.get("listing_description") and out.get("description"):
         out["listing_description"] = out["description"]
 
+    image_url = out.get("image_url")
+    if image_url:
+        out["image_url"] = image_url.replace(
+            "https://api.carflipanalyzer.com/backend/downloads/",
+            "https://carflipanalyzer.com/downloads/",
+        )
+
     return out

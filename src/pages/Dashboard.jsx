@@ -29,6 +29,7 @@ import {
   costLabel,
   maxOfferLabel,
   askingPrice,
+  formatSaleDate,
 } from "../utils/vehicleSource";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -841,12 +842,12 @@ export default function Dashboard({
                       <MapPin size={13} className="shrink-0 text-slate-400" />
                       {car.sale_name || car.location || "N/A"}
                     </p>
+                    {formatSaleDate(car) && (
                     <p className="flex items-center gap-2">
                       <Calendar size={13} className="shrink-0 text-slate-400" />
-                      {car.sale_date
-                        ? new Date(car.sale_date).toLocaleDateString()
-                        : "N/A"}
+                      {formatSaleDate(car)}
                     </p>
+                    )}
                   </div>
 
                   {/* Repairs / Resale */}

@@ -20,6 +20,7 @@ router = APIRouter()
 
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "/opt/carflip/backend/downloads")
 INTERNAL_TRIGGER_URL = os.getenv("INTERNAL_TRIGGER_URL", "http://localhost:8000/api/trigger")
+IMAGE_BASE_URL = os.getenv("IMAGE_BASE_URL", "https://carflipanalyzer.com/downloads")
 
 
 @router.post("/add_manual_vehicle")
@@ -72,7 +73,7 @@ async def add_manual_vehicle(
                 with open(save_path, "wb") as buffer:
                     shutil.copyfileobj(file.file, buffer)
 
-                url = f"https://api.carflipanalyzer.com/backend/downloads/{lot_number}/{name}"
+                url = f"{IMAGE_BASE_URL.rstrip('/')}/{lot_number}/{name}"
                 saved_image_urls.append(url)
                 idx += 1
 
@@ -120,7 +121,7 @@ async def add_manual_vehicle(
                         :retail,
                         :asking_price,
                         :listing_description,
-                        'Private Party',
+                        NULL,
                         :year,
                         :make,
                         :model,

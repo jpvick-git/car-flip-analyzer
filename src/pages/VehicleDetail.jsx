@@ -169,6 +169,9 @@ export default function VehicleDetail() {
 
   const profitPositive = profit >= 0;
   const marginFill = (margin / 40) * 100;
+  const hasReconData = Boolean(car.repair_details || car.repair_breakdown);
+  const hasResaleData = Boolean(car.resale_details);
+  const showAnalysisRow = hasReconData || hasResaleData;
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -326,36 +329,46 @@ export default function VehicleDetail() {
               </section>
             )}
 
-            {/* AI Details */}
-            {(car.repair_details || car.repair_breakdown || car.resale_details) && (
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                {(car.repair_details || car.repair_breakdown) && (
-                  <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-600">
-                        <Wrench size={13} />
-                      </span>
-                      {isPrivate ? "Recon Analysis" : "Repair Analysis"}
-                    </h3>
-                    <RepairBreakdown
-                      car={car}
-                      apiBase={API}
-                      readOnly={isDemo}
-                      onTotalChange={setRepairTotal}
-                    />
-                  </section>
-                )}
-                {car.resale_details && (
-                  <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-emerald-600">
-                        <DollarSign size={13} />
-                      </span>
-                      {isPrivate ? "Retail Exit" : "Resale Analysis"}
-                    </h3>
-                    <p className="text-sm leading-relaxed text-slate-600">{car.resale_details}</p>
-                  </section>
-                )}
+            {/* AI Details — equal-height paired tiles */}
+            {showAnalysisRow && (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-stretch">
+                <section className="flex min-h-[12rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="mb-3 flex shrink-0 items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-600">
+                      <Wrench size={13} />
+                    </span>
+                    {isPrivate ? "Recon Analysis" : "Repair Analysis"}
+                  </h3>
+                  <div className="flex flex-1 flex-col">
+                    {hasReconData ? (
+                      <RepairBreakdown
+                        car={car}
+                        apiBase={API}
+                        readOnly={isDemo}
+                        onTotalChange={setRepairTotal}
+                        className="flex-1"
+                      />
+                    ) : (
+                      <p className="text-sm text-slate-400">No repair analysis available.</p>
+                    )}
+                  </div>
+                </section>
+
+                <section className="flex min-h-[12rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="mb-3 flex shrink-0 items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-emerald-600">
+                      <DollarSign size={13} />
+                    </span>
+                    {isPrivate ? "Retail Exit" : "Resale Analysis"}
+                  </h3>
+                  <div className="flex flex-1 flex-col">
+                    {hasResaleData ? (
+                      <p className="text-sm leading-relaxed text-slate-600">{car.resale_details}</p>
+                    ) : (
+                      <p className="text-sm text-slate-400">No resale analysis available.</p>
+                    )}
+                  </div>
+                </section>
               </div>
             )}
 
@@ -384,16 +397,16 @@ export default function VehicleDetail() {
           <div className="lg:col-span-5">
             <div className="space-y-4 lg:sticky lg:top-20">
 
-              {/* Repair / Resale — the only place these appear */}
+              {/* Repair / Resale summary tiles */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-center">
+                <div className="flex min-h-[5.5rem] flex-col justify-center rounded-2xl border border-amber-100 bg-amber-50 p-4 text-center">
                   <div className="mb-1 flex items-center justify-center gap-1.5 text-amber-600">
                     <Wrench size={14} />
                     <span className="text-[11px] font-semibold uppercase tracking-wide">Est. {costLabel(car)}</span>
                   </div>
                   <p className="text-2xl font-bold tabular-nums text-amber-700">{formatCurrency(repair)}</p>
                 </div>
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-center">
+                <div className="flex min-h-[5.5rem] flex-col justify-center rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-center">
                   <div className="mb-1 flex items-center justify-center gap-1.5 text-emerald-600">
                     <DollarSign size={14} />
                     <span className="text-[11px] font-semibold uppercase tracking-wide">Est. {isPrivate ? "Retail Exit" : "Resale"}</span>

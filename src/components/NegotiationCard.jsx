@@ -61,8 +61,8 @@ export default function NegotiationCard({
   };
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-3 flex items-start justify-between gap-3">
+    <section className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-3 flex shrink-0 items-start justify-between gap-3">
         <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-sky-100 text-sky-600">
             <HandCoins size={13} />
@@ -82,8 +82,9 @@ export default function NegotiationCard({
         )}
       </div>
 
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-3 shrink-0 text-sm text-red-600">{error}</p>}
 
+      <div className="flex-1">
       {loading && !hasData ? (
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <RefreshCw size={14} className="animate-spin" />
@@ -120,11 +121,11 @@ export default function NegotiationCard({
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                 Key Talking Points
               </h4>
-              <ul className="space-y-3">
+              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {talkingPoints.map((item, index) => (
                   <li
                     key={`point-${index}`}
-                    className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3"
+                    className="flex min-h-[7.5rem] flex-col rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <p className="text-sm font-medium text-slate-800">{item.point}</p>
@@ -132,21 +133,25 @@ export default function NegotiationCard({
                         <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 ring-1 ring-slate-200">
                           {categoryLabel(item.category)}
                         </span>
-                        {item.strength && (
+                        {item.strength ? (
                           <span
                             className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${strengthClass(item.strength)}`}
                           >
                             {item.strength}
                           </span>
+                        ) : (
+                          <span className="invisible rounded-full px-2 py-0.5 text-[10px]">—</span>
                         )}
                       </div>
                     </div>
-                    {item.how_to_use && (
-                      <p className="mt-2 flex gap-1.5 text-xs leading-relaxed text-slate-500">
-                        <MessageCircle size={12} className="mt-0.5 shrink-0 text-slate-400" />
-                        {item.how_to_use}
-                      </p>
-                    )}
+                    <div className="mt-auto min-h-[2.5rem] pt-2">
+                      {item.how_to_use && (
+                        <p className="flex gap-1.5 text-xs leading-relaxed text-slate-500">
+                          <MessageCircle size={12} className="mt-0.5 shrink-0 text-slate-400" />
+                          {item.how_to_use}
+                        </p>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -167,8 +172,9 @@ export default function NegotiationCard({
           )}
         </div>
       )}
+      </div>
 
-      <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-400">
+      <p className="mt-4 shrink-0 border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-400">
         Suggestions are based on listing evidence and estimates — use your own judgment and
         verify facts with the seller before making an offer.
       </p>

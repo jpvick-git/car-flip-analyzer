@@ -22,37 +22,35 @@ function IssueList({ title, items, labelKey }) {
       <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
         {title}
       </h4>
-      <ul className="space-y-3">
+      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {items.map((item, index) => {
           const label = item[labelKey] || item.issue || item.item || "Unknown";
           return (
             <li
               key={`${labelKey}-${index}`}
-              className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3"
+              className="flex min-h-[5.5rem] flex-col rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <p className="text-sm font-medium text-slate-800">{label}</p>
-                {item.confidence && (
+                {item.confidence ? (
                   <span
                     className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${confidenceClass(item.confidence)}`}
                   >
                     {item.confidence}
                   </span>
+                ) : (
+                  <span className="invisible shrink-0 rounded-full px-2 py-0.5 text-[10px]">—</span>
                 )}
               </div>
-              <dl className="mt-2 grid gap-1 text-xs text-slate-500 sm:grid-cols-2">
-                {item.typical_mileage && (
-                  <div>
-                    <dt className="inline font-medium text-slate-600">Typical mileage: </dt>
-                    <dd className="inline">{item.typical_mileage}</dd>
-                  </div>
-                )}
-                {item.cost_range && (
-                  <div>
-                    <dt className="inline font-medium text-slate-600">Est. cost: </dt>
-                    <dd className="inline">{item.cost_range}</dd>
-                  </div>
-                )}
+              <dl className="mt-auto grid gap-1 pt-2 text-xs text-slate-500 sm:grid-cols-2">
+                <div>
+                  <dt className="inline font-medium text-slate-600">Typical mileage: </dt>
+                  <dd className="inline">{item.typical_mileage || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="inline font-medium text-slate-600">Est. cost: </dt>
+                  <dd className="inline">{item.cost_range || "—"}</dd>
+                </div>
               </dl>
             </li>
           );
@@ -96,8 +94,8 @@ export default function KnownIssuesCard({
   };
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-3 flex items-start justify-between gap-3">
+    <section className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-3 flex shrink-0 items-start justify-between gap-3">
         <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-100 text-violet-600">
             <AlertTriangle size={13} />
@@ -118,9 +116,10 @@ export default function KnownIssuesCard({
       </div>
 
       {error && (
-        <p className="mb-3 text-sm text-red-600">{error}</p>
+        <p className="mb-3 shrink-0 text-sm text-red-600">{error}</p>
       )}
 
+      <div className="flex-1">
       {loading && !hasData ? (
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <RefreshCw size={14} className="animate-spin" />
@@ -155,8 +154,9 @@ export default function KnownIssuesCard({
           )}
         </div>
       )}
+      </div>
 
-      <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-400">
+      <p className="mt-4 shrink-0 border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-400">
         Based on model training data, not live NHTSA/TSB lookup. Treat low-confidence items as
         leads for your own research, not facts about this specific vehicle.
       </p>

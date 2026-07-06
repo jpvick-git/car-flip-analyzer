@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import RepairBreakdown from "../components/RepairBreakdown";
 import KnownIssuesCard from "../components/KnownIssuesCard";
+import NegotiationCard from "../components/NegotiationCard";
 import RedFlagsCard from "../components/RedFlagsCard";
 import { parseRepairItems } from "../utils/repairBreakdown";
 import { formatCurrency } from "../utils/formatCurrency";
@@ -396,6 +397,24 @@ export default function VehicleDetail() {
                   }))
                 }
               />
+
+              {isPrivate && (
+                <NegotiationCard
+                  car={car}
+                  apiBase={API}
+                  readOnly={isDemo}
+                  onUpdate={(data) =>
+                    setCar((prev) => ({
+                      ...prev,
+                      negotiation_summary: data.negotiation_summary,
+                      negotiation_talking_points: data.negotiation_talking_points,
+                      suggested_offer_low: data.suggested_offer_low,
+                      suggested_offer_high: data.suggested_offer_high,
+                      offer_rationale: data.offer_rationale,
+                    }))
+                  }
+                />
+              )}
 
               {/* Bid card */}
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-200/60">

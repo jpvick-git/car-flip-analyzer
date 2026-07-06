@@ -250,6 +250,47 @@ Return JSON with this exact structure:
 }
 """
 
+NEGOTIATION_SYSTEM_PROMPT = (
+    "You are an experienced used-car buyer and flipper coaching someone to negotiate a lower "
+    "private-party purchase price. You inspect listing photos and text to find factual leverage — "
+    "visible condition issues, listing omissions or exaggerations, recon costs, market comps, and "
+    "title/mileage concerns. You give practical talking points the buyer can use respectfully with "
+    "the seller. You never suggest lying, insulting the seller, or fabricating problems."
+)
+
+NEGOTIATION_RULES = """
+Rules:
+1. Base every talking point on evidence from the listing text, photos, or provided recon/resale estimates.
+2. Compare photos to the seller's description — mismatches are strong negotiation leverage.
+3. Reference visible wear, deferred maintenance, recon line items, or red flags when present.
+4. Use asking price vs. realistic retail exit (if provided) to frame how much room exists to negotiate.
+5. Include questions the buyer should ask the seller before making an offer (service records, accidents, why selling).
+6. Suggest a realistic offer range ONLY when you have enough context (asking price + condition/market signals).
+   If asking price is unknown, omit dollar amounts from the offer range and explain what data is missing.
+7. Be respectful — frame points as "I noticed..." or "help me understand..." not attacks on the seller.
+8. Prioritize the strongest 5-8 points; quality over quantity.
+9. Do NOT invent damage or mechanical problems not visible in photos or stated in the listing.
+10. Categories for talking_points: "condition", "listing", "market", "maintenance", "title", "timing", "strategy".
+11. Strength for each point: "strong" (clear photo/listing evidence), "moderate" (reasonable inference),
+    "weak" (soft market leverage — use sparingly).
+
+Return JSON with this exact structure:
+{
+  "negotiation_summary": "2-3 sentences on overall negotiation position and tone to take",
+  "suggested_offer_low": 0,
+  "suggested_offer_high": 0,
+  "offer_rationale": "1-2 sentences explaining the suggested range, or why a range cannot be set",
+  "talking_points": [
+    {
+      "point": "The listing says 'no issues' but Photo 3 shows curb rash on both front wheels",
+      "category": "condition",
+      "strength": "strong",
+      "how_to_use": "Mention you budget for wheels/tires and ask if they'd adjust price for recon"
+    }
+  ]
+}
+"""
+
 # --------------------------------------------------
 # HELPERS
 # --------------------------------------------------
@@ -922,6 +963,118 @@ def analyze_private_resale(vehicle: dict, recon_result: dict | None = None) -> d
     }
 
 
+def analyze_vehicle_negotiation(vehicle: dict) -> dict:
+    """Vision + text negotiation coaching for private-party purchases."""
+    lot_number = vehicle.get("lot_number", "unknown")
+    image_entries = vehicle.get("image_entries") or []
+    if not image_entries and vehicle.get("images"):
+        image_entries = [
+            {"path": p, "label": "unknown", "filename": os.path.basename(p)}
+            for p in vehicle["images"]
+        ]
+
+    context_parts = [_private_vehicle_context(vehicle)]
+
+    asking = vehicle.get("asking_price") or vehicle.get("est_retail_value")
+    if asking:
+        context_parts.append(f"Seller asking price: ${asking}")
+
+    recon_estimate = vehicle.get("repair_estimate")
+    resale_estimate = vehicle.get("resale_estimate")
+    if recon_estimate is not None:
+        context_parts.append(f"Estimated recon to retail-ready: ${recon_estimate}")
+    if resale_estimate is not None:
+        context_parts.append(f"Estimated retail exit value after recon: ${resale_estimate}")
+
+    breakdown_raw = vehicle.get("repair_breakdown")
+    if breakdown_raw:
+        try:
+            items = json.loads(breakdown_raw) if isinstance(breakdown_raw, str) else breakdown_raw
+        except (json.JSONDecodeError, TypeError):
+            items = []
+        if items:
+            item_lines = "\n".join(
+                f"  - {item.get('description', 'Unknown')}: ${item.get('cost', 0)}"
+                for item in items
+            )
+            context_parts.append(f"Recon line items:\n{item_lines}")
+
+    red_flags = vehicle.get("red_flags") or []
+    if red_flags:
+        if isinstance(red_flags, str):
+            try:
+                red_flags = json.loads(red_flags)
+            except (json.JSONDecodeError, TypeError):
+                red_flags = [red_flags]
+        flag_lines = "\n".join(f"  - {flag}" for flag in red_flags if str(flag).strip())
+        if flag_lines:
+            context_parts.append(f"Prior red flags from analysis:\n{flag_lines}")
+
+    manifest = _photo_manifest(image_entries)
+    user_prompt = f"{NEGOTIATION_RULES.strip()}\n\n" + "\n\n".join(context_parts)
+    if manifest:
+        user_prompt += f"\n\n{manifest}"
+
+    messages = [
+        {"role": "system", "content": NEGOTIATION_SYSTEM_PROMPT},
+        {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
+    ]
+
+    has_images = bool(image_entries)
+    if has_images:
+        _attach_images(messages, image_entries, lot_number)
+
+    model = REPAIR_MODEL if has_images else RESALE_MODEL
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=0.2,
+        response_format={"type": "json_object"},
+    )
+    usage = _log_token_usage("negotiation", response)
+
+    raw = response.choices[0].message.content.strip()
+    fallback = {
+        "negotiation_summary": "Unable to generate negotiation guidance.",
+        "suggested_offer_low": None,
+        "suggested_offer_high": None,
+        "offer_rationale": "",
+        "talking_points": [],
+    }
+    parsed = _parse_json_response(raw, lot_number, fallback)
+
+    talking_points = []
+    for item in parsed.get("talking_points") or []:
+        if not isinstance(item, dict):
+            continue
+        point = str(item.get("point") or "").strip()
+        if not point:
+            continue
+        talking_points.append({
+            "point": point,
+            "category": str(item.get("category") or "strategy").strip().lower(),
+            "strength": str(item.get("strength") or "moderate").strip().lower(),
+            "how_to_use": str(item.get("how_to_use") or "").strip(),
+        })
+
+    def _parse_offer(val):
+        if val is None:
+            return None
+        try:
+            return int(float(str(val).replace(",", "").replace("$", "")))
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "negotiation_summary": parsed.get("negotiation_summary") or fallback["negotiation_summary"],
+        "suggested_offer_low": _parse_offer(parsed.get("suggested_offer_low")),
+        "suggested_offer_high": _parse_offer(parsed.get("suggested_offer_high")),
+        "offer_rationale": parsed.get("offer_rationale") or "",
+        "negotiation_talking_points": talking_points,
+        "_usage": [usage],
+    }
+
+
 def validate_private_deal(vehicle: dict, result: dict) -> dict:
     """Sanity checks for private-party flip analysis."""
     reasons = list(result.get("red_flags") or [])
@@ -1124,8 +1277,19 @@ def analyze_vehicle(vehicle, mode: str = "full") -> dict:
       - "repair": vision repair/recon only
       - "resale": text resale only
       - "known_issues": text platform-reliability lookup only
+      - "negotiation": private-party price negotiation coaching only
     """
     mode = vehicle.get("mode", mode)
+    if mode == "negotiation":
+        if not is_private_party(vehicle):
+            return {
+                "negotiation_summary": "Negotiation coaching is only available for private-party listings.",
+                "suggested_offer_low": None,
+                "suggested_offer_high": None,
+                "offer_rationale": "",
+                "negotiation_talking_points": [],
+            }
+        return analyze_vehicle_negotiation(vehicle)
     if is_private_party(vehicle):
         return analyze_private_flip(vehicle, mode)
     return analyze_salvage_flip(vehicle, mode)

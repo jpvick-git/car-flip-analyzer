@@ -22,6 +22,13 @@ def run_ai(vehicle: dict, mode: str = "full"):
             response["known_issues"] = result.get("known_issues") or []
             response["wear_items"] = result.get("wear_items") or []
 
+        if mode == "negotiation":
+            response["negotiation_summary"] = result.get("negotiation_summary") or "No negotiation summary available."
+            response["negotiation_talking_points"] = result.get("negotiation_talking_points") or []
+            response["suggested_offer_low"] = result.get("suggested_offer_low")
+            response["suggested_offer_high"] = result.get("suggested_offer_high")
+            response["offer_rationale"] = result.get("offer_rationale") or ""
+
         if mode == "full":
             response["needs_manual_review"] = result.get("needs_manual_review", False)
             response["review_reasons"] = result.get("review_reasons") or []
@@ -46,6 +53,14 @@ def run_ai(vehicle: dict, mode: str = "full"):
             return {k: fallback[k] for k in ("resale_estimate", "resale_details")}
         if mode == "known_issues":
             return {k: fallback[k] for k in ("reliability_summary", "known_issues", "wear_items")}
+        if mode == "negotiation":
+            return {
+                "negotiation_summary": "AI error — no negotiation guidance available.",
+                "negotiation_talking_points": [],
+                "suggested_offer_low": None,
+                "suggested_offer_high": None,
+                "offer_rationale": "",
+            }
         return fallback
 
 

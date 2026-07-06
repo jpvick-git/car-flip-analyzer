@@ -10,7 +10,8 @@ from .db import get_engine
 from .auth import get_current_user, get_vehicle_owner_id, require_not_demo
 from .ai_estimator import run_ai
 from .copart_utils import enrich_vehicle
-from .vehicle_model import normalize_vehicle
+from .vehicle_model import normalize_vehicle, is_private_party
+from .ai_repair_estimator import select_images_by_angle
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
@@ -34,6 +35,11 @@ def _ensure_schema_columns():
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS asking_price INTEGER",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS listing_description TEXT",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS red_flags TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS negotiation_summary TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS negotiation_talking_points TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS suggested_offer_low INTEGER",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS suggested_offer_high INTEGER",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS offer_rationale TEXT",
         ):
             conn.execute(text(stmt))
 
@@ -215,6 +221,95 @@ def refresh_vehicle_known_issues(
         "reliability_summary": result.get("reliability_summary"),
         "known_issues": result.get("known_issues") or [],
         "wear_items": result.get("wear_items") or [],
+    }
+
+
+def _load_vehicle_images(lot_number: str) -> tuple[list[str], list[dict]]:
+    lot_dir = os.path.join(DOWNLOAD_DIR, str(lot_number))
+    if not os.path.isdir(lot_dir):
+        return [], []
+
+    image_entries, _ = select_images_by_angle(lot_dir)
+    paths = [entry["path"] for entry in image_entries if entry.get("path")]
+    return paths, image_entries
+
+
+@router.post("/vehicle/{vehicle_id}/negotiation")
+def refresh_vehicle_negotiation(
+    vehicle_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate AI negotiation talking points for a private-party listing."""
+    require_not_demo(current_user)
+    owner_id = get_vehicle_owner_id(current_user)
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("""
+                SELECT year, make, model, odometer, lot_number, source_type,
+                       asking_price, est_retail_value, listing_description, damage_description,
+                       title_code, repair_estimate, repair_breakdown, resale_estimate,
+                       red_flags
+                FROM user_vehicles
+                WHERE id = :id AND user_id = :uid
+            """),
+            {"id": vehicle_id, "uid": owner_id},
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+
+    vehicle_data = dict(row._mapping)
+    if not is_private_party(vehicle_data):
+        raise HTTPException(
+            status_code=400,
+            detail="Negotiation coaching is only available for private-party listings.",
+        )
+
+    lot_number = vehicle_data.get("lot_number") or str(vehicle_id)
+    image_paths, image_entries = _load_vehicle_images(lot_number)
+
+    vehicle = {
+        **vehicle_data,
+        "images": image_paths,
+        "image_entries": image_entries,
+        "lot_number": lot_number,
+    }
+
+    result = run_ai(vehicle, mode="negotiation")
+    talking_points_json = json.dumps(result.get("negotiation_talking_points") or [])
+
+    with engine.begin() as conn:
+        updated = conn.execute(
+            text("""
+                UPDATE user_vehicles
+                SET negotiation_summary = :summary,
+                    negotiation_talking_points = :talking_points,
+                    suggested_offer_low = :offer_low,
+                    suggested_offer_high = :offer_high,
+                    offer_rationale = :offer_rationale,
+                    updated_at = NOW()
+                WHERE id = :id AND user_id = :uid
+            """),
+            {
+                "summary": result.get("negotiation_summary"),
+                "talking_points": talking_points_json,
+                "offer_low": result.get("suggested_offer_low"),
+                "offer_high": result.get("suggested_offer_high"),
+                "offer_rationale": result.get("offer_rationale"),
+                "id": vehicle_id,
+                "uid": owner_id,
+            },
+        )
+        if updated.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Vehicle not found")
+
+    return {
+        "negotiation_summary": result.get("negotiation_summary"),
+        "negotiation_talking_points": result.get("negotiation_talking_points") or [],
+        "suggested_offer_low": result.get("suggested_offer_low"),
+        "suggested_offer_high": result.get("suggested_offer_high"),
+        "offer_rationale": result.get("offer_rationale"),
     }
 
 

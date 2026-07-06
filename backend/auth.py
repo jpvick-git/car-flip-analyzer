@@ -18,6 +18,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 DEMO_EMAIL = os.getenv("DEMO_EMAIL", "demo@carflipanalyzer.com")
+DAILY_VEHICLE_LIMIT = int(os.getenv("DAILY_VEHICLE_LIMIT", "2"))
+UPLOAD_EXEMPT_EMAIL = os.getenv("UPLOAD_EXEMPT_EMAIL", "jpvick@gmail.com")
 
 # --------------------------------------------------
 # PASSWORD HELPERS
@@ -81,6 +83,38 @@ def get_vehicle_owner_id(current_user: dict) -> int:
 def require_not_demo(current_user: dict):
     if current_user.get("is_demo"):
         raise HTTPException(status_code=403, detail="Demo account is read-only")
+
+def is_upload_exempt(current_user: dict) -> bool:
+    email = (current_user.get("email") or "").lower()
+    return email == UPLOAD_EXEMPT_EMAIL.lower()
+
+def count_vehicles_added_today(user_id: int) -> int:
+    with engine.connect() as conn:
+        count = conn.execute(
+            text("""
+                SELECT COUNT(*) FROM user_vehicles
+                WHERE user_id = :uid
+                  AND created_at >= CURRENT_DATE
+            """),
+            {"uid": user_id},
+        ).scalar()
+    return int(count or 0)
+
+def require_daily_vehicle_quota(current_user: dict, additional: int = 1):
+    """Reject if user would exceed the daily new-vehicle limit (exempt admin excluded)."""
+    if additional <= 0 or is_upload_exempt(current_user):
+        return
+
+    today_count = count_vehicles_added_today(current_user["id"])
+    if today_count + additional > DAILY_VEHICLE_LIMIT:
+        remaining = max(0, DAILY_VEHICLE_LIMIT - today_count)
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Daily vehicle limit reached ({DAILY_VEHICLE_LIMIT} per day). "
+                f"You can add {remaining} more vehicle(s) today."
+            ),
+        )
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:

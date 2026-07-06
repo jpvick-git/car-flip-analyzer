@@ -68,7 +68,8 @@ function Layout() {
         setUploadComplete(true);
         setTimeout(() => setUploadComplete(false), 100);
       } else {
-        alert("Upload failed.");
+        const err = await response.json().catch(() => ({}));
+        alert(err.detail || "Upload failed.");
       }
     } catch (err) {
       console.error(err);

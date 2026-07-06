@@ -5,7 +5,8 @@ import requests
 from fastapi import APIRouter, UploadFile, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
-from .auth import get_current_user, require_not_demo
+from fastapi import HTTPException
+from .auth import get_current_user, require_not_demo, require_daily_vehicle_quota
 from .copart_utils import resolve_make_model
 from .db import get_engine
 
@@ -63,6 +64,29 @@ async def upload_file(
         print(f"Saved CSV upload to: {file_path}")
 
         df = pd.read_csv(file_path)
+
+        # ------------------------------------------------------------------
+        # 1b. ENFORCE DAILY ADD LIMIT (new lots only; updates don't count)
+        # ------------------------------------------------------------------
+        csv_lot_numbers = []
+        for _, row in df.iterrows():
+            lot_number = normalize_lot(row.get("Lot/Inv #", ""))
+            if lot_number:
+                csv_lot_numbers.append(lot_number)
+
+        if csv_lot_numbers:
+            with rds_engine.connect() as conn:
+                existing_rows = conn.execute(
+                    text("""
+                        SELECT TRIM(lot_number) AS lot_number
+                        FROM user_vehicles
+                        WHERE user_id = :uid
+                    """),
+                    {"uid": user["id"]},
+                ).fetchall()
+            existing_lots = {str(row[0]) for row in existing_rows}
+            new_lot_count = sum(1 for lot in csv_lot_numbers if lot not in existing_lots)
+            require_daily_vehicle_quota(user, additional=new_lot_count)
 
         # ------------------------------------------------------------------
         # 2. PROCESS CSV ROWS
@@ -199,6 +223,8 @@ async def upload_file(
 
         return {"status": "success", "rows": len(df)}
 
+    except HTTPException:
+        raise
     except Exception as e:
         print("Upload failed:", e)
         return JSONResponse(status_code=500, content={"error": str(e)})

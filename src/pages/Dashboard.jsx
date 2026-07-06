@@ -155,7 +155,8 @@ function ManualVehicleModal({ API, close, reload }) {
       reload();
     } catch (err) {
       console.error("Manual vehicle upload failed:", err);
-      alert("Failed to add vehicle.");
+      const msg = err.response?.data?.detail || "Failed to add vehicle.";
+      alert(msg);
     }
   };
 

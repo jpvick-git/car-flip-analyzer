@@ -13,7 +13,7 @@ from ..db import get_engine
 
 engine = get_engine()
 
-from ..auth import get_current_user, require_not_demo
+from ..auth import get_current_user, require_not_demo, require_daily_vehicle_quota
 from ..vehicle_model import SOURCE_PRIVATE_PARTY, parse_money
 
 router = APIRouter()
@@ -49,6 +49,7 @@ async def add_manual_vehicle(
 ):
     print("➡️ /add_manual_vehicle called", flush=True)
     require_not_demo(current_user)
+    require_daily_vehicle_quota(current_user, additional=1)
 
     try:
         user_id = current_user["id"]
@@ -111,7 +112,8 @@ async def add_manual_vehicle(
                         resale_estimate,
                         image_url,
                         resale_details,
-                        repair_details
+                        repair_details,
+                        created_at
                     )
                     VALUES (
                         :uid,
@@ -140,7 +142,8 @@ async def add_manual_vehicle(
                         NULL,
                         :image,
                         NULL,
-                        NULL
+                        NULL,
+                        NOW()
                     )
                 """),
                 {

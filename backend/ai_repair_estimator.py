@@ -8,7 +8,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 from openai import OpenAI
-from .vehicle_model import is_private_party
+
+try:
+    from .vehicle_model import is_private_party
+except ImportError:
+    from vehicle_model import is_private_party
 
 # --------------------------------------------------
 # CONFIGURATION

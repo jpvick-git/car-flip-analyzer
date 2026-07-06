@@ -844,11 +844,13 @@ export default function Dashboard({
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {visibleCars.map((car) => (
+          <div className="grid grid-cols-1 items-stretch gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {visibleCars.map((car) => {
+              const saleDate = formatSaleDate(car);
+              return (
               <div
                 key={car.id}
-                className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
               >
                 <div className="relative">
                   <img
@@ -896,11 +898,11 @@ export default function Dashboard({
                 </div>
 
                 <div className="flex flex-1 flex-col p-5">
-                  <h2 className="text-lg font-bold tracking-tight text-slate-900">
+                  <h2 className="line-clamp-2 min-h-[3.5rem] text-lg font-bold leading-snug tracking-tight text-slate-900">
                     {formatVehicleTitle(car)}
                   </h2>
 
-                  <div className="mt-2 space-y-1.5 text-sm text-slate-500">
+                  <div className="mt-2 min-h-[4.75rem] space-y-1.5 text-sm text-slate-500">
                     <p className="flex items-center gap-2">
                       <Hash size={13} className="shrink-0 text-slate-400" />
                       {isPrivateParty(car)
@@ -911,17 +913,16 @@ export default function Dashboard({
                       <MapPin size={13} className="shrink-0 text-slate-400" />
                       {car.sale_name || car.location || "N/A"}
                     </p>
-                    {formatSaleDate(car) && (
-                    <p className="flex items-center gap-2">
+                    <p className={`flex items-center gap-2 ${saleDate ? "" : "invisible"}`}>
                       <Calendar size={13} className="shrink-0 text-slate-400" />
-                      {formatSaleDate(car)}
+                      {saleDate || "—"}
                     </p>
-                    )}
                   </div>
 
+                  <div className="mt-auto flex flex-col pt-4">
                   {/* Repairs / Resale */}
-                  <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
-                    <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
+                  <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
+                    <div className="flex min-h-[5.25rem] flex-col rounded-xl border border-amber-100 bg-amber-50 p-3">
                       <div className="mb-1 flex items-center gap-1.5 text-amber-600">
                         <Wrench size={13} />
                         <span className="text-[11px] font-semibold uppercase tracking-wide">{costLabel(car)}</span>
@@ -934,7 +935,7 @@ export default function Dashboard({
                       />
                     </div>
 
-                    <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                    <div className="flex min-h-[5.25rem] flex-col rounded-xl border border-emerald-100 bg-emerald-50 p-3">
                       <div className="mb-1 flex items-center gap-1.5 text-emerald-600">
                         <DollarSign size={13} />
                         <span className="text-[11px] font-semibold uppercase tracking-wide">
@@ -967,9 +968,11 @@ export default function Dashboard({
                     View Details
                     <ArrowRight size={15} />
                   </button>
+                  </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>

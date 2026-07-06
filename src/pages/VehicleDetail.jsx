@@ -19,10 +19,19 @@ import {
 } from "lucide-react";
 import RepairBreakdown from "../components/RepairBreakdown";
 import KnownIssuesCard from "../components/KnownIssuesCard";
+import RedFlagsCard from "../components/RedFlagsCard";
 import { parseRepairItems } from "../utils/repairBreakdown";
 import { formatCurrency } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
 import { useFlipMetrics } from "../utils/useFlipMetrics";
+import {
+  isPrivateParty,
+  buyerFeeRate,
+  sourceLabel,
+  costLabel,
+  maxOfferLabel,
+  askingPrice,
+} from "../utils/vehicleSource";
 
 const API = process.env.REACT_APP_API_BASE_URL ?? "";
 
@@ -91,6 +100,9 @@ export default function VehicleDetail() {
   const overrideTax = stateData ? Number(stateData.avg_tax_rate) : null;
   const overrideTitle = stateData ? Number(stateData.title_fee) : null;
 
+  const isPrivate = isPrivateParty(car);
+  const asking = askingPrice(car);
+
   const {
     bid,
     buyerFee,
@@ -109,6 +121,7 @@ export default function VehicleDetail() {
     marginPercent: margin,
     taxRate: overrideTax !== null ? overrideTax : Number(car?.avg_tax_rate || 0),
     titleFee: overrideTitle !== null ? overrideTitle : Number(car?.title_fee || 0),
+    buyerFeeRate: buyerFeeRate(car),
   });
 
   if (loading)
@@ -139,16 +152,18 @@ export default function VehicleDetail() {
 
   const details = [
     car.vin          && ["VIN",         car.vin],
-    car.lot_number   && ["Lot #",        car.lot_number],
+    isPrivate && asking && ["Asking Price", formatCurrency(asking)],
+    !isPrivate && car.lot_number && ["Lot #", car.lot_number],
     car.title_code   && ["Title",        car.title_code],
     !isNaN(odometer) && odometer > 0 && ["Odometer", `${odometer.toLocaleString()} mi`],
     car.engine_type  && ["Engine",       car.engine_type],
     car.transmission && ["Transmission", car.transmission],
     car.fuel_type    && ["Fuel",         car.fuel_type],
     car.drive_train  && ["Drivetrain",   car.drive_train],
-    car.sale_name    && ["Location",     car.sale_name],
-    car.sale_date    && ["Sale Date",    new Date(car.sale_date).toLocaleDateString()],
-    car.damage_description && ["Damage", car.damage_description],
+    (car.sale_name || car.location) && ["Location", car.sale_name || car.location],
+    !isPrivate && car.sale_date && ["Sale Date", new Date(car.sale_date).toLocaleDateString()],
+    isPrivate && car.listing_description && ["Listing", car.listing_description],
+    !isPrivate && car.damage_description && ["Damage", car.damage_description],
   ].filter(Boolean);
 
   const profitPositive = profit >= 0;
@@ -181,6 +196,9 @@ export default function VehicleDetail() {
 
           {/* Title / location / date pills — below the name */}
           <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200">
+              {sourceLabel(car)}
+            </span>
             {car.title_code && (
               <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200">
                 {car.title_code}
@@ -192,7 +210,7 @@ export default function VehicleDetail() {
                 {car.sale_name}
               </span>
             )}
-            {car.sale_date && (
+            {car.sale_date && !isPrivate && (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-slate-200">
                 <Calendar size={13} className="text-blue-400" />
                 {new Date(car.sale_date).toLocaleDateString()}
@@ -316,7 +334,7 @@ export default function VehicleDetail() {
                       <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-600">
                         <Wrench size={13} />
                       </span>
-                      Repair Analysis
+                      {isPrivate ? "Recon Analysis" : "Repair Analysis"}
                     </h3>
                     <RepairBreakdown
                       car={car}
@@ -332,13 +350,15 @@ export default function VehicleDetail() {
                       <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-emerald-600">
                         <DollarSign size={13} />
                       </span>
-                      Resale Analysis
+                      {isPrivate ? "Retail Exit" : "Resale Analysis"}
                     </h3>
                     <p className="text-sm leading-relaxed text-slate-600">{car.resale_details}</p>
                   </section>
                 )}
               </div>
             )}
+
+            <RedFlagsCard car={car} />
           </div>
 
           {/* RIGHT — Bidding rail (sticky) */}
@@ -350,14 +370,14 @@ export default function VehicleDetail() {
                 <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-center">
                   <div className="mb-1 flex items-center justify-center gap-1.5 text-amber-600">
                     <Wrench size={14} />
-                    <span className="text-[11px] font-semibold uppercase tracking-wide">Est. Repair</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide">Est. {costLabel(car)}</span>
                   </div>
                   <p className="text-2xl font-bold tabular-nums text-amber-700">{formatCurrency(repair)}</p>
                 </div>
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-center">
                   <div className="mb-1 flex items-center justify-center gap-1.5 text-emerald-600">
                     <DollarSign size={14} />
-                    <span className="text-[11px] font-semibold uppercase tracking-wide">Est. Resale</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide">Est. {isPrivate ? "Retail Exit" : "Resale"}</span>
                   </div>
                   <p className="text-2xl font-bold tabular-nums text-emerald-700">{formatCurrency(resale)}</p>
                 </div>
@@ -380,15 +400,22 @@ export default function VehicleDetail() {
               {/* Bid card */}
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-200/60">
 
-                {/* Max bid — focal point */}
+                {/* Max bid / offer — focal point */}
                 <div className="border-b border-slate-100 bg-gradient-to-b from-white to-slate-50 px-6 py-7 text-center">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.15em] text-blue-600">Your Max Bid</p>
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.15em] text-blue-600">
+                    Your {maxOfferLabel(car)}
+                  </p>
                   <p className="text-5xl font-extrabold tracking-tight tabular-nums text-slate-900 sm:text-6xl">
                     {formatCurrency(bid)}
                   </p>
+                  {isPrivate && asking != null && (
+                    <p className="mt-1 text-sm text-slate-500">
+                      Seller asking <span className="font-semibold text-slate-700">{formatCurrency(asking)}</span>
+                    </p>
+                  )}
                   <p className="mt-2 text-xs text-slate-400">
-                    max bid set at <span className="font-semibold text-slate-500">{margin}%</span> margin
-                    · profit updates when you edit repair costs
+                    {maxOfferLabel(car).toLowerCase()} set at <span className="font-semibold text-slate-500">{margin}%</span> margin
+                    · profit updates when you edit {isPrivate ? "recon" : "repair"} costs
                   </p>
                 </div>
 
@@ -437,10 +464,12 @@ export default function VehicleDetail() {
 
                   {/* Cost breakdown */}
                   <div className="space-y-2 rounded-xl bg-slate-50 p-4 text-sm">
-                    <div className="flex justify-between text-slate-500">
-                      <span>Buyer Fee (7.5%)</span>
-                      <span className="tabular-nums text-slate-700">{formatCurrency(buyerFee)}</span>
-                    </div>
+                    {!isPrivate && (
+                      <div className="flex justify-between text-slate-500">
+                        <span>Buyer Fee (7.5%)</span>
+                        <span className="tabular-nums text-slate-700">{formatCurrency(buyerFee)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-slate-500">
                       <span>Tax ({taxRate}%)</span>
                       <span className="tabular-nums text-slate-700">{formatCurrency(taxAmt)}</span>
@@ -450,7 +479,7 @@ export default function VehicleDetail() {
                       <span className="tabular-nums text-slate-700">{formatCurrency(titleFee)}</span>
                     </div>
                     <div className="flex justify-between text-slate-500">
-                      <span>Repairs</span>
+                      <span>{costLabel(car)}</span>
                       <span className="tabular-nums text-slate-700">{formatCurrency(repair)}</span>
                     </div>
                     <div className="mt-1 flex justify-between border-t border-slate-200 pt-2 font-semibold text-slate-900">
@@ -484,7 +513,7 @@ export default function VehicleDetail() {
                       rel="noopener noreferrer"
                       className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 active:scale-[0.99]"
                     >
-                      View on Copart
+                      {isPrivate ? "View Listing" : "View on Copart"}
                       <ExternalLink size={16} />
                     </a>
                   )}
@@ -495,8 +524,8 @@ export default function VehicleDetail() {
         </div>
 
         <p className="mt-10 border-t border-slate-200 pt-6 text-center text-xs leading-relaxed text-slate-400">
-          AI-generated estimates may contain errors. All repair costs, resale values, and bid
-          calculations should be independently verified before making any purchase decision.
+          AI-generated estimates may contain errors. All {isPrivate ? "recon" : "repair"} costs, resale values, and{" "}
+          {isPrivate ? "offer" : "bid"} calculations should be independently verified before making any purchase decision.
         </p>
       </main>
 

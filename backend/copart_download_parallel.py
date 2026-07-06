@@ -373,6 +373,7 @@ def process_lots_directly(lots, uid):
                                 reliability_summary = :reliability_summary,
                                 known_issues = :known_issues,
                                 wear_items = :wear_items,
+                                red_flags = :red_flags,
                                 needs_manual_review = :needs_manual_review,
                                 review_reasons = :review_reasons,
                                 updated_at = NOW()
@@ -387,6 +388,7 @@ def process_lots_directly(lots, uid):
                             "reliability_summary": result.get("reliability_summary"),
                             "known_issues": json.dumps(result.get("known_issues") or []),
                             "wear_items": json.dumps(result.get("wear_items") or []),
+                            "red_flags": json.dumps(result.get("red_flags") or []),
                             "needs_manual_review": result.get("needs_manual_review", False),
                             "review_reasons": json.dumps(result.get("review_reasons") or []),
                             "lot": lot,

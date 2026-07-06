@@ -10,6 +10,7 @@ from .db import get_engine
 from .auth import get_current_user, get_vehicle_owner_id, require_not_demo
 from .ai_estimator import run_ai
 from .copart_utils import enrich_vehicle
+from .vehicle_model import normalize_vehicle
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
@@ -29,6 +30,10 @@ def _ensure_schema_columns():
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS wear_items TEXT",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS needs_manual_review BOOLEAN DEFAULT FALSE",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS review_reasons TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS source_type VARCHAR(32) DEFAULT 'salvage_auction'",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS asking_price INTEGER",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS listing_description TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS red_flags TEXT",
         ):
             conn.execute(text(stmt))
 
@@ -65,7 +70,7 @@ def get_vehicles(current_user: dict = Depends(get_current_user)):
 
         vehicles = []
         for row in rows:
-            vehicles.append(enrich_vehicle(dict(row._mapping)))
+            vehicles.append(normalize_vehicle(enrich_vehicle(dict(row._mapping))))
         return vehicles
 
     except Exception as e:
@@ -104,7 +109,7 @@ def get_vehicle(vehicle_id: int, current_user: dict = Depends(get_current_user))
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Vehicle not found")
-    return enrich_vehicle(dict(row._mapping))
+    return normalize_vehicle(enrich_vehicle(dict(row._mapping)))
 
 
 @router.patch("/vehicle/{vehicle_id}/repair")

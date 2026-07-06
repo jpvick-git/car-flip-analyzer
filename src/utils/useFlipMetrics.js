@@ -12,11 +12,12 @@ export function useFlipMetrics({
   marginPercent,
   taxRate = 0,
   titleFee = 0,
+  buyerFeeRate = 0.075,
 }) {
   const lockedBidRef = useRef(null);
   const bidKeyRef = useRef("");
 
-  const bidKey = `${carId}-${marginPercent}-${resale}-${taxRate}-${titleFee}`;
+  const bidKey = `${carId}-${marginPercent}-${resale}-${taxRate}-${titleFee}-${buyerFeeRate}`;
 
   return useMemo(() => {
     const inputs = {
@@ -25,6 +26,7 @@ export function useFlipMetrics({
       marginPercent,
       taxRate,
       titleFee,
+      buyerFeeRate,
     };
 
     if (bidKeyRef.current !== bidKey) {
@@ -36,5 +38,5 @@ export function useFlipMetrics({
       ...inputs,
       fixedBid: lockedBidRef.current,
     });
-  }, [bidKey, repair, resale, marginPercent, taxRate, titleFee]);
+  }, [bidKey, repair, resale, marginPercent, taxRate, titleFee, buyerFeeRate]);
 }

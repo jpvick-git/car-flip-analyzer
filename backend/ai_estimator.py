@@ -25,6 +25,7 @@ def run_ai(vehicle: dict, mode: str = "full"):
         if mode == "full":
             response["needs_manual_review"] = result.get("needs_manual_review", False)
             response["review_reasons"] = result.get("review_reasons") or []
+            response["red_flags"] = result.get("red_flags") or []
 
         return response
 

@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 from openai import OpenAI
+from .vehicle_model import is_private_party
 
 # --------------------------------------------------
 # CONFIGURATION
@@ -182,6 +183,66 @@ Return JSON with this exact structure:
   "wear_items": [
     {"item": "Clutch (manual)", "typical_mileage": "60k-90k depending on driving style", "cost_range": "$800-1,400 installed", "confidence": "high"}
   ]
+}
+"""
+
+PRIVATE_RECON_SYSTEM_PROMPT = (
+    "You are an experienced used-car flipper and independent mechanic evaluating a private-party "
+    "purchase. You inspect listing photos and estimate realistic reconditioning costs — NOT collision "
+    "body repair unless visible accident damage is present. You flag seller red flags and note when "
+    "photos do not match the listing description."
+)
+
+PRIVATE_RECON_RULES = """
+Rules:
+1. This is a private-party flip — estimate RECONDITIONING (detail, tires, brakes, fluids, bulbs,
+   minor cosmetic touch-ups, deferred maintenance the listing mentions or photos suggest).
+2. Do NOT invent collision damage. If photos show a clean car, recon should be light (detail, inspection,
+   maybe tires/brakes based on mileage) — not thousands in body work.
+3. Compare photos to the seller's listing description. Flag mismatches (e.g. ad says runs great but
+   check-engine light visible, ad says clean but visible rust/dents not mentioned).
+4. Parse the listing text for red flags: runs but, needs work, mechanic special, salvage/rebuilt
+   title mentions, vague mileage, lost title, lien language, as-is, incomplete registration, etc.
+5. Each recon_items cost is ALL-IN at a competent independent shop (not dealer, not DIY).
+6. If listing mentions a specific issue (needs brakes, AC doesn't blow cold), include a line item for it.
+7. Be conservative on recon — slightly HIGH rather than low when issues are visible or stated.
+
+Return JSON with this exact structure:
+{
+  "photo_match_notes": "1-2 sentences: do photos match the listing?",
+  "red_flags": ["short red flag strings from listing or photos"],
+  "recon_items": [
+    {"description": "Full detail + engine bay clean", "cost": 200}
+  ],
+  "recon_estimate": 200,
+  "recon_details": "2-4 sentence summary of recon needed and photo/listing observations"
+}
+
+Rules for recon_items:
+8. recon_estimate MUST equal the sum of all recon_items costs.
+9. If the car appears retail-ready with no stated issues, recon_items can be minimal (detail + inspection).
+"""
+
+PRIVATE_RESALE_SYSTEM_PROMPT = (
+    "You are an experienced used-car flipper estimating realistic RETAIL resale value after "
+    "reconditioning — what this vehicle could sell for on Facebook Marketplace, Craigslist, or "
+    "a dealer lot as a clean retail listing. Not wholesale, not auction, not trade-in."
+)
+
+PRIVATE_RESALE_RULES = """
+Rules:
+1. Use realistic private-party RETAIL asking prices for a well-presented example of this year/make/model/trim
+   at this mileage in the current US market — not KBB "fair purchase price" and not auction wholesale.
+2. Factor in title status: clean title = full retail; rebuilt/salvage = significant discount (20-40%+).
+3. Factor recon costs when a recon line-item list is provided — buyer's exit is AFTER recon is done.
+4. Be conservative — understate rather than overstate value.
+5. You have NOT seen photos. Your only condition info is recon line items and listing context below.
+6. Do NOT invent specific mechanical failures not mentioned in the recon list or listing.
+
+Return JSON with this exact structure:
+{
+  "resale_estimate": 0,
+  "resale_details": "2-4 sentence retail exit rationale"
 }
 """
 
@@ -385,6 +446,32 @@ def _vehicle_context(vehicle) -> str:
         f"- Reported damage notes: {damage}\n"
         f"- Odometer: {odometer_display}\n"
         f"- Title type: {title_code}"
+    )
+
+
+def _private_vehicle_context(vehicle) -> str:
+    year = vehicle.get("year") or "Unknown"
+    make = vehicle.get("make") or "Unknown"
+    model = vehicle.get("model") or "Unknown"
+    odometer_display = vehicle.get("odometer", "Unknown")
+    title_code = _normalize_title_code(vehicle.get("title_code", "Unknown"))
+    asking = vehicle.get("asking_price") or vehicle.get("est_retail_value") or "Unknown"
+    listing = (
+        vehicle.get("listing_description")
+        or vehicle.get("description")
+        or vehicle.get("damage_description")
+        or "No listing text provided"
+    )
+
+    return (
+        "Private-party listing context:\n"
+        f"- Year: {year}\n"
+        f"- Make: {make}\n"
+        f"- Model: {model}\n"
+        f"- Seller asking price: {asking}\n"
+        f"- Odometer: {odometer_display}\n"
+        f"- Title type: {title_code}\n"
+        f"- Seller description / listing text:\n{listing}"
     )
 
 
@@ -681,6 +768,191 @@ def analyze_vehicle_known_issues(vehicle: dict) -> dict:
     }
 
 
+def _finalize_private_recon_fields(parsed: dict) -> dict:
+    items = []
+    for item in parsed.get("recon_items") or []:
+        if not isinstance(item, dict):
+            continue
+        description = str(item.get("description") or "").strip()
+        if not description:
+            continue
+        try:
+            cost = int(float(item.get("cost") or 0))
+        except (TypeError, ValueError):
+            cost = 0
+        items.append({"description": description, "cost": max(cost, 0)})
+
+    total = sum(item["cost"] for item in items)
+    if not total:
+        try:
+            total = int(float(parsed.get("recon_estimate") or 0))
+        except (TypeError, ValueError):
+            total = 0
+
+    details = (parsed.get("recon_details") or "").strip()
+    photo_notes = (parsed.get("photo_match_notes") or "").strip()
+    if photo_notes and photo_notes not in details:
+        details = f"{photo_notes} {details}".strip()
+
+    red_flags = [
+        str(flag).strip()
+        for flag in (parsed.get("red_flags") or [])
+        if str(flag).strip()
+    ]
+
+    return {
+        "repair_estimate": total,
+        "repair_details": details or "No recon details available.",
+        "repair_breakdown": json.dumps(items),
+        "red_flags": red_flags,
+    }
+
+
+def analyze_private_recon(vehicle: dict) -> dict:
+    """Vision-based reconditioning estimate for private-party listings."""
+    lot_number = vehicle.get("lot_number", "unknown")
+    image_entries = vehicle.get("image_entries") or []
+    if not image_entries and vehicle.get("images"):
+        image_entries = [
+            {"path": p, "label": "unknown", "filename": os.path.basename(p)}
+            for p in vehicle["images"]
+        ]
+
+    manifest = _photo_manifest(image_entries)
+    user_prompt = f"{PRIVATE_RECON_RULES.strip()}\n\n{_private_vehicle_context(vehicle)}"
+    if manifest:
+        user_prompt += f"\n\n{manifest}"
+
+    messages = [
+        {"role": "system", "content": PRIVATE_RECON_SYSTEM_PROMPT},
+        {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
+    ]
+    _attach_images(messages, image_entries, lot_number)
+
+    if len(messages[1]["content"]) == 1:
+        return {
+            **_empty_repair_result("No usable photos attached for recon analysis."),
+            "red_flags": [],
+        }
+
+    response = client.chat.completions.create(
+        model=REPAIR_MODEL,
+        messages=messages,
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+    usage = _log_token_usage("private_recon", response)
+
+    raw = response.choices[0].message.content.strip()
+    parsed = _parse_json_response(
+        raw,
+        lot_number,
+        {"recon_estimate": None, "recon_details": raw[:800], "red_flags": []},
+    )
+    recon_fields = _finalize_private_recon_fields(parsed)
+    return {
+        **recon_fields,
+        "_usage": [usage],
+    }
+
+
+def analyze_private_resale(vehicle: dict, recon_result: dict | None = None) -> dict:
+    """Text-only retail resale estimate for private-party flips."""
+    lot_number = vehicle.get("lot_number", "unknown")
+    odometer_display = vehicle.get("odometer", "Unknown")
+    title_code = _normalize_title_code(vehicle.get("title_code", "Unknown"))
+
+    recon_summary = ""
+    if recon_result:
+        estimate = recon_result.get("repair_estimate")
+        breakdown_raw = recon_result.get("repair_breakdown")
+        items = []
+        if breakdown_raw:
+            try:
+                items = json.loads(breakdown_raw) if isinstance(breakdown_raw, str) else breakdown_raw
+            except (json.JSONDecodeError, TypeError):
+                items = []
+        if estimate is not None or items:
+            if items:
+                item_lines = "\n".join(
+                    f"  - {item.get('description', 'Unknown item')}: ${item.get('cost', 0)}"
+                    for item in items
+                )
+            else:
+                item_lines = "  (no itemized recon breakdown available)"
+            recon_summary = (
+                "\nKnown recon line items (this is the ONLY condition work you have — do not add to it):\n"
+                f"- Recon estimate total: {estimate if estimate is not None else 'Unknown'}\n"
+                f"{item_lines}"
+            )
+
+    user_prompt = (
+        f"{PRIVATE_RESALE_RULES.strip()}\n\n"
+        f"{_private_vehicle_context(vehicle)}\n"
+        f"{recon_summary}\n\n"
+        f"Odometer for resale math: {odometer_display} miles.\n"
+        f"Title type for resale math: {title_code}."
+    )
+
+    response = client.chat.completions.create(
+        model=RESALE_MODEL,
+        messages=[
+            {"role": "system", "content": PRIVATE_RESALE_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+    usage = _log_token_usage("private_resale", response)
+
+    raw = response.choices[0].message.content.strip()
+    parsed = _parse_json_response(
+        raw,
+        lot_number,
+        {"resale_estimate": None, "resale_details": raw[:800]},
+    )
+    return {
+        "resale_estimate": parsed.get("resale_estimate"),
+        "resale_details": parsed.get("resale_details") or "No resale details available.",
+        "_usage": [usage],
+    }
+
+
+def validate_private_deal(vehicle: dict, result: dict) -> dict:
+    """Sanity checks for private-party flip analysis."""
+    reasons = list(result.get("red_flags") or [])
+
+    asking = vehicle.get("asking_price")
+    if asking is None:
+        try:
+            asking = int(float(str(vehicle.get("est_retail_value") or "0").replace(",", "").replace("$", "")))
+        except (TypeError, ValueError):
+            asking = None
+
+    recon_estimate = int(result.get("repair_estimate") or 0)
+    resale_estimate = result.get("resale_estimate")
+
+    if asking and resale_estimate and asking >= resale_estimate * 0.9:
+        reasons.append(
+            f"Asking price (${asking}) is very close to or above estimated retail exit (${resale_estimate}) — "
+            "little or no margin before recon and fees."
+        )
+
+    if recon_estimate and resale_estimate and recon_estimate >= resale_estimate * 0.4:
+        reasons.append(
+            f"Recon estimate (${recon_estimate}) is high relative to retail exit (${resale_estimate})."
+        )
+
+    title = (vehicle.get("title_code") or "").lower()
+    if any(term in title for term in ("salvage", "rebuilt", "junk", "flood")):
+        reasons.append(f"Branded title ({vehicle.get('title_code')}) — verify title status before purchase.")
+
+    return {
+        "needs_manual_review": bool(reasons),
+        "review_reasons": reasons,
+    }
+
+
 def validate_repair_estimate(vehicle: dict, result: dict) -> dict:
     """
     Rule-based sanity checks — catches the two failure modes seen in practice:
@@ -749,17 +1021,10 @@ def validate_repair_estimate(vehicle: dict, result: dict) -> dict:
     }
 
 
-def analyze_vehicle(vehicle, mode: str = "full") -> dict:
+def analyze_salvage_flip(vehicle, mode: str = "full") -> dict:
     """
-    Analyze a vehicle with AI.
-
-    mode:
-      - "full": repair (if photos) + resale + known_issues
-      - "repair": vision repair only
-      - "resale": text resale only
-      - "known_issues": text platform-reliability lookup only (no photos, no odometer/title math)
+    Salvage/auction flip analysis — collision repair + wholesale resale.
     """
-    mode = vehicle.get("mode", mode)
     result = {}
     usages = []
 
@@ -801,6 +1066,67 @@ def analyze_vehicle(vehicle, mode: str = "full") -> dict:
     return result
 
 
+def analyze_private_flip(vehicle, mode: str = "full") -> dict:
+    """
+    Private-party flip analysis — recon + retail resale + listing red flags.
+    """
+    result = {}
+    usages = []
+
+    image_paths = [p for p in (vehicle.get("images") or []) if p and os.path.isfile(p)]
+    has_images = bool(image_paths)
+
+    if mode in ("full", "repair"):
+        if has_images:
+            recon_result = analyze_private_recon(vehicle)
+            usages.extend(recon_result.pop("_usage", []))
+            result.update(recon_result)
+        else:
+            result.update(_empty_repair_result("No photos provided for recon analysis."))
+            result["red_flags"] = []
+
+    if mode in ("full", "resale"):
+        recon_context = None
+        if mode == "full" and has_images:
+            recon_context = result
+        elif vehicle.get("repair_context"):
+            recon_context = vehicle["repair_context"]
+        resale_result = analyze_private_resale(vehicle, recon_context)
+        usages.extend(resale_result.pop("_usage", []))
+        result.update(resale_result)
+
+    if mode in ("full", "known_issues"):
+        known_issues_result = analyze_vehicle_known_issues(vehicle)
+        usages.extend(known_issues_result.pop("_usage", []))
+        result.update(known_issues_result)
+
+    if mode == "full":
+        validation = validate_private_deal(vehicle, result)
+        result["needs_manual_review"] = validation["needs_manual_review"]
+        result["review_reasons"] = validation["review_reasons"]
+
+    if usages:
+        result["_usage"] = usages
+
+    return result
+
+
+def analyze_vehicle(vehicle, mode: str = "full") -> dict:
+    """
+    Analyze a vehicle with AI. Routes by source_type.
+
+    mode:
+      - "full": repair/recon (if photos) + resale + known_issues
+      - "repair": vision repair/recon only
+      - "resale": text resale only
+      - "known_issues": text platform-reliability lookup only
+    """
+    mode = vehicle.get("mode", mode)
+    if is_private_party(vehicle):
+        return analyze_private_flip(vehicle, mode)
+    return analyze_salvage_flip(vehicle, mode)
+
+
 # --------------------------------------------------
 # LOT PROCESSING FUNCTION
 # --------------------------------------------------
@@ -811,7 +1137,8 @@ def _load_vehicle_for_lot(lot, rds_engine):
     with rds_engine.connect() as conn:
         row = conn.execute(
             text("""
-                SELECT year, make, model, damage_description, odometer, title_code, repair_estimate
+                SELECT year, make, model, damage_description, odometer, title_code, repair_estimate,
+                       source_type, asking_price, listing_description, est_retail_value
                 FROM user_vehicles
                 WHERE lot_number = :lot
                 LIMIT 1
@@ -822,7 +1149,10 @@ def _load_vehicle_for_lot(lot, rds_engine):
     if not row:
         return None, f"No user_vehicles record found for lot {lot}"
 
-    year, make, model, damage, odometer, title_code, existing_repair = row
+    (
+        year, make, model, damage, odometer, title_code, existing_repair,
+        source_type, asking_price, listing_description, est_retail_value,
+    ) = row
 
     lot_dir = os.path.join(DOWNLOAD_DIR, lot)
     if not os.path.isdir(lot_dir):
@@ -834,10 +1164,14 @@ def _load_vehicle_for_lot(lot, rds_engine):
 
     vehicle = {
         "lot_number": lot,
+        "source_type": source_type or "salvage_auction",
         "year": year,
         "make": make,
         "model": model,
         "damage_description": damage,
+        "listing_description": listing_description,
+        "asking_price": asking_price,
+        "est_retail_value": est_retail_value,
         "images": [entry["path"] for entry in image_entries],
         "image_entries": image_entries,
         "odometer": odometer or "Unknown",
@@ -976,6 +1310,7 @@ def process_lot(lot, rds_engine, dry_run=False, force=False):
                         reliability_summary = :reliability_summary,
                         known_issues = :known_issues,
                         wear_items = :wear_items,
+                        red_flags = :red_flags,
                         needs_manual_review = :needs_manual_review,
                         review_reasons = :review_reasons,
                         updated_at = NOW()
@@ -991,6 +1326,7 @@ def process_lot(lot, rds_engine, dry_run=False, force=False):
                     "reliability_summary": ai_result.get("reliability_summary"),
                     "known_issues": json.dumps(ai_result.get("known_issues") or []),
                     "wear_items": json.dumps(ai_result.get("wear_items") or []),
+                    "red_flags": json.dumps(ai_result.get("red_flags") or []),
                     "needs_manual_review": ai_result.get("needs_manual_review", False),
                     "review_reasons": json.dumps(ai_result.get("review_reasons") or []),
                 },

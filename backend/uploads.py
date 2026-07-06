@@ -92,6 +92,7 @@ async def upload_file(
 
                 values = {
                     "user_id": user["id"],
+                    "source_type": "salvage_auction",
                     "lot_number": lot_number,
                     "lot_url": lot_url,
                     "est_retail_value": getval(row, "Est. Retail value"),
@@ -136,7 +137,7 @@ async def upload_file(
                     conn.execute(
                         text("""
                             INSERT INTO user_vehicles (
-                                user_id, lot_url, lot_number, est_retail_value,
+                                user_id, source_type, lot_url, lot_number, est_retail_value,
                                 sale_date, year, make, model, engine_type, cylinders, vin,
                                 title_code, odometer, odometer_description, damage_description,
                                 current_bid, my_bid, item_number, sale_name,
@@ -144,7 +145,7 @@ async def upload_file(
                                 created_at
                             )
                             VALUES (
-                                :user_id, :lot_url, :lot_number, :est_retail_value,
+                                :user_id, :source_type, :lot_url, :lot_number, :est_retail_value,
                                 :sale_date, :year, :make, :model, :engine_type, :cylinders, :vin,
                                 :title_code, :odometer, :odometer_description, :damage_description,
                                 :current_bid, :my_bid, :item_number, :sale_name,

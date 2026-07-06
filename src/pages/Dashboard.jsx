@@ -22,6 +22,14 @@ import { formatCurrency, parseCurrencyInput } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
 import { calculateFlipMetrics } from "../utils/flipCalculator";
 import { useFlipMetrics } from "../utils/useFlipMetrics";
+import {
+  isPrivateParty,
+  buyerFeeRate,
+  sourceLabel,
+  costLabel,
+  maxOfferLabel,
+  askingPrice,
+} from "../utils/vehicleSource";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 //  ADD VEHICLE MODAL (ManualVehicleModal)
@@ -158,7 +166,7 @@ function ManualVehicleModal({ API, close, reload }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 text-slate-900 shadow-2xl">
-        <h2 className="mb-5 text-xl font-bold tracking-tight text-slate-900">Add Vehicle</h2>
+        <h2 className="mb-5 text-xl font-bold tracking-tight text-slate-900">Add Private Listing</h2>
 
         {/* SECTIONS */}
         <details className="mb-4 border-b border-slate-100 pb-4" open>
@@ -229,12 +237,11 @@ function ManualVehicleModal({ API, close, reload }) {
 
           {[
             ["mileage", "Mileage"],
-            ["damage_description", "Damage"],
             ["title_status", "Title Status"],
             ["asking_price", "Asking Price"],
             ["location", "Location"],
-            ["listing_url", "Listing URL (optional)"],
-            ["description", "Description"],
+            ["listing_url", "Listing URL (Facebook, Craigslist, etc.)"],
+            ["description", "Seller Description"],
             ["vin", "VIN"],
           ].map(([key, label]) => (
             <input
@@ -350,6 +357,7 @@ function VehicleDetailModal({
   isDemo,
 }) {
   const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
+  const isPrivate = isPrivateParty(car);
   const metrics = useFlipMetrics({
     carId: car.id,
     resale: car.resale_estimate || car.ai_resale_estimate || 0,
@@ -357,6 +365,7 @@ function VehicleDetailModal({
     marginPercent: tempMargin,
     taxRate: car.avg_tax_rate || 0,
     titleFee: car.title_fee || 0,
+    buyerFeeRate: buyerFeeRate(car),
   });
   const profitPositive = metrics.profit >= 0;
 
@@ -431,13 +440,15 @@ function VehicleDetailModal({
 
         <div className="mt-4 rounded-xl bg-slate-50 p-4">
           <div className="mb-1 flex items-baseline justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-blue-600">Max Bid</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-blue-600">
+              {maxOfferLabel(car)}
+            </span>
             <span className="text-3xl font-extrabold tabular-nums text-slate-900">
               {formatCurrency(metrics.bid)}
             </span>
           </div>
           <p className="mb-3 text-xs text-slate-400">
-            set at {tempMargin}% margin · profit updates when repair costs change
+            set at {tempMargin}% margin · profit updates when {isPrivate ? "recon" : "repair"} costs change
           </p>
 
           <div className="space-y-1.5 border-t border-slate-200 pt-3 text-sm text-slate-500">
@@ -524,16 +535,12 @@ function VehicleDetailModal({
 
 function isCarReady(car) {
   if (!car.image_url) return false;
-  if (car.lot_number) {
-    const repairSet =
-      car.repair_estimate != null && String(car.repair_estimate).trim() !== "";
-    const resale = parseCurrencyInput(
-      car.resale_estimate ?? car.ai_resale_estimate ?? 0
-    );
-    return repairSet && resale > 0;
-  }
-  // Manual entries: image is enough
-  return true;
+  const repairSet =
+    car.repair_estimate != null && String(car.repair_estimate).trim() !== "";
+  const resale = parseCurrencyInput(
+    car.resale_estimate ?? car.ai_resale_estimate ?? 0
+  );
+  return repairSet && resale > 0;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -573,6 +580,7 @@ export default function Dashboard({
       marginPercent: marginInput,
       taxRate: car.avg_tax_rate || 0,
       titleFee: car.title_fee || 0,
+      buyerFeeRate: buyerFeeRate(car),
     });
 
     return {
@@ -779,7 +787,12 @@ export default function Dashboard({
                     alt=""
                   />
                   <span className="absolute left-3 top-3 rounded-full bg-black/70 px-3 py-1 text-xs font-medium text-white backdrop-blur">
-                    {car.damage_description || "Unknown Damage"}
+                    {sourceLabel(car)}
+                  </span>
+                  <span className="absolute bottom-3 left-3 max-w-[70%] truncate rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white backdrop-blur">
+                    {isPrivateParty(car)
+                      ? (askingPrice(car) ? `Ask ${formatCurrency(askingPrice(car))}` : "Private listing")
+                      : (car.damage_description || "Unknown damage")}
                   </span>
 
                   {/* Card menu */}
@@ -820,7 +833,9 @@ export default function Dashboard({
                   <div className="mt-2 space-y-1.5 text-sm text-slate-500">
                     <p className="flex items-center gap-2">
                       <Hash size={13} className="shrink-0 text-slate-400" />
-                      Lot {car.lot_number || "Manual"}
+                      {isPrivateParty(car)
+                        ? (askingPrice(car) ? `Ask ${formatCurrency(askingPrice(car))}` : "Private party")
+                        : `Lot ${car.lot_number || "—"}`}
                     </p>
                     <p className="flex items-center gap-2">
                       <MapPin size={13} className="shrink-0 text-slate-400" />
@@ -839,7 +854,7 @@ export default function Dashboard({
                     <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
                       <div className="mb-1 flex items-center gap-1.5 text-amber-600">
                         <Wrench size={13} />
-                        <span className="text-[11px] font-semibold uppercase tracking-wide">Repair</span>
+                        <span className="text-[11px] font-semibold uppercase tracking-wide">{costLabel(car)}</span>
                       </div>
                       <CurrencyInput
                         readOnly={isDemo}
@@ -852,7 +867,9 @@ export default function Dashboard({
                     <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
                       <div className="mb-1 flex items-center gap-1.5 text-emerald-600">
                         <DollarSign size={13} />
-                        <span className="text-[11px] font-semibold uppercase tracking-wide">Resale</span>
+                        <span className="text-[11px] font-semibold uppercase tracking-wide">
+                          {isPrivateParty(car) ? "Exit" : "Resale"}
+                        </span>
                       </div>
                       <CurrencyInput
                         readOnly={isDemo}
@@ -863,9 +880,11 @@ export default function Dashboard({
                     </div>
                   </div>
 
-                  {/* Max Bid */}
+                  {/* Max Bid / Offer */}
                   <div className="mt-3 flex items-baseline justify-between rounded-xl bg-blue-50 px-4 py-3">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-blue-600">Max Bid</span>
+                    <span className="text-xs font-semibold uppercase tracking-wide text-blue-600">
+                      {maxOfferLabel(car)}
+                    </span>
                     <span className="text-2xl font-extrabold tabular-nums text-blue-700">
                       {formatCurrency(car.max_bid)}
                     </span>

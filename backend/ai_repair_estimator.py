@@ -1262,10 +1262,6 @@ def analyze_private_flip(vehicle, mode: str = "full") -> dict:
         result["needs_manual_review"] = validation["needs_manual_review"]
         result["review_reasons"] = validation["review_reasons"]
 
-        negotiation_result = analyze_vehicle_negotiation({**vehicle, **result})
-        usages.extend(negotiation_result.pop("_usage", []))
-        result.update(negotiation_result)
-
     if usages:
         result["_usage"] = usages
 
@@ -1277,7 +1273,7 @@ def analyze_vehicle(vehicle, mode: str = "full") -> dict:
     Analyze a vehicle with AI. Routes by source_type.
 
     mode:
-      - "full": repair/recon (if photos) + resale + known_issues + negotiation (private party)
+      - "full": repair/recon (if photos) + resale + known_issues
       - "repair": vision repair/recon only
       - "resale": text resale only
       - "known_issues": text platform-reliability lookup only
@@ -1302,17 +1298,6 @@ def analyze_vehicle(vehicle, mode: str = "full") -> dict:
 # --------------------------------------------------
 # LOT PROCESSING FUNCTION
 # --------------------------------------------------
-
-def negotiation_db_params(ai_result: dict) -> dict:
-    """SQL bind params for negotiation columns."""
-    return {
-        "negotiation_summary": ai_result.get("negotiation_summary"),
-        "negotiation_talking_points": json.dumps(ai_result.get("negotiation_talking_points") or []),
-        "suggested_offer_low": ai_result.get("suggested_offer_low"),
-        "suggested_offer_high": ai_result.get("suggested_offer_high"),
-        "offer_rationale": ai_result.get("offer_rationale"),
-    }
-
 
 def _load_vehicle_for_lot(lot, rds_engine):
     """Load vehicle metadata and local image paths for a lot."""
@@ -1496,11 +1481,6 @@ def process_lot(lot, rds_engine, dry_run=False, force=False):
                         red_flags = :red_flags,
                         needs_manual_review = :needs_manual_review,
                         review_reasons = :review_reasons,
-                        negotiation_summary = :negotiation_summary,
-                        negotiation_talking_points = :negotiation_talking_points,
-                        suggested_offer_low = :suggested_offer_low,
-                        suggested_offer_high = :suggested_offer_high,
-                        offer_rationale = :offer_rationale,
                         updated_at = NOW()
                     WHERE lot_number = :lot;
                 """),
@@ -1517,7 +1497,6 @@ def process_lot(lot, rds_engine, dry_run=False, force=False):
                     "red_flags": json.dumps(ai_result.get("red_flags") or []),
                     "needs_manual_review": ai_result.get("needs_manual_review", False),
                     "review_reasons": json.dumps(ai_result.get("review_reasons") or []),
-                    **negotiation_db_params(ai_result),
                 },
             )
 

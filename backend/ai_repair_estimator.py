@@ -47,11 +47,13 @@ client = OpenAI(api_key=openai_key)
 
 # Static prefix first — eligible for OpenAI prompt caching on repeated batch runs.
 REPAIR_SYSTEM_PROMPT = (
-    "You are an experienced automotive appraiser and body shop estimator. "
+    "You are an experienced automotive appraiser, body shop estimator, AND independent car-flip advisor. "
     "You inspect vehicle photos and report only damage you can see. "
     "You never assume or invent damage that is not visible in the photos. "
     "When damage IS visible, you price repairs at realistic US body-shop out-the-door rates "
-    "(parts + labor + paint + related hardware) — not DIY, not parts-only, not auction flip shortcuts."
+    "(parts + labor + paint + related hardware) — not DIY, not parts-only, not auction flip shortcuts. "
+    "You also produce a practical repair PLAN: specific parts, part-only price ranges, labor hours, "
+    "shop vs DIY work, and flipper warnings — not vague summaries."
 )
 
 REPAIR_RULES = """
@@ -83,7 +85,8 @@ Vehicle tier multiplier — apply to the base pricing above, and use the matchin
 
 When a bumper is missing, torn off, or hanging: do NOT price only a cover. Include visible behind-bumper components and full refinish.
 
-Return JSON with this exact structure:
+Return ONE JSON object with ALL fields below (repair estimate AND repair plan together):
+
 {
   "regions": {
     "front": {"damaged": false, "evidence": ""},
@@ -93,64 +96,73 @@ Return JSON with this exact structure:
     "roof": {"damaged": false, "evidence": ""},
     "undercarriage": {"damaged": false, "evidence": ""}
   },
-  "parts_to_replace": [],
-  "parts_to_repair": [],
-  "labor_hours": 0,
-  "interior_notes": "",
+  "parts_to_replace": ["list specific components e.g. Left front door shell, Left quarter panel"],
+  "parts_to_repair": ["panels that need body work but not full replacement"],
   "repair_items": [
-    {"description": "Rear bumper cover, reinforcement, absorber, brackets — replace + paint (Photo 8)", "cost": 1850},
-    {"description": "Front bumper cover — replace + paint (Photo 1)", "cost": 1350}
+    {"description": "Left front door shell — replace + paint + transfer hardware (Photo 3)", "cost": 1450},
+    {"description": "Left quarter panel — repair dent + paint blend (Photo 3)", "cost": 850}
   ],
-  "repair_estimate": 3200,
-  "repair_details": "2-4 sentence summary citing photo evidence"
+  "repair_estimate": 2300,
+  "repair_details": "2-4 sentence summary citing photo evidence",
+  "repair_difficulty_score": 5,
+  "repair_difficulty_label": "Medium",
+  "parts_availability": "Good",
+  "estimated_labor_hours": 16,
+  "estimated_repair_days_min": 5,
+  "estimated_repair_days_max": 10,
+  "diy_friendly": "Partial",
+  "parts_needed": [
+    {
+      "name": "Left front door shell (used/OEM)",
+      "category": "Body",
+      "estimated_price_low": 350,
+      "estimated_price_high": 650,
+      "availability": "High",
+      "notes": "Color-match paint is separate shop work. Transfer window regulator and handle."
+    },
+    {
+      "name": "Door trim / mirror / handle hardware",
+      "category": "Trim",
+      "estimated_price_low": 40,
+      "estimated_price_high": 120,
+      "availability": "High",
+      "notes": "Reuse from donor door if possible."
+    }
+  ],
+  "shop_services_needed": [
+    {"name": "Quarter panel dent repair + paint blend", "required": true, "notes": "Not a bolt-on DIY job."},
+    {"name": "Door gap / hinge alignment check", "required": true, "notes": "Verify after door replacement."}
+  ],
+  "repair_plan_summary": "2-3 sentences of practical flipper advice — what to verify in person before bidding.",
+  "repair_plan_warnings": ["Verify door frame / B-pillar is straight before buying."],
+  "hidden_damage_risks": ["Inner door beam", "Window regulator", "Side curtain airbag (if door intrusion visible)"]
 }
 
 Rules for repair_items:
 9. List each distinct visible repair as its own line item with description (include photo reference when possible) and all-in cost in USD.
 10. repair_estimate MUST equal the sum of all repair_items costs.
-11. If no visible damage, use repair_items: [] and repair_estimate: 0.
-12. Multiple damaged regions (e.g. front AND rear) must each have their own line items — never combine into one low bumper-only total.
+11. If no visible damage, use repair_items: [] and repair_estimate: 0 — set estimated_labor_hours to 0 and parts_needed to [].
+12. Multiple damaged regions must each have their own line items.
 
-Also include a practical repair plan for an independent vehicle flipper (not a mechanic report):
-13. Be conservative — use "likely", "possible", "should be inspected", "not visible from photos", "verify before bidding".
-14. Distinguish visible damage vs inferred vs unknown/needs inspection.
-15. repair_difficulty_score is 1-10 (1=easy bolt-on, 10=expert structural/ADAS/electrical).
-16. parts_availability must be one of: Good, Medium, Poor, Unknown.
-17. diy_friendly must be one of: Yes, Mostly, Partial, No, Unknown.
-
-Add these repair-plan fields to your JSON response:
-{
-  "repair_difficulty_score": 6,
-  "repair_difficulty_label": "Medium",
-  "parts_availability": "Good",
-  "estimated_labor_hours": 18,
-  "estimated_repair_days_min": 7,
-  "estimated_repair_days_max": 14,
-  "diy_friendly": "Mostly",
-  "parts_needed": [
-    {
-      "name": "Front bumper cover",
-      "category": "Body",
-      "estimated_price_low": 250,
-      "estimated_price_high": 450,
-      "availability": "High",
-      "notes": "Used or aftermarket part should be easy to find."
-    }
-  ],
-  "shop_services_needed": [
-    {"name": "Paint match", "required": true, "notes": "Likely needed if replacing painted panels."}
-  ],
-  "repair_plan_summary": "2-3 sentences of practical flipper advice.",
-  "repair_plan_warnings": ["Possible hidden radiator support damage."],
-  "hidden_damage_risks": ["Radiator support", "Parking sensors"]
-}
+Repair plan rules (REQUIRED whenever repair_items is non-empty):
+13. parts_needed MUST list every replaceable component separately — door shell, bumper cover, headlight, grille, etc. NOT just "left door".
+    Include trim, clips, sensors, and hardware when likely needed.
+14. estimated_price_low/high are PARTS-ONLY estimates (used/OEM/aftermarket), NOT the all-in repair_items cost.
+15. estimated_labor_hours MUST be > 0 when repair_items exist. Estimate body-shop hours for remove/replace, body work, and paint.
+16. shop_services_needed MUST include paint/blend, alignment, ADAS calibration, frame measurement, or diagnostics when applicable.
+17. parts_availability: Good (common parts, easy to source), Medium, Poor (rare/expensive/back-ordered), or Unknown only if truly uncertain.
+18. diy_friendly: Yes / Mostly / Partial / No — Partial if any paint or body work is required; No if structural/ADAS/airbag work likely.
+19. Be conservative — use "likely", "possible", "should be inspected", "verify before bidding" for hidden risks.
+20. Do NOT leave parts_needed with zero prices when you can estimate from the vehicle make/model and damage type.
 """
 
 REPAIR_PLAN_RECON_APPEND = """
-Also include a practical recon/repair plan for an independent vehicle flipper:
-- Be conservative — use "likely", "possible", "should be inspected", "verify before bidding".
-- repair_difficulty_score is 1-10; parts_availability: Good/Medium/Poor/Unknown; diy_friendly: Yes/Mostly/Partial/No/Unknown.
-- Include the same repair-plan fields as salvage analysis (parts_needed, shop_services_needed, repair_plan_summary, repair_plan_warnings, hidden_damage_risks, estimated_labor_hours, estimated_repair_days_min/max).
+Repair plan rules (REQUIRED whenever recon_items is non-empty):
+- Include ALL repair-plan fields in the SAME JSON object as recon_items.
+- parts_needed must list specific parts/supplies (brake pads, tires, battery, bulbs, filters) with price ranges — not vague labels.
+- estimated_labor_hours must reflect shop time when work is not DIY-friendly.
+- shop_services_needed for alignment, AC recharge, paint touch-up, diagnostics when applicable.
+- parts_availability: Good/Medium/Poor; diy_friendly: Yes/Mostly/Partial/No.
 """
 
 RESALE_SYSTEM_PROMPT = (
@@ -706,7 +718,178 @@ def _infer_difficulty_from_labor(labor_hours):
     return 9
 
 
+def _infer_part_category(description: str) -> str:
+    d = description.lower()
+    if any(k in d for k in ("paint", "blend", "refinish", "clearcoat")):
+        return "Paint"
+    if any(k in d for k in ("headlight", "taillight", "lamp", "fog light")):
+        return "Lighting"
+    if any(k in d for k in ("bumper", "fender", "quarter", "door", "hood", "trunk", "panel", "grille")):
+        return "Body"
+    if any(k in d for k in ("mirror", "trim", "moulding", "molding", "handle", "grille")):
+        return "Trim"
+    if any(k in d for k in ("sensor", "camera", "radar", "adas")):
+        return "ADAS"
+    if any(k in d for k in ("radiator", "condenser", "cooling", "ac ")):
+        return "Cooling"
+    if any(k in d for k in ("wheel", "tire", "brake", "rotor", "suspension", "strut")):
+        return "Mechanical"
+    return "General"
+
+
+def _clean_part_name(description: str) -> str:
+    name = str(description or "").strip()
+    for sep in ("—", " - ", " ("):
+        if sep in name:
+            name = name.split(sep)[0].strip()
+    return name[:100] if name else "Repair component"
+
+
+def _is_generic_part(part: dict) -> bool:
+    if not part.get("name"):
+        return True
+    low = part.get("estimated_price_low") or 0
+    high = part.get("estimated_price_high") or 0
+    notes = str(part.get("notes") or "").lower()
+    if low <= 0 and high <= 0:
+        return True
+    if "likely needed based on visible damage" in notes:
+        return True
+    return False
+
+
+def _parts_from_repair_items(repair_items: list) -> tuple[list, list]:
+    parts = []
+    shop_services = []
+    seen_shop = set()
+
+    for item in repair_items:
+        if not isinstance(item, dict):
+            continue
+        desc = str(item.get("description") or "").strip()
+        if not desc:
+            continue
+        try:
+            all_in = int(float(item.get("cost") or 0))
+        except (TypeError, ValueError):
+            all_in = 0
+
+        d_lower = desc.lower()
+        category = _infer_part_category(desc)
+        is_paint_work = any(k in d_lower for k in ("paint", "blend", "refinish", "body work", "dent repair"))
+
+        if is_paint_work:
+            parts_low = max(50, int(all_in * 0.12)) if all_in else 0
+            parts_high = max(parts_low + 50, int(all_in * 0.28)) if all_in else 0
+            shop_name = _clean_part_name(desc)
+            if shop_name.lower() not in seen_shop:
+                shop_services.append({
+                    "name": shop_name,
+                    "required": True,
+                    "notes": f"Shop body/paint work — all-in estimate ${all_in:,}." if all_in else "Shop body/paint work required.",
+                })
+                seen_shop.add(shop_name.lower())
+        else:
+            parts_low = max(75, int(all_in * 0.32)) if all_in else 0
+            parts_high = max(parts_low + 75, int(all_in * 0.52)) if all_in else 0
+
+        parts.append({
+            "name": _clean_part_name(desc),
+            "category": category,
+            "estimated_price_low": parts_low,
+            "estimated_price_high": parts_high,
+            "availability": "Medium",
+            "notes": (
+                f"Parts-only estimate; all-in shop line item ${all_in:,} includes labor + paint."
+                if all_in else "Verify part numbers and trim before ordering."
+            ),
+        })
+
+        if "align" in d_lower and "alignment" not in seen_shop:
+            shop_services.append({
+                "name": "Wheel alignment check",
+                "required": False,
+                "notes": "Recommended after front-end or suspension work.",
+            })
+            seen_shop.add("alignment")
+        if any(k in d_lower for k in ("adas", "calibrat", "camera", "radar sensor")):
+            svc = "ADAS / sensor calibration"
+            if svc.lower() not in seen_shop:
+                shop_services.append({
+                    "name": svc,
+                    "required": True,
+                    "notes": "Required after bumper/grille/windshield work on many modern vehicles.",
+                })
+                seen_shop.add(svc.lower())
+
+    return parts[:12], shop_services[:10]
+
+
+def _estimate_labor_hours(repair_items: list, total_cost: int) -> float | None:
+    if not repair_items:
+        return None
+    hours_from_items = 0.0
+    for item in repair_items:
+        if not isinstance(item, dict):
+            continue
+        desc = str(item.get("description") or "").lower()
+        try:
+            cost = int(float(item.get("cost") or 0))
+        except (TypeError, ValueError):
+            cost = 0
+        if any(k in desc for k in ("paint", "blend", "refinish", "quarter panel", "fender")):
+            hours_from_items += max(3.0, cost / 85.0)
+        elif any(k in desc for k in ("bumper", "door", "hood", "trunk", "headlight")):
+            hours_from_items += max(2.0, cost / 95.0)
+        elif cost > 0:
+            hours_from_items += max(1.5, cost / 100.0)
+
+    if hours_from_items > 0:
+        return round(max(2.0, hours_from_items), 1)
+
+    if total_cost > 0:
+        return round(max(2.0, total_cost / 90.0), 1)
+    return None
+
+
+def _infer_diy_friendly(repair_items: list, shop_services: list, score) -> str:
+    if not repair_items:
+        return "Yes"
+    text = " ".join(
+        str(i.get("description") or "") for i in repair_items if isinstance(i, dict)
+    ).lower()
+    shop_text = " ".join(
+        (s.get("name") or "") if isinstance(s, dict) else str(s) for s in shop_services
+    ).lower()
+    combined = text + " " + shop_text
+    if any(k in combined for k in ("frame", "structural", "airbag", "unibody", "adas", "calibrat")):
+        return "No"
+    if any(k in combined for k in ("paint", "blend", "refinish", "quarter panel", "dent repair")):
+        return "Partial"
+    if score is not None and score <= 4:
+        return "Mostly"
+    if score is not None and score >= 7:
+        return "No"
+    return "Partial"
+
+
+def _infer_parts_availability(parts: list, repair_items: list) -> str:
+    if not parts and not repair_items:
+        return "Unknown"
+    generic = sum(1 for p in parts if _is_generic_part(p))
+    if parts and generic < len(parts) * 0.5:
+        high_avail = sum(
+            1 for p in parts
+            if str(p.get("availability") or "").lower() in ("high", "good")
+        )
+        if high_avail >= len(parts) / 2:
+            return "Good"
+        return "Medium"
+    return "Medium"
+
+
 def _normalize_parts_needed(parsed: dict) -> list:
+    repair_items = parsed.get("repair_items") or parsed.get("recon_items") or []
     parts = parsed.get("parts_needed") or []
     normalized = []
     if isinstance(parts, list):
@@ -730,6 +913,20 @@ def _normalize_parts_needed(parsed: dict) -> list:
                     "notes": "",
                 })
 
+    generic_count = sum(1 for p in normalized if _is_generic_part(p))
+    if not normalized or generic_count == len(normalized):
+        from_items, _ = _parts_from_repair_items(repair_items)
+        if from_items:
+            normalized = from_items
+    elif generic_count > 0 and repair_items:
+        from_items, _ = _parts_from_repair_items(repair_items)
+        enriched = [p for p in normalized if not _is_generic_part(p)]
+        seen = {p["name"].lower() for p in enriched}
+        for p in from_items:
+            if p["name"].lower() not in seen:
+                enriched.append(p)
+        normalized = enriched
+
     if not normalized:
         for part in (parsed.get("parts_to_replace") or []):
             name = str(part).strip()
@@ -740,12 +937,19 @@ def _normalize_parts_needed(parsed: dict) -> list:
                     "estimated_price_low": 0,
                     "estimated_price_high": 0,
                     "availability": "Unknown",
-                    "notes": "Likely needed based on visible damage.",
+                    "notes": "Verify exact part number and trim before ordering.",
                 })
+
+    if not normalized or all(_is_generic_part(p) for p in normalized):
+        from_items, _ = _parts_from_repair_items(repair_items)
+        if from_items:
+            normalized = from_items
+
     return normalized[:12]
 
 
 def _normalize_shop_services(parsed: dict) -> list:
+    repair_items = parsed.get("repair_items") or parsed.get("recon_items") or []
     services = parsed.get("shop_services_needed") or []
     normalized = []
     if isinstance(services, list):
@@ -758,6 +962,14 @@ def _normalize_shop_services(parsed: dict) -> list:
                 })
             elif isinstance(item, str) and item.strip():
                 normalized.append({"name": item.strip(), "required": True, "notes": ""})
+
+    _, from_items = _parts_from_repair_items(repair_items)
+    seen = {s["name"].lower() for s in normalized}
+    for svc in from_items:
+        if svc["name"].lower() not in seen:
+            normalized.append(svc)
+            seen.add(svc["name"].lower())
+
     return normalized[:10]
 
 
@@ -781,7 +993,25 @@ def _normalize_string_list(value) -> list:
 
 
 def _extract_repair_plan(parsed: dict) -> dict:
+    repair_items = parsed.get("repair_items") or parsed.get("recon_items") or []
+    try:
+        total_cost = sum(
+            int(float(i.get("cost") or 0))
+            for i in repair_items
+            if isinstance(i, dict)
+        )
+    except (TypeError, ValueError):
+        total_cost = 0
+    if not total_cost:
+        try:
+            total_cost = int(float(parsed.get("repair_estimate") or parsed.get("recon_estimate") or 0))
+        except (TypeError, ValueError):
+            total_cost = 0
+
     labor = _safe_numeric(parsed.get("estimated_labor_hours") or parsed.get("labor_hours"))
+    if (labor is None or labor <= 0) and repair_items:
+        labor = _estimate_labor_hours(repair_items, total_cost)
+
     score = _safe_numeric(parsed.get("repair_difficulty_score"))
     if score is None:
         score = _infer_difficulty_from_labor(labor)
@@ -790,25 +1020,43 @@ def _extract_repair_plan(parsed: dict) -> dict:
     if not label:
         label = _difficulty_label_from_score(score)
 
-    parts_availability = str(parsed.get("parts_availability") or "Unknown").strip()
-    if parts_availability not in ("Good", "Medium", "Poor", "Unknown"):
-        parts_availability = "Unknown"
+    parts_needed = _normalize_parts_needed(parsed)
+    shop_services = _normalize_shop_services(parsed)
 
-    diy = str(parsed.get("diy_friendly") or "Unknown").strip()
+    parts_availability = str(parsed.get("parts_availability") or "").strip()
+    if parts_availability not in ("Good", "Medium", "Poor", "Unknown"):
+        parts_availability = _infer_parts_availability(parts_needed, repair_items)
+
+    diy = str(parsed.get("diy_friendly") or "").strip()
     if diy not in ("Yes", "Mostly", "Partial", "No", "Unknown"):
-        diy = "Unknown"
+        diy = _infer_diy_friendly(repair_items, shop_services, score)
 
     days_min = _safe_numeric(parsed.get("estimated_repair_days_min"))
     days_max = _safe_numeric(parsed.get("estimated_repair_days_max"))
-    if days_min is None and labor is not None:
+    if labor and labor > 0:
+        if days_min is None:
+            days_min = max(1, round(labor / 6))
+        if days_max is None:
+            days_max = max(days_min, round(labor / 4))
+    elif days_min is None and labor is not None:
         days_min = max(1, round(labor / 8))
     if days_max is None and days_min is not None:
         days_max = max(days_min, round(days_min * 1.5))
 
-    parts_needed = _normalize_parts_needed(parsed)
-    shop_services = _normalize_shop_services(parsed)
     warnings = _normalize_string_list(parsed.get("repair_plan_warnings"))
     hidden_risks = _normalize_string_list(parsed.get("hidden_damage_risks"))
+
+    if not hidden_risks and repair_items:
+        for item in repair_items:
+            d = str(item.get("description") or "").lower() if isinstance(item, dict) else ""
+            if "door" in d and "Inner door beam" not in hidden_risks:
+                hidden_risks.append("Inner door beam / check hinge pillar")
+            if "quarter" in d and "Trunk floor / inner structure" not in " ".join(hidden_risks).lower():
+                hidden_risks.append("Inner quarter structure — verify no kinks")
+            if "front" in d and "bumper" in d:
+                hidden_risks.append("Radiator support / crash bar — inspect before bidding")
+
+    hidden_risks = list(dict.fromkeys(hidden_risks))[:8]
 
     summary = (
         parsed.get("repair_plan_summary")

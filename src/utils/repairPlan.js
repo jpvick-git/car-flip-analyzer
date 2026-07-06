@@ -127,9 +127,12 @@ export function formatRepairTimeline(plan) {
   const max = plan?.estimated_repair_days_max;
   if (min != null && max != null) {
     if (min === max) return `${min} day${min === 1 ? "" : "s"}`;
-    const minWeeks = Math.max(1, Math.round(min / 7));
-    const maxWeeks = Math.max(minWeeks, Math.round(max / 7));
-    if (max <= 14) return `${minWeeks}-${maxWeeks} week${maxWeeks === 1 ? "" : "s"}`;
+    if (max <= 14) {
+      const minWeeks = Math.max(1, Math.round(min / 7));
+      const maxWeeks = Math.max(minWeeks, Math.round(max / 7));
+      if (minWeeks === maxWeeks) return `${minWeeks} week${minWeeks === 1 ? "" : "s"}`;
+      return `${minWeeks}-${maxWeeks} weeks`;
+    }
     return `${Math.round(min)}-${Math.round(max)} days`;
   }
   if (max != null) return `Up to ${Math.round(max)} days`;

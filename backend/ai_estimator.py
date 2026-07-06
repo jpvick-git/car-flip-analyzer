@@ -1,7 +1,8 @@
 import os
+import json
 import tempfile
 import requests
-from .ai_repair_estimator import analyze_vehicle
+from .ai_repair_estimator import analyze_vehicle, repair_plan_db_params
 
 
 def run_ai(vehicle: dict, mode: str = "full"):
@@ -12,6 +13,22 @@ def run_ai(vehicle: dict, mode: str = "full"):
         if mode in ("full", "repair"):
             response["repair_estimate"] = int(result.get("repair_estimate") or 1500)
             response["repair_details"] = result.get("repair_details") or "No repair details available."
+            breakdown_raw = result.get("repair_breakdown")
+            if breakdown_raw:
+                try:
+                    response["repair_breakdown"] = json.loads(breakdown_raw) if isinstance(breakdown_raw, str) else breakdown_raw
+                except Exception:
+                    response["repair_breakdown"] = []
+            else:
+                response["repair_breakdown"] = []
+            response.update(repair_plan_db_params(result))
+            for key in ("parts_needed", "shop_services_needed", "repair_plan_warnings", "hidden_damage_risks"):
+                raw = response.get(key)
+                if isinstance(raw, str):
+                    try:
+                        response[key] = json.loads(raw)
+                    except Exception:
+                        response[key] = []
 
         if mode in ("full", "resale"):
             response["resale_estimate"] = int(result.get("resale_estimate") or 5000)

@@ -110,6 +110,47 @@ Rules for repair_items:
 10. repair_estimate MUST equal the sum of all repair_items costs.
 11. If no visible damage, use repair_items: [] and repair_estimate: 0.
 12. Multiple damaged regions (e.g. front AND rear) must each have their own line items — never combine into one low bumper-only total.
+
+Also include a practical repair plan for an independent vehicle flipper (not a mechanic report):
+13. Be conservative — use "likely", "possible", "should be inspected", "not visible from photos", "verify before bidding".
+14. Distinguish visible damage vs inferred vs unknown/needs inspection.
+15. repair_difficulty_score is 1-10 (1=easy bolt-on, 10=expert structural/ADAS/electrical).
+16. parts_availability must be one of: Good, Medium, Poor, Unknown.
+17. diy_friendly must be one of: Yes, Mostly, Partial, No, Unknown.
+
+Add these repair-plan fields to your JSON response:
+{
+  "repair_difficulty_score": 6,
+  "repair_difficulty_label": "Medium",
+  "parts_availability": "Good",
+  "estimated_labor_hours": 18,
+  "estimated_repair_days_min": 7,
+  "estimated_repair_days_max": 14,
+  "diy_friendly": "Mostly",
+  "parts_needed": [
+    {
+      "name": "Front bumper cover",
+      "category": "Body",
+      "estimated_price_low": 250,
+      "estimated_price_high": 450,
+      "availability": "High",
+      "notes": "Used or aftermarket part should be easy to find."
+    }
+  ],
+  "shop_services_needed": [
+    {"name": "Paint match", "required": true, "notes": "Likely needed if replacing painted panels."}
+  ],
+  "repair_plan_summary": "2-3 sentences of practical flipper advice.",
+  "repair_plan_warnings": ["Possible hidden radiator support damage."],
+  "hidden_damage_risks": ["Radiator support", "Parking sensors"]
+}
+"""
+
+REPAIR_PLAN_RECON_APPEND = """
+Also include a practical recon/repair plan for an independent vehicle flipper:
+- Be conservative — use "likely", "possible", "should be inspected", "verify before bidding".
+- repair_difficulty_score is 1-10; parts_availability: Good/Medium/Poor/Unknown; diy_friendly: Yes/Mostly/Partial/No/Unknown.
+- Include the same repair-plan fields as salvage analysis (parts_needed, shop_services_needed, repair_plan_summary, repair_plan_warnings, hidden_damage_risks, estimated_labor_hours, estimated_repair_days_min/max).
 """
 
 RESALE_SYSTEM_PROMPT = (
@@ -225,7 +266,7 @@ Return JSON with this exact structure:
 Rules for recon_items:
 8. recon_estimate MUST equal the sum of all recon_items costs.
 9. If the car appears retail-ready with no stated issues, recon_items can be minimal (detail + inspection).
-"""
+""" + REPAIR_PLAN_RECON_APPEND
 
 PRIVATE_RESALE_SYSTEM_PROMPT = (
     "You are an experienced used-car flipper estimating realistic RETAIL resale value after "
@@ -627,13 +668,199 @@ def _normalize_repair_items(parsed: dict) -> list[dict]:
     return []
 
 
+def _safe_numeric(value):
+    if value is None or value == "":
+        return None
+    try:
+        n = float(value)
+        return n if n >= 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _difficulty_label_from_score(score):
+    if score is None:
+        return "Medium"
+    try:
+        s = int(round(float(score)))
+    except (TypeError, ValueError):
+        return "Medium"
+    if s <= 3:
+        return "Easy"
+    if s <= 6:
+        return "Medium"
+    if s <= 8:
+        return "Hard"
+    return "Expert"
+
+
+def _infer_difficulty_from_labor(labor_hours):
+    if labor_hours is None:
+        return None
+    if labor_hours <= 8:
+        return 3
+    if labor_hours <= 20:
+        return 5
+    if labor_hours <= 40:
+        return 7
+    return 9
+
+
+def _normalize_parts_needed(parsed: dict) -> list:
+    parts = parsed.get("parts_needed") or []
+    normalized = []
+    if isinstance(parts, list):
+        for item in parts:
+            if isinstance(item, dict) and item.get("name"):
+                normalized.append({
+                    "name": str(item["name"]).strip(),
+                    "category": str(item.get("category") or "General").strip(),
+                    "estimated_price_low": int(_safe_numeric(item.get("estimated_price_low")) or 0),
+                    "estimated_price_high": int(_safe_numeric(item.get("estimated_price_high")) or 0),
+                    "availability": str(item.get("availability") or "Unknown").strip(),
+                    "notes": str(item.get("notes") or "").strip(),
+                })
+            elif isinstance(item, str) and item.strip():
+                normalized.append({
+                    "name": item.strip(),
+                    "category": "General",
+                    "estimated_price_low": 0,
+                    "estimated_price_high": 0,
+                    "availability": "Unknown",
+                    "notes": "",
+                })
+
+    if not normalized:
+        for part in (parsed.get("parts_to_replace") or []):
+            name = str(part).strip()
+            if name:
+                normalized.append({
+                    "name": name,
+                    "category": "Body",
+                    "estimated_price_low": 0,
+                    "estimated_price_high": 0,
+                    "availability": "Unknown",
+                    "notes": "Likely needed based on visible damage.",
+                })
+    return normalized[:12]
+
+
+def _normalize_shop_services(parsed: dict) -> list:
+    services = parsed.get("shop_services_needed") or []
+    normalized = []
+    if isinstance(services, list):
+        for item in services:
+            if isinstance(item, dict) and item.get("name"):
+                normalized.append({
+                    "name": str(item["name"]).strip(),
+                    "required": bool(item.get("required", True)),
+                    "notes": str(item.get("notes") or "").strip(),
+                })
+            elif isinstance(item, str) and item.strip():
+                normalized.append({"name": item.strip(), "required": True, "notes": ""})
+    return normalized[:10]
+
+
+def _normalize_string_list(value) -> list:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return []
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [str(v).strip() for v in parsed if str(v).strip()]
+        except json.JSONDecodeError:
+            return [value]
+        return []
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    return []
+
+
+def _extract_repair_plan(parsed: dict) -> dict:
+    labor = _safe_numeric(parsed.get("estimated_labor_hours") or parsed.get("labor_hours"))
+    score = _safe_numeric(parsed.get("repair_difficulty_score"))
+    if score is None:
+        score = _infer_difficulty_from_labor(labor)
+
+    label = str(parsed.get("repair_difficulty_label") or "").strip()
+    if not label:
+        label = _difficulty_label_from_score(score)
+
+    parts_availability = str(parsed.get("parts_availability") or "Unknown").strip()
+    if parts_availability not in ("Good", "Medium", "Poor", "Unknown"):
+        parts_availability = "Unknown"
+
+    diy = str(parsed.get("diy_friendly") or "Unknown").strip()
+    if diy not in ("Yes", "Mostly", "Partial", "No", "Unknown"):
+        diy = "Unknown"
+
+    days_min = _safe_numeric(parsed.get("estimated_repair_days_min"))
+    days_max = _safe_numeric(parsed.get("estimated_repair_days_max"))
+    if days_min is None and labor is not None:
+        days_min = max(1, round(labor / 8))
+    if days_max is None and days_min is not None:
+        days_max = max(days_min, round(days_min * 1.5))
+
+    parts_needed = _normalize_parts_needed(parsed)
+    shop_services = _normalize_shop_services(parsed)
+    warnings = _normalize_string_list(parsed.get("repair_plan_warnings"))
+    hidden_risks = _normalize_string_list(parsed.get("hidden_damage_risks"))
+
+    summary = (
+        parsed.get("repair_plan_summary")
+        or parsed.get("repair_details")
+        or parsed.get("recon_details")
+        or ""
+    )
+    summary = str(summary).strip()
+
+    return {
+        "repair_difficulty_score": int(round(score)) if score is not None else None,
+        "repair_difficulty_label": label,
+        "parts_availability": parts_availability,
+        "estimated_labor_hours": labor,
+        "estimated_repair_days_min": days_min,
+        "estimated_repair_days_max": days_max,
+        "diy_friendly": diy,
+        "parts_needed": json.dumps(parts_needed),
+        "shop_services_needed": json.dumps(shop_services),
+        "repair_plan_summary": summary,
+        "repair_plan_warnings": json.dumps(warnings),
+        "hidden_damage_risks": json.dumps(hidden_risks),
+    }
+
+
+def repair_plan_db_params(result: dict) -> dict:
+    """Extract DB column values from an analyze_vehicle repair result."""
+    return {
+        "repair_difficulty_score": result.get("repair_difficulty_score"),
+        "repair_difficulty_label": result.get("repair_difficulty_label"),
+        "parts_availability": result.get("parts_availability"),
+        "estimated_labor_hours": result.get("estimated_labor_hours"),
+        "estimated_repair_days_min": result.get("estimated_repair_days_min"),
+        "estimated_repair_days_max": result.get("estimated_repair_days_max"),
+        "diy_friendly": result.get("diy_friendly"),
+        "parts_needed": result.get("parts_needed") or "[]",
+        "shop_services_needed": result.get("shop_services_needed") or "[]",
+        "repair_plan_summary": result.get("repair_plan_summary"),
+        "repair_plan_warnings": result.get("repair_plan_warnings") or "[]",
+        "hidden_damage_risks": result.get("hidden_damage_risks") or "[]",
+    }
+
+
 def _finalize_repair_fields(parsed: dict) -> dict:
     items = _normalize_repair_items(parsed)
     total = sum(item["cost"] for item in items)
+    plan = _extract_repair_plan(parsed)
     return {
         "repair_estimate": total,
         "repair_details": parsed.get("repair_details") or "No repair details available.",
         "repair_breakdown": json.dumps(items),
+        **plan,
     }
 
 
@@ -845,11 +1072,14 @@ def _finalize_private_recon_fields(parsed: dict) -> dict:
         if str(flag).strip()
     ]
 
+    plan = _extract_repair_plan(parsed)
+
     return {
         "repair_estimate": total,
         "repair_details": details or "No recon details available.",
         "repair_breakdown": json.dumps(items),
         "red_flags": red_flags,
+        **plan,
     }
 
 
@@ -1481,6 +1711,18 @@ def process_lot(lot, rds_engine, dry_run=False, force=False):
                         red_flags = :red_flags,
                         needs_manual_review = :needs_manual_review,
                         review_reasons = :review_reasons,
+                        repair_difficulty_score = :repair_difficulty_score,
+                        repair_difficulty_label = :repair_difficulty_label,
+                        parts_availability = :parts_availability,
+                        estimated_labor_hours = :estimated_labor_hours,
+                        estimated_repair_days_min = :estimated_repair_days_min,
+                        estimated_repair_days_max = :estimated_repair_days_max,
+                        diy_friendly = :diy_friendly,
+                        parts_needed = :parts_needed,
+                        shop_services_needed = :shop_services_needed,
+                        repair_plan_summary = :repair_plan_summary,
+                        repair_plan_warnings = :repair_plan_warnings,
+                        hidden_damage_risks = :hidden_damage_risks,
                         updated_at = NOW()
                     WHERE lot_number = :lot;
                 """),
@@ -1497,6 +1739,7 @@ def process_lot(lot, rds_engine, dry_run=False, force=False):
                     "red_flags": json.dumps(ai_result.get("red_flags") or []),
                     "needs_manual_review": ai_result.get("needs_manual_review", False),
                     "review_reasons": json.dumps(ai_result.get("review_reasons") or []),
+                    **repair_plan_db_params(ai_result),
                 },
             )
 

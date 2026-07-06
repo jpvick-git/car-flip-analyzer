@@ -15,6 +15,7 @@ import {
   Images,
 } from "lucide-react";
 import RepairAnalysisCard from "../components/RepairAnalysisCard";
+import RepairPlanCard from "../components/RepairPlanCard";
 import FlipDecisionCard from "../components/FlipDecisionCard";
 import KnownIssuesCard from "../components/KnownIssuesCard";
 import NegotiationCard from "../components/NegotiationCard";
@@ -477,6 +478,39 @@ export default function VehicleDetail() {
 
         {/* ── Analysis sections (below the fold) ── */}
         <div className="mt-8 space-y-6">
+          <RepairPlanCard
+            car={car}
+            apiBase={API}
+            readOnly={isDemo}
+            onUpdate={(data) => {
+              if (data.repair_estimate != null) {
+                setRepairTotal(Number(data.repair_estimate) || 0);
+              } else if (Array.isArray(data.repair_breakdown)) {
+                setRepairTotal(
+                  data.repair_breakdown.reduce((s, i) => s + (Number(i.cost) || 0), 0)
+                );
+              }
+              setCar((prev) => ({
+                ...prev,
+                repair_difficulty_score: data.repair_difficulty_score,
+                repair_difficulty_label: data.repair_difficulty_label,
+                parts_availability: data.parts_availability,
+                estimated_labor_hours: data.estimated_labor_hours,
+                estimated_repair_days_min: data.estimated_repair_days_min,
+                estimated_repair_days_max: data.estimated_repair_days_max,
+                diy_friendly: data.diy_friendly,
+                parts_needed: data.parts_needed,
+                shop_services_needed: data.shop_services_needed,
+                repair_plan_summary: data.repair_plan_summary,
+                repair_plan_warnings: data.repair_plan_warnings,
+                hidden_damage_risks: data.hidden_damage_risks,
+                repair_estimate: data.repair_estimate ?? prev.repair_estimate,
+                repair_details: data.repair_details ?? prev.repair_details,
+                repair_breakdown: data.repair_breakdown ?? prev.repair_breakdown,
+              }));
+            }}
+          />
+
           <RepairAnalysisCard
             car={car}
             apiBase={API}

@@ -2,6 +2,12 @@ import { parseRedFlags, isPrivateParty, askingPrice, isSalvageAuction } from "./
 import { getEffectiveTransportCost, getTransportWarnings } from "./transportCalculator";
 import { parseKnownIssues, parseWearItems } from "./knownIssues";
 import { parseRepairItems } from "./repairBreakdown";
+import {
+  parseRepairPlan,
+  evaluateRepairPlanImpact,
+  hasRepairPlanData,
+  formatRepairTimeline,
+} from "./repairPlan";
 
 export const RECOMMENDATION = {
   BUY: "BUY",
@@ -310,6 +316,11 @@ function computeFlipScore(vehicle, flipMetrics, context) {
 
   if (vehicle?.needs_manual_review) score -= 12;
 
+  if (hasRepairPlanData(vehicle)) {
+    const planImpact = evaluateRepairPlanImpact(parseRepairPlan(vehicle), context);
+    score += planImpact.scoreAdjustment || 0;
+  }
+
   if (transportCost > 0 && profit + transportCost > 0) {
     const transportShare = transportCost / (profit + transportCost);
     if (transportShare > 0.35) score -= 15;
@@ -360,6 +371,19 @@ function buildReasons(vehicle, context) {
 
   if (inferRepairConfidence(vehicle) === "High") {
     reasons.push("AI has high confidence in the repair estimate.");
+  }
+
+  if (hasRepairPlanData(vehicle)) {
+    const plan = parseRepairPlan(vehicle);
+    if (plan.repair_difficulty_label === "Easy") {
+      reasons.push("Repair plan looks like a mostly bolt-on flip.");
+    } else if (plan.parts_availability === "Good") {
+      reasons.push("Parts should be easy to source.");
+    }
+    const timeline = formatRepairTimeline(plan);
+    if (timeline !== "—" && (plan.estimated_repair_days_max ?? 99) <= 14) {
+      reasons.push(`Short repair timeline (${timeline}).`);
+    }
   }
 
   if (reasons.length === 0 && profit > 0) {
@@ -425,7 +449,49 @@ function buildWarnings(vehicle, context) {
     if (warnings.length < 6) warnings.push(w);
   });
 
+  if (hasRepairPlanData(vehicle)) {
+    const plan = parseRepairPlan(vehicle);
+    const planImpact = evaluateRepairPlanImpact(plan, context);
+    planImpact.warnings.forEach((w) => {
+      if (warnings.length < 6) warnings.push(w);
+    });
+  }
+
   return [...new Set(warnings)].slice(0, 6);
+}
+
+function applyRepairPlanToRecommendation(recommendation, vehicle, context) {
+  if (!hasRepairPlanData(vehicle)) return recommendation;
+
+  const planImpact = evaluateRepairPlanImpact(parseRepairPlan(vehicle), context);
+
+  if (recommendation === RECOMMENDATION.BUY && planImpact.downgradeBuyToMaybe) {
+    return RECOMMENDATION.MAYBE;
+  }
+  if (
+    (recommendation === RECOMMENDATION.MAYBE || recommendation === RECOMMENDATION.BUY) &&
+    planImpact.downgradeMaybeToPass
+  ) {
+    return RECOMMENDATION.PASS;
+  }
+  return recommendation;
+}
+
+function applyRepairPlanToConfidence(confidenceLabel, vehicle) {
+  if (!hasRepairPlanData(vehicle)) return confidenceLabel;
+
+  const planImpact = evaluateRepairPlanImpact(parseRepairPlan(vehicle));
+
+  if (planImpact.confidencePenalty && confidenceLabel === "High") {
+    return "Medium";
+  }
+  if (planImpact.confidenceBoost && confidenceLabel === "Medium") {
+    return "High";
+  }
+  if (planImpact.confidencePenalty && confidenceLabel === "Medium") {
+    return "Low";
+  }
+  return confidenceLabel;
 }
 
 function deriveRecommendation(flipScore, context, vehicle, marginPercent) {
@@ -482,7 +548,7 @@ function deriveRecommendation(flipScore, context, vehicle, marginPercent) {
     return RECOMMENDATION.MAYBE;
   }
 
-  return recommendation;
+  return applyRepairPlanToRecommendation(recommendation, vehicle, context);
 }
 
 // ── Main exports ───────────────────────────────────────────────
@@ -529,6 +595,8 @@ export function calculateFlipDecision(vehicle, flipMetrics, options = {}) {
     confidenceLabel = "Medium";
   }
 
+  confidenceLabel = applyRepairPlanToConfidence(confidenceLabel, vehicle);
+
   const context = {
     profit,
     bid,
@@ -544,7 +612,14 @@ export function calculateFlipDecision(vehicle, flipMetrics, options = {}) {
   };
 
   const flipScore = computeFlipScore(vehicle, flipMetrics, context);
-  const riskLevel = vehicle?.risk_level || deriveRiskLevel(flipScore, severeRedFlagCount, repairRatio, profit);
+  let riskLevel = vehicle?.risk_level || deriveRiskLevel(flipScore, severeRedFlagCount, repairRatio, profit);
+
+  if (hasRepairPlanData(vehicle)) {
+    const planScore = parseRepairPlan(vehicle).repair_difficulty_score ?? 0;
+    if (planScore >= 8 && riskLevel === "Low") riskLevel = "Medium";
+    else if (planScore >= 9 && riskLevel !== "High") riskLevel = "High";
+  }
+
   const recommendation = deriveRecommendation(flipScore, context, vehicle, marginPercent);
   const reasons = vehicle?.buy_reasons?.length ? vehicle.buy_reasons : buildReasons(vehicle, context);
   const warnings = vehicle?.watch_out_for?.length ? vehicle.watch_out_for : buildWarnings(vehicle, context);

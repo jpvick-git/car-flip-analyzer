@@ -11,7 +11,7 @@ from .auth import get_current_user, get_vehicle_owner_id, require_not_demo
 from .ai_estimator import run_ai
 from .copart_utils import enrich_vehicle
 from .vehicle_model import normalize_vehicle, is_private_party
-from .ai_repair_estimator import select_images_by_angle
+from .ai_repair_estimator import select_images_by_angle, repair_plan_db_params
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
@@ -47,6 +47,18 @@ def _ensure_schema_columns():
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS transport_cost_estimate NUMERIC",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS transport_cost_manual_override NUMERIC",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS transport_notes TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS repair_difficulty_score NUMERIC",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS repair_difficulty_label TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS parts_availability TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS estimated_labor_hours NUMERIC",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS estimated_repair_days_min NUMERIC",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS estimated_repair_days_max NUMERIC",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS diy_friendly TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS parts_needed TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS shop_services_needed TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS repair_plan_summary TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS repair_plan_warnings TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS hidden_damage_risks TEXT",
         ):
             conn.execute(text(stmt))
 
@@ -183,6 +195,127 @@ def update_vehicle_repair(
         "repair_estimate": total,
         "repair_breakdown": items,
     }
+
+
+def _parse_json_field(raw, default=None):
+    if default is None:
+        default = []
+    if raw is None or raw == "":
+        return default
+    if isinstance(raw, list):
+        return raw
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, list) else default
+    except (json.JSONDecodeError, TypeError):
+        return default
+
+
+def _repair_plan_response(row_or_dict):
+    data = dict(row_or_dict) if not isinstance(row_or_dict, dict) else row_or_dict
+    return {
+        "repair_difficulty_score": data.get("repair_difficulty_score"),
+        "repair_difficulty_label": data.get("repair_difficulty_label"),
+        "parts_availability": data.get("parts_availability"),
+        "estimated_labor_hours": data.get("estimated_labor_hours"),
+        "estimated_repair_days_min": data.get("estimated_repair_days_min"),
+        "estimated_repair_days_max": data.get("estimated_repair_days_max"),
+        "diy_friendly": data.get("diy_friendly"),
+        "parts_needed": _parse_json_field(data.get("parts_needed")),
+        "shop_services_needed": _parse_json_field(data.get("shop_services_needed")),
+        "repair_plan_summary": data.get("repair_plan_summary"),
+        "repair_plan_warnings": _parse_json_field(data.get("repair_plan_warnings")),
+        "hidden_damage_risks": _parse_json_field(data.get("hidden_damage_risks")),
+    }
+
+
+@router.post("/vehicle/{vehicle_id}/repair_plan")
+def refresh_vehicle_repair_plan(
+    vehicle_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Re-run vision-based repair/recon analysis and refresh the repair plan."""
+    require_not_demo(current_user)
+    owner_id = get_vehicle_owner_id(current_user)
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
+            {"id": vehicle_id, "uid": owner_id},
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+
+    vehicle_data = dict(row._mapping)
+    lot_number = vehicle_data.get("lot_number") or str(vehicle_id)
+    image_paths, image_entries = _load_vehicle_images(lot_number)
+
+    if not image_paths:
+        raise HTTPException(
+            status_code=400,
+            detail="No photos available for this vehicle. Upload or wait for images to finish downloading.",
+        )
+
+    vehicle = {
+        **vehicle_data,
+        "images": image_paths,
+        "image_entries": image_entries,
+        "lot_number": lot_number,
+    }
+
+    result = run_ai(vehicle, mode="repair")
+    plan_params = repair_plan_db_params(result)
+    breakdown = result.get("repair_breakdown")
+    if isinstance(breakdown, list):
+        breakdown_json = json.dumps(breakdown)
+    else:
+        breakdown_json = breakdown or "[]"
+
+    with engine.begin() as conn:
+        updated = conn.execute(
+            text("""
+                UPDATE user_vehicles
+                SET repair_estimate = :repair_estimate,
+                    repair_details = :repair_details,
+                    repair_breakdown = :repair_breakdown,
+                    repair_difficulty_score = :repair_difficulty_score,
+                    repair_difficulty_label = :repair_difficulty_label,
+                    parts_availability = :parts_availability,
+                    estimated_labor_hours = :estimated_labor_hours,
+                    estimated_repair_days_min = :estimated_repair_days_min,
+                    estimated_repair_days_max = :estimated_repair_days_max,
+                    diy_friendly = :diy_friendly,
+                    parts_needed = :parts_needed,
+                    shop_services_needed = :shop_services_needed,
+                    repair_plan_summary = :repair_plan_summary,
+                    repair_plan_warnings = :repair_plan_warnings,
+                    hidden_damage_risks = :hidden_damage_risks,
+                    updated_at = NOW()
+                WHERE id = :id AND user_id = :uid
+            """),
+            {
+                "repair_estimate": result.get("repair_estimate"),
+                "repair_details": result.get("repair_details"),
+                "repair_breakdown": breakdown_json,
+                **plan_params,
+                "id": vehicle_id,
+                "uid": owner_id,
+            },
+        )
+        if updated.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Vehicle not found")
+
+        saved = conn.execute(
+            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
+            {"id": vehicle_id, "uid": owner_id},
+        ).fetchone()
+
+    response = _repair_plan_response(dict(saved._mapping))
+    response["repair_estimate"] = saved.repair_estimate
+    response["repair_details"] = saved.repair_details
+    response["repair_breakdown"] = _parse_json_field(saved.repair_breakdown)
+    return response
 
 
 @router.patch("/vehicle/{vehicle_id}/transport")

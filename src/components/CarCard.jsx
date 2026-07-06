@@ -5,6 +5,11 @@ import { formatVehicleTitle } from "../utils/vehicleName";
 import { calculateFlipMetrics } from "../utils/flipCalculator";
 import { calculateFlipDecision, recommendationStyles } from "../utils/flipDecision";
 import { getTransportCostInfo } from "../utils/userSettings";
+import {
+  parseRepairPlan,
+  hasRepairPlanData,
+  formatRepairTimeline,
+} from "../utils/repairPlan";
 import { useUserSettings } from "../context/UserSettingsContext";
 import {
   isPrivateParty,
@@ -31,6 +36,8 @@ export default function CarCard({
   const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
   const transport = getTransportCostInfo(car, settings);
   const transportCost = transport.cost;
+  const repairPlan = parseRepairPlan(car);
+  const showRepairPlan = hasRepairPlanData(car);
 
   const flipMetrics = calculateFlipMetrics({
     resale,
@@ -142,6 +149,32 @@ export default function CarCard({
             <span className="italic text-slate-400">not set</span>
           )}
         </p>
+
+        {showRepairPlan && (
+          <p className="mt-1 text-xs text-slate-500">
+            Repair{" "}
+            <span className="font-semibold text-slate-700">
+              {repairPlan.repair_difficulty_label || "—"}
+            </span>
+            {repairPlan.parts_availability && (
+              <>
+                {" · "}
+                Parts{" "}
+                <span className="font-semibold text-slate-700">
+                  {repairPlan.parts_availability}
+                </span>
+              </>
+            )}
+            {formatRepairTimeline(repairPlan) !== "—" && (
+              <>
+                {" · "}
+                <span className="font-semibold text-slate-700">
+                  {formatRepairTimeline(repairPlan)}
+                </span>
+              </>
+            )}
+          </p>
+        )}
 
         {/* Secondary: repair / resale */}
         <div className="mt-3 grid grid-cols-2 gap-2">

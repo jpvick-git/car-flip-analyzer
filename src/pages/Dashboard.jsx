@@ -111,7 +111,7 @@ function ManualVehicleModal({ API, close, reload }) {
     const loadModels = async () => {
       try {
         const res = await axios.get(
-          `${API}/api/specs/models/${form.year}/${form.make}`
+          `${API}/api/specs/models/${form.year}/${encodeURIComponent(form.make)}`
         );
         setModels(res.data || []);
         setTrims([]);
@@ -129,7 +129,7 @@ function ManualVehicleModal({ API, close, reload }) {
     const loadTrims = async () => {
       try {
         const res = await axios.get(
-          `${API}/api/specs/trims/${form.year}/${form.make}/${form.model}`
+          `${API}/api/specs/trims/${form.year}/${encodeURIComponent(form.make)}/${encodeURIComponent(form.model)}`
         );
         setTrims(res.data || []);
       } catch (err) {

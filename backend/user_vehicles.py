@@ -11,7 +11,7 @@ from .auth import get_current_user, get_vehicle_owner_id, require_not_demo
 from .ai_estimator import run_ai
 from .copart_utils import enrich_vehicle
 from .vehicle_model import normalize_vehicle, is_private_party
-from .ai_repair_estimator import select_images_by_angle, repair_plan_db_params
+from .ai_repair_estimator import select_images_by_angle, repair_plan_db_params, analyze_vehicle
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
@@ -264,13 +264,15 @@ def refresh_vehicle_repair_plan(
         "lot_number": lot_number,
     }
 
-    result = run_ai(vehicle, mode="repair")
+    result = analyze_vehicle(vehicle, mode="repair")
     plan_params = repair_plan_db_params(result)
-    breakdown = result.get("repair_breakdown")
-    if isinstance(breakdown, list):
-        breakdown_json = json.dumps(breakdown)
+    breakdown_raw = result.get("repair_breakdown")
+    if isinstance(breakdown_raw, str):
+        breakdown_json = breakdown_raw
+    elif isinstance(breakdown_raw, list):
+        breakdown_json = json.dumps(breakdown_raw)
     else:
-        breakdown_json = breakdown or "[]"
+        breakdown_json = "[]"
 
     with engine.begin() as conn:
         updated = conn.execute(

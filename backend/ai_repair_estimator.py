@@ -834,6 +834,14 @@ def _extract_repair_plan(parsed: dict) -> dict:
     }
 
 
+def _json_db_field(value, default="[]"):
+    if value is None or value == "":
+        return default
+    if isinstance(value, str):
+        return value
+    return json.dumps(value)
+
+
 def repair_plan_db_params(result: dict) -> dict:
     """Extract DB column values from an analyze_vehicle repair result."""
     return {
@@ -844,11 +852,11 @@ def repair_plan_db_params(result: dict) -> dict:
         "estimated_repair_days_min": result.get("estimated_repair_days_min"),
         "estimated_repair_days_max": result.get("estimated_repair_days_max"),
         "diy_friendly": result.get("diy_friendly"),
-        "parts_needed": result.get("parts_needed") or "[]",
-        "shop_services_needed": result.get("shop_services_needed") or "[]",
+        "parts_needed": _json_db_field(result.get("parts_needed")),
+        "shop_services_needed": _json_db_field(result.get("shop_services_needed")),
         "repair_plan_summary": result.get("repair_plan_summary"),
-        "repair_plan_warnings": result.get("repair_plan_warnings") or "[]",
-        "hidden_damage_risks": result.get("hidden_damage_risks") or "[]",
+        "repair_plan_warnings": _json_db_field(result.get("repair_plan_warnings")),
+        "hidden_damage_risks": _json_db_field(result.get("hidden_damage_risks")),
     }
 
 

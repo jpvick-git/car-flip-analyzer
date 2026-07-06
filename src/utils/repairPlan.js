@@ -109,9 +109,13 @@ export function parseRepairPlan(vehicle) {
 
 export function hasRepairPlanData(vehicle) {
   const plan = parseRepairPlan(vehicle);
+  const hasScore = plan.repair_difficulty_score != null && plan.repair_difficulty_score > 0;
+  const hasLabor = plan.estimated_labor_hours != null && plan.estimated_labor_hours > 0;
   return (
-    plan.repair_difficulty_score != null ||
+    hasScore ||
+    hasLabor ||
     plan.parts_needed.length > 0 ||
+    plan.shop_services_needed.length > 0 ||
     plan.repair_plan_summary.length > 0 ||
     plan.repair_plan_warnings.length > 0 ||
     plan.hidden_damage_risks.length > 0

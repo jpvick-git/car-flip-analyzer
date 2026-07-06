@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Settings, Save, MapPin, Percent, Truck } from "lucide-react";
 import { useUserSettings } from "../context/UserSettingsContext";
+import AddressAutocomplete from "../components/AddressAutocomplete";
 import {
   TRANSPORT_TYPES,
   TRANSPORT_TYPE_LABELS,
@@ -144,15 +145,13 @@ export default function SettingsPage({ isDemo = false }) {
               </p>
             </div>
           </div>
-          <input
-            type="text"
+          <AddressAutocomplete
             disabled={isDemo}
             value={form.shop_location}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, shop_location: e.target.value }))
+            onChange={(val) =>
+              setForm((prev) => ({ ...prev, shop_location: val }))
             }
             placeholder="e.g. Alabaster, AL"
-            className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
           />
         </section>
 

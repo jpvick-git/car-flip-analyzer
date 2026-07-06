@@ -14,6 +14,8 @@ import {
   defaultTransportType,
 } from "../utils/userSettings";
 import CurrencyInput from "./CurrencyInput";
+import AddressAutocomplete from "./AddressAutocomplete";
+import { haversineMiles } from "../utils/addressSearch";
 
 export default function TransportCostCard({
   vehicle,
@@ -36,10 +38,14 @@ export default function TransportCostCard({
   const [error, setError] = useState(null);
   const [saved, setSaved] = useState(false);
   const skipPreviewRef = useRef(true);
+  const [pickupCoords, setPickupCoords] = useState(null);
+  const [deliveryCoords, setDeliveryCoords] = useState(null);
 
   useEffect(() => {
     if (!vehicle) return;
     skipPreviewRef.current = true;
+    setPickupCoords(null);
+    setDeliveryCoords(null);
     setForm({
       transport_pickup_location: defaultPickupLocation(vehicle),
       transport_delivery_location: defaultDeliveryLocation(vehicle, userSettings),
@@ -55,6 +61,26 @@ export default function TransportCostCard({
       transport_notes: vehicle.transport_notes || "",
     });
   }, [vehicle?.id, userSettings?.shop_location, userSettings?.default_transport_type]);
+
+  useEffect(() => {
+    if (
+      pickupCoords?.lat != null &&
+      pickupCoords?.lon != null &&
+      deliveryCoords?.lat != null &&
+      deliveryCoords?.lon != null
+    ) {
+      const miles = haversineMiles(
+        pickupCoords.lat,
+        pickupCoords.lon,
+        deliveryCoords.lat,
+        deliveryCoords.lon
+      );
+      setForm((prev) => ({
+        ...prev,
+        transport_distance_miles: String(Math.max(1, miles)),
+      }));
+    }
+  }, [pickupCoords, deliveryCoords]);
 
   const estimatedCost = estimateTransportCost({
     distanceMiles: form.transport_distance_miles,
@@ -160,23 +186,37 @@ export default function TransportCostCard({
       <div className="space-y-4 p-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Pickup">
-            <input
-              type="text"
-              disabled={readOnly}
+            <AddressAutocomplete
+              readOnly={readOnly}
               value={form.transport_pickup_location}
-              onChange={(e) => update("transport_pickup_location", e.target.value)}
+              onChange={(val) => {
+                update("transport_pickup_location", val);
+                setPickupCoords(null);
+              }}
+              onSelect={(s) => {
+                if (s.lat != null && s.lon != null) {
+                  setPickupCoords({ lat: s.lat, lon: s.lon });
+                }
+              }}
               placeholder="Auction yard or seller city"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
+              inputClassName="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
             />
           </Field>
           <Field label="Delivery">
-            <input
-              type="text"
-              disabled={readOnly}
+            <AddressAutocomplete
+              readOnly={readOnly}
               value={form.transport_delivery_location}
-              onChange={(e) => update("transport_delivery_location", e.target.value)}
+              onChange={(val) => {
+                update("transport_delivery_location", val);
+                setDeliveryCoords(null);
+              }}
+              onSelect={(s) => {
+                if (s.lat != null && s.lon != null) {
+                  setDeliveryCoords({ lat: s.lat, lon: s.lon });
+                }
+              }}
               placeholder="Your shop or home"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
+              inputClassName="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
             />
           </Field>
         </div>

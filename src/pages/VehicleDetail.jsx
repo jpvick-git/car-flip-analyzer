@@ -384,38 +384,6 @@ export default function VehicleDetail() {
                 </div>
               </div>
 
-              <KnownIssuesCard
-                car={car}
-                apiBase={API}
-                readOnly={isDemo}
-                onUpdate={(data) =>
-                  setCar((prev) => ({
-                    ...prev,
-                    reliability_summary: data.reliability_summary,
-                    known_issues: data.known_issues,
-                    wear_items: data.wear_items,
-                  }))
-                }
-              />
-
-              {isPrivate && (
-                <NegotiationCard
-                  car={car}
-                  apiBase={API}
-                  readOnly={isDemo}
-                  onUpdate={(data) =>
-                    setCar((prev) => ({
-                      ...prev,
-                      negotiation_summary: data.negotiation_summary,
-                      negotiation_talking_points: data.negotiation_talking_points,
-                      suggested_offer_low: data.suggested_offer_low,
-                      suggested_offer_high: data.suggested_offer_high,
-                      offer_rationale: data.offer_rationale,
-                    }))
-                  }
-                />
-              )}
-
               {/* Bid card */}
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-200/60">
 
@@ -538,6 +506,39 @@ export default function VehicleDetail() {
                   )}
                 </div>
               </div>
+
+              <KnownIssuesCard
+                car={car}
+                apiBase={API}
+                readOnly={isDemo}
+                onUpdate={(data) =>
+                  setCar((prev) => ({
+                    ...prev,
+                    reliability_summary: data.reliability_summary,
+                    known_issues: data.known_issues,
+                    wear_items: data.wear_items,
+                  }))
+                }
+              />
+
+              {isPrivate && (
+                <NegotiationCard
+                  car={car}
+                  apiBase={API}
+                  readOnly={isDemo}
+                  onUpdate={(data) =>
+                    setCar((prev) => ({
+                      ...prev,
+                      negotiation_summary: data.negotiation_summary,
+                      negotiation_talking_points: data.negotiation_talking_points,
+                      suggested_offer_low: data.suggested_offer_low,
+                      suggested_offer_high: data.suggested_offer_high,
+                      offer_rationale: data.offer_rationale,
+                    }))
+                  }
+                />
+              )}
+
             </div>
           </div>
         </div>

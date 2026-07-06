@@ -24,7 +24,8 @@ import { formatCurrency } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
 import { useFlipMetrics } from "../utils/useFlipMetrics";
 import TransportCostCard from "../components/TransportCostCard";
-import { getEffectiveTransportCost } from "../utils/transportCalculator";
+import { useUserSettings } from "../context/UserSettingsContext";
+import { getTransportCostForFlip } from "../utils/userSettings";
 import { calculateFlipDecision } from "../utils/flipDecision";
 import {
   isPrivateParty,
@@ -44,6 +45,7 @@ export default function VehicleDetail() {
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [margin, setMargin] = useState(15);
+  const { settings } = useUserSettings();
   const [activePhoto, setActivePhoto] = useState(0);
   const [lightbox, setLightbox] = useState(null);
   const [states, setStates] = useState([]);
@@ -102,6 +104,10 @@ export default function VehicleDetail() {
     setPreviewTransportCost(null);
   }, [car?.id]);
 
+  useEffect(() => {
+    setMargin(settings.default_margin_percent);
+  }, [settings.default_margin_percent]);
+
   const stateData = states.find((s) => s.state_code === selectedState) || null;
   const overrideTax = stateData ? Number(stateData.avg_tax_rate) : null;
   const overrideTitle = stateData ? Number(stateData.title_fee) : null;
@@ -112,7 +118,7 @@ export default function VehicleDetail() {
     previewTransportCost !== null
       ? previewTransportCost
       : car
-        ? getEffectiveTransportCost(car)
+        ? getTransportCostForFlip(car, settings)
         : 0;
 
   const {
@@ -366,6 +372,7 @@ export default function VehicleDetail() {
                 readOnly={isDemo}
                 onSave={handleTransportSave}
                 onPreviewChange={setPreviewTransportCost}
+                userSettings={settings}
               />
 
               {/* Margin & tax controls */}

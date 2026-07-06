@@ -172,6 +172,9 @@ if manual_vehicle_router:
 if specs_router:
     app.include_router(specs_router, prefix="/api")
 
+from .user_settings import router as settings_router
+app.include_router(settings_router, prefix="/api")
+
 # --------------------------------------------------
 # UVICORN SERVER START
 # --------------------------------------------------

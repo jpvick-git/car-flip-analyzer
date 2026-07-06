@@ -13,7 +13,8 @@ import { formatCurrency } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
 import { calculateFlipMetrics } from "../utils/flipCalculator";
 import { calculateFlipDecision, recommendationStyles } from "../utils/flipDecision";
-import { getEffectiveTransportCost, hasTransportConfigured } from "../utils/transportCalculator";
+import { getTransportCostForFlip, hasTransportConfigured } from "../utils/userSettings";
+import { useUserSettings } from "../context/UserSettingsContext";
 import {
   isPrivateParty,
   sourceLabel,
@@ -34,12 +35,13 @@ export default function VehicleListRow({
   onViewDetails,
   marginPercent = 15,
 }) {
+  const { settings } = useUserSettings();
   const odometer = Number(car.odometer);
   const hasOdometer = !Number.isNaN(odometer) && odometer > 0;
 
   const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
   const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
-  const transportCost = getEffectiveTransportCost(car);
+  const transportCost = getTransportCostForFlip(car, settings);
   const flipMetrics = calculateFlipMetrics({
     resale,
     repair,

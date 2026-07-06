@@ -25,7 +25,8 @@ import CurrencyInput from "../components/CurrencyInput";
 import { formatCurrency, parseCurrencyInput } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
 import { calculateFlipMetrics } from "../utils/flipCalculator";
-import { getEffectiveTransportCost } from "../utils/transportCalculator";
+import { getTransportCostForFlip } from "../utils/userSettings";
+import { useUserSettings } from "../context/UserSettingsContext";
 import { useFlipMetrics } from "../utils/useFlipMetrics";
 import {
   isPrivateParty,
@@ -363,6 +364,7 @@ function VehicleDetailModal({
   apiBase,
   isDemo,
 }) {
+  const { settings } = useUserSettings();
   const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
   const isPrivate = isPrivateParty(car);
   const metrics = useFlipMetrics({
@@ -373,7 +375,7 @@ function VehicleDetailModal({
     taxRate: car.avg_tax_rate || 0,
     titleFee: car.title_fee || 0,
     buyerFeeRate: buyerFeeRate(car),
-    transportCost: getEffectiveTransportCost(car),
+    transportCost: getTransportCostForFlip(car, settings),
   });
   const profitPositive = metrics.profit >= 0;
 
@@ -567,9 +569,10 @@ export default function Dashboard({
   isDemo = false,
 }) {
   const navigate = useNavigate();
+  const { settings } = useUserSettings();
   const [cars, setCars] = useState([]);
   const [selectedCar, setSelectedCar] = useState(null);
-  const [tempMargin, setTempMargin] = useState(15);
+  const [tempMargin, setTempMargin] = useState(settings.default_margin_percent);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [downloading, setDownloading] = useState(false);
@@ -588,9 +591,13 @@ export default function Dashboard({
   const API =
     process.env.REACT_APP_API_BASE_URL ?? "";
 
+  useEffect(() => {
+    setTempMargin(settings.default_margin_percent);
+  }, [settings.default_margin_percent]);
+
   // MAX BID CALC
   const calculateCarWithMargin = (car, marginInput) => {
-    const transportCost = getEffectiveTransportCost(car);
+    const transportCost = getTransportCostForFlip(car, settings);
     const metrics = calculateFlipMetrics({
       resale: car.resale_estimate || car.ai_resale_estimate || 0,
       repair: car.repair_estimate || car.ai_repair_estimate || 0,
@@ -621,7 +628,7 @@ export default function Dashboard({
     let list = Array.isArray(res.data) ? res.data : res.data.vehicles || [];
     list = list.map((car) => {
       if (car.image_urls?.length > 0) car.image_url = car.image_urls[0];
-      return calculateCarWithMargin(car, 15);
+      return calculateCarWithMargin(car, settings.default_margin_percent);
     });
     setCars(list);
     return list;

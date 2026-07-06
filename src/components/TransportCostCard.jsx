@@ -9,6 +9,10 @@ import {
   defaultPickupLocation,
   getTransportWarnings,
 } from "../utils/transportCalculator";
+import {
+  defaultDeliveryLocation,
+  defaultTransportType,
+} from "../utils/userSettings";
 import CurrencyInput from "./CurrencyInput";
 
 export default function TransportCostCard({
@@ -18,6 +22,7 @@ export default function TransportCostCard({
   readOnly = false,
   onSave,
   onPreviewChange,
+  userSettings,
 }) {
   const [form, setForm] = useState({
     transport_pickup_location: "",
@@ -37,19 +42,19 @@ export default function TransportCostCard({
     skipPreviewRef.current = true;
     setForm({
       transport_pickup_location: defaultPickupLocation(vehicle),
-      transport_delivery_location: vehicle.transport_delivery_location || "",
+      transport_delivery_location: defaultDeliveryLocation(vehicle, userSettings),
       transport_distance_miles:
         vehicle.transport_distance_miles != null && vehicle.transport_distance_miles !== ""
           ? String(vehicle.transport_distance_miles)
           : "",
-      transport_type: vehicle.transport_type || "local_tow",
+      transport_type: defaultTransportType(vehicle, userSettings),
       transport_cost_manual_override:
         vehicle.transport_cost_manual_override != null
           ? String(vehicle.transport_cost_manual_override)
           : "",
       transport_notes: vehicle.transport_notes || "",
     });
-  }, [vehicle?.id]);
+  }, [vehicle?.id, userSettings?.shop_location, userSettings?.default_transport_type]);
 
   const estimatedCost = estimateTransportCost({
     distanceMiles: form.transport_distance_miles,

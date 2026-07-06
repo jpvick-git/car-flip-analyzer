@@ -1,8 +1,10 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 
 export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <header className="flex items-center justify-between px-4 py-3 bg-white shadow">
@@ -60,6 +62,19 @@ export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
 			  <div className="border-t my-1"></div>
 			    </>
 			  )}
+
+			  {/* Settings */}
+			  <button
+				onClick={() => {
+				  setMenuOpen(false);
+				  navigate("/settings");
+				}}
+				className="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-gray-100"
+			  >
+				Flip Preferences
+			  </button>
+
+			  <div className="border-t my-1"></div>
 
 			  {/* Logout */}
 			  <button

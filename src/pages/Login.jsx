@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { fetchUserSettings } from "../utils/userSettings";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -40,6 +41,8 @@ export default function Login() {
       if (token) {
         localStorage.setItem("token", token);
         localStorage.setItem("is_demo", data?.is_demo ? "1" : "0");
+        await fetchUserSettings(apiBase).catch(() => {});
+        window.dispatchEvent(new Event("auth-changed"));
         setStatus("✅ Login successful!");
         navigate("/");
       } else {

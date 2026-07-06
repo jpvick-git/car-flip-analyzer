@@ -12,7 +12,10 @@ import {
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import VehicleDetail from "./pages/VehicleDetail";
+import SettingsPage from "./pages/Settings";
 import Header from "./components/Header";
+import { UserSettingsProvider } from "./context/UserSettingsContext";
+import { clearCachedSettings } from "./utils/userSettings";
 
 // ProtectedRoute
 function ProtectedRoute({ children }) {
@@ -39,6 +42,8 @@ function Layout() {
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("is_demo");
+    clearCachedSettings();
+    window.dispatchEvent(new Event("auth-changed"));
     navigate("/login");
   };
 
@@ -125,6 +130,15 @@ function Layout() {
           }
         />
 
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage isDemo={isDemo} />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -135,8 +149,10 @@ function Layout() {
 // Main app root
 export default function App() {
   return (
-    <Router>
-      <Layout />
-    </Router>
+    <UserSettingsProvider>
+      <Router>
+        <Layout />
+      </Router>
+    </UserSettingsProvider>
   );
 }

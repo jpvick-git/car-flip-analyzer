@@ -15,7 +15,7 @@ import {
 } from "../utils/userSettings";
 import CurrencyInput from "./CurrencyInput";
 import AddressAutocomplete from "./AddressAutocomplete";
-import { haversineMiles } from "../utils/addressSearch";
+import { geocodeAddress, roadMilesFromCoords } from "../utils/addressSearch";
 
 export default function TransportCostCard({
   vehicle,
@@ -38,21 +38,30 @@ export default function TransportCostCard({
   const [error, setError] = useState(null);
   const [saved, setSaved] = useState(false);
   const skipPreviewRef = useRef(true);
+  const geocodeRequestRef = useRef(0);
+  const milesManuallyEditedRef = useRef(false);
+  const lockedMilesRef = useRef(null);
   const [pickupCoords, setPickupCoords] = useState(null);
   const [deliveryCoords, setDeliveryCoords] = useState(null);
+  const [geocodingMiles, setGeocodingMiles] = useState(false);
 
   useEffect(() => {
     if (!vehicle) return;
     skipPreviewRef.current = true;
+    milesManuallyEditedRef.current = false;
     setPickupCoords(null);
     setDeliveryCoords(null);
+
+    const hasSavedMiles =
+      vehicle.transport_distance_miles != null && vehicle.transport_distance_miles !== "";
+    lockedMilesRef.current = hasSavedMiles ? Number(vehicle.transport_distance_miles) : null;
+
     setForm({
       transport_pickup_location: defaultPickupLocation(vehicle),
       transport_delivery_location: defaultDeliveryLocation(vehicle, userSettings),
-      transport_distance_miles:
-        vehicle.transport_distance_miles != null && vehicle.transport_distance_miles !== ""
-          ? String(vehicle.transport_distance_miles)
-          : "",
+      transport_distance_miles: hasSavedMiles
+        ? String(vehicle.transport_distance_miles)
+        : "",
       transport_type: defaultTransportType(vehicle, userSettings),
       transport_cost_manual_override:
         vehicle.transport_cost_manual_override != null
@@ -63,24 +72,65 @@ export default function TransportCostCard({
   }, [vehicle?.id, userSettings?.shop_location, userSettings?.default_transport_type]);
 
   useEffect(() => {
-    if (
-      pickupCoords?.lat != null &&
-      pickupCoords?.lon != null &&
-      deliveryCoords?.lat != null &&
-      deliveryCoords?.lon != null
-    ) {
-      const miles = haversineMiles(
-        pickupCoords.lat,
-        pickupCoords.lon,
-        deliveryCoords.lat,
-        deliveryCoords.lon
-      );
-      setForm((prev) => ({
-        ...prev,
-        transport_distance_miles: String(Math.max(1, miles)),
-      }));
-    }
-  }, [pickupCoords, deliveryCoords]);
+    const pickup = form.transport_pickup_location?.trim();
+    const delivery = form.transport_delivery_location?.trim();
+    if (!pickup || !delivery || pickup.length < 3 || delivery.length < 3) return;
+    if (milesManuallyEditedRef.current || lockedMilesRef.current != null) return;
+
+    const timer = setTimeout(async () => {
+      const requestId = ++geocodeRequestRef.current;
+      setGeocodingMiles(true);
+      try {
+        const [pickupResult, deliveryResult] = await Promise.all([
+          pickupCoords?.lat != null ? null : geocodeAddress(pickup),
+          deliveryCoords?.lat != null ? null : geocodeAddress(delivery),
+        ]);
+
+        if (requestId !== geocodeRequestRef.current) return;
+        if (milesManuallyEditedRef.current || lockedMilesRef.current != null) return;
+
+        let plat = pickupCoords?.lat;
+        let plon = pickupCoords?.lon;
+        let dlat = deliveryCoords?.lat;
+        let dlon = deliveryCoords?.lon;
+
+        if (pickupResult?.lat != null) {
+          plat = pickupResult.lat;
+          plon = pickupResult.lon;
+          setPickupCoords({ lat: plat, lon: plon });
+        }
+        if (deliveryResult?.lat != null) {
+          dlat = deliveryResult.lat;
+          dlon = deliveryResult.lon;
+          setDeliveryCoords({ lat: dlat, lon: dlon });
+        }
+
+        if (plat != null && dlat != null) {
+          const miles = roadMilesFromCoords(plat, plon, dlat, dlon);
+          setForm((prev) => ({
+            ...prev,
+            transport_distance_miles: String(miles),
+          }));
+        }
+      } catch (err) {
+        console.error("Transport distance lookup failed:", err);
+      } finally {
+        if (requestId === geocodeRequestRef.current) setGeocodingMiles(false);
+      }
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [
+    form.transport_pickup_location,
+    form.transport_delivery_location,
+    pickupCoords,
+    deliveryCoords,
+  ]);
+
+  const unlockMiles = () => {
+    lockedMilesRef.current = null;
+    milesManuallyEditedRef.current = false;
+  };
 
   const estimatedCost = estimateTransportCost({
     distanceMiles: form.transport_distance_miles,
@@ -190,10 +240,12 @@ export default function TransportCostCard({
               readOnly={readOnly}
               value={form.transport_pickup_location}
               onChange={(val) => {
+                unlockMiles();
                 update("transport_pickup_location", val);
                 setPickupCoords(null);
               }}
               onSelect={(s) => {
+                unlockMiles();
                 if (s.lat != null && s.lon != null) {
                   setPickupCoords({ lat: s.lat, lon: s.lon });
                 }
@@ -207,10 +259,12 @@ export default function TransportCostCard({
               readOnly={readOnly}
               value={form.transport_delivery_location}
               onChange={(val) => {
+                unlockMiles();
                 update("transport_delivery_location", val);
                 setDeliveryCoords(null);
               }}
               onSelect={(s) => {
+                unlockMiles();
                 if (s.lat != null && s.lon != null) {
                   setDeliveryCoords({ lat: s.lat, lon: s.lon });
                 }
@@ -228,8 +282,12 @@ export default function TransportCostCard({
               min={0}
               disabled={readOnly}
               value={form.transport_distance_miles}
-              onChange={(e) => update("transport_distance_miles", e.target.value)}
-              placeholder="e.g. 23"
+              onChange={(e) => {
+                milesManuallyEditedRef.current = true;
+                lockedMilesRef.current = null;
+                update("transport_distance_miles", e.target.value);
+              }}
+              placeholder={geocodingMiles ? "Calculating…" : "e.g. 23"}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm tabular-nums focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
             />
           </Field>

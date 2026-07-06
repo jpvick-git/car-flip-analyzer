@@ -179,7 +179,7 @@ export default function AddressAutocomplete({
 
       {!loading && !open && value && String(value).trim().length >= MIN_QUERY_LENGTH && (
         <p className="mt-1 text-[11px] text-slate-400">
-          Pick a suggestion for better distance estimates.
+          Distance auto-calculates when pickup and delivery are both set.
         </p>
       )}
     </div>

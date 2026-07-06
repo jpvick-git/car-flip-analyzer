@@ -148,4 +148,37 @@ export function haversineMiles(lat1, lon1, lat2, lon2) {
   return Math.round(R * c);
 }
 
+/** Approximate driving distance from straight-line miles (typical US haul). */
+export function roadMilesFromCoords(lat1, lon1, lat2, lon2) {
+  const straight = haversineMiles(lat1, lon1, lat2, lon2);
+  return Math.max(1, Math.round(straight * 1.2));
+}
+
+/** Turn Copart yard strings like "MA - FREETOWN" into "Freetown, MA". */
+export function normalizeLocationQuery(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return "";
+
+  const copartMatch = trimmed.match(/^([A-Z]{2})\s*[-–—]\s*(.+)$/i);
+  if (copartMatch) {
+    const state = copartMatch[1].toUpperCase();
+    const city = copartMatch[2]
+      .trim()
+      .toLowerCase()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+    return `${city}, ${state}`;
+  }
+
+  return trimmed;
+}
+
+/** Best-effort geocode for a city, yard, or address string. */
+export async function geocodeAddress(query) {
+  const normalized = normalizeLocationQuery(query);
+  if (normalized.length < MIN_QUERY_LENGTH) return null;
+
+  const results = await searchAddresses(normalized, { limit: 1 });
+  return results[0] || null;
+}
+
 export { MIN_QUERY_LENGTH };

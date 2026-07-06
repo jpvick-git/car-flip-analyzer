@@ -15,8 +15,11 @@ import {
   Car,
   MoreVertical,
   Trash2,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import RepairBreakdown from "../components/RepairBreakdown";
+import VehicleListRow from "../components/VehicleListRow";
 import CurrencyInput from "../components/CurrencyInput";
 import { formatCurrency, parseCurrencyInput } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
@@ -570,6 +573,14 @@ export default function Dashboard({
   const [menuOpenId, setMenuOpenId] = useState(null);
   const [carToDelete, setCarToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [viewMode, setViewMode] = useState(() =>
+    localStorage.getItem("dashboard-view-mode") === "list" ? "list" : "grid"
+  );
+
+  const setInventoryViewMode = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem("dashboard-view-mode", mode);
+  };
 
   const API =
     process.env.REACT_APP_API_BASE_URL ?? "";
@@ -739,7 +750,7 @@ export default function Dashboard({
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
 
         {/* PAGE HEADER */}
-        <div className="mb-6 flex items-end justify-between">
+        <div className="mb-6 flex items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Vehicle Inventory</h1>
             <p className="mt-1 text-sm text-slate-500">
@@ -747,6 +758,40 @@ export default function Dashboard({
               {isDemo ? " in demo preview" : " in your pipeline"}
             </p>
           </div>
+          {visibleCars.length > 0 && (
+            <div
+              className="flex shrink-0 items-center rounded-lg border border-slate-200 bg-white p-1 shadow-sm"
+              role="group"
+              aria-label="View mode"
+            >
+              <button
+                type="button"
+                aria-pressed={viewMode === "grid"}
+                onClick={() => setInventoryViewMode("grid")}
+                className={`rounded-md p-2 transition ${
+                  viewMode === "grid"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                }`}
+                title="Tile view"
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button
+                type="button"
+                aria-pressed={viewMode === "list"}
+                onClick={() => setInventoryViewMode("list")}
+                className={`rounded-md p-2 transition ${
+                  viewMode === "list"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                }`}
+                title="List view"
+              >
+                <List size={16} />
+              </button>
+            </div>
+          )}
         </div>
 
         {isDemo && (
@@ -774,6 +819,29 @@ export default function Dashboard({
                 <p className="mt-1 text-sm text-slate-500">Add a vehicle or upload a CSV to get started.</p>
               </>
             )}
+          </div>
+        ) : viewMode === "list" ? (
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="hidden bg-slate-800 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white lg:grid lg:grid-cols-[120px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-5">
+              <span>Image</span>
+              <span>Lot info</span>
+              <span>Vehicle info</span>
+              <span>Condition</span>
+              <span>Estimates</span>
+              <span>Max bid / offer</span>
+            </div>
+            {visibleCars.map((car) => (
+              <VehicleListRow
+                key={car.id}
+                car={car}
+                isDemo={isDemo}
+                menuOpenId={menuOpenId}
+                setMenuOpenId={setMenuOpenId}
+                setCarToDelete={setCarToDelete}
+                updateCarValue={updateCarValue}
+                onViewDetails={() => navigate(`/vehicle/${car.id}`)}
+              />
+            ))}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

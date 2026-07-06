@@ -17,7 +17,9 @@ import {
   getRepairDifficultyDescription,
   difficultyStyles,
   formatPartPrice,
+  buildAllInRepairBreakdown,
 } from "../utils/repairPlan";
+import { formatCurrency } from "../utils/formatCurrency";
 import { isPrivateParty } from "../utils/vehicleSource";
 
 function MetricCell({ label, value, sub }) {
@@ -41,6 +43,7 @@ export default function RepairPlanCard({
 
   const plan = parseRepairPlan(car);
   const hasData = hasRepairPlanData(car);
+  const allIn = buildAllInRepairBreakdown(car);
   const styles = difficultyStyles(plan.repair_difficulty_label);
   const { diyTasks, shopTasks } = inferDiyAndShopTasks(plan);
   const isPrivate = isPrivateParty(car);
@@ -163,6 +166,55 @@ export default function RepairPlanCard({
               />
             </div>
 
+            {allIn.total > 0 && (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">
+                      All-In Shop Estimate
+                    </p>
+                    <p className="text-2xl font-extrabold tabular-nums text-amber-900">
+                      {formatCurrency(allIn.total)}
+                    </p>
+                    <p className="mt-1 text-xs text-amber-800/80">
+                      Matches Repair Analysis below — parts + labor + paint at body shop rates.
+                    </p>
+                  </div>
+                  {allIn.partsOnlyLow > 0 && (
+                    <p className="text-xs text-amber-800">
+                      Parts-only to order:{" "}
+                      <span className="font-semibold tabular-nums">
+                        {formatCurrency(allIn.partsOnlyLow)}
+                        {allIn.partsOnlyHigh > allIn.partsOnlyLow
+                          ? ` – ${formatCurrency(allIn.partsOnlyHigh)}`
+                          : ""}
+                      </span>
+                    </p>
+                  )}
+                </div>
+
+                {allIn.hasLineItems && (
+                  <ul className="mt-3 space-y-1.5 border-t border-amber-200/80 pt-3">
+                    {allIn.lineItems.map((item, i) => (
+                      <li
+                        key={`line-${i}`}
+                        className="flex items-start justify-between gap-3 text-sm text-amber-950"
+                      >
+                        <span className="min-w-0 leading-snug">{item.description}</span>
+                        <span className="shrink-0 font-bold tabular-nums">
+                          {formatCurrency(item.cost)}
+                        </span>
+                      </li>
+                    ))}
+                    <li className="flex justify-between border-t border-amber-200/80 pt-2 text-sm font-bold text-amber-950">
+                      <span>Total</span>
+                      <span className="tabular-nums">{formatCurrency(allIn.total)}</span>
+                    </li>
+                  </ul>
+                )}
+              </div>
+            )}
+
             {plan.repair_plan_summary && (
               <p className="mb-4 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 text-sm leading-relaxed text-slate-700">
                 {plan.repair_plan_summary}
@@ -174,6 +226,9 @@ export default function RepairPlanCard({
                 <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
                   <Package size={12} />
                   Parts Needed
+                  <span className="font-normal normal-case text-slate-400">
+                    (parts-only — for ordering)
+                  </span>
                 </h4>
                 <ul className="space-y-2">
                   {plan.parts_needed.slice(0, 8).map((part, i) => (
@@ -208,59 +263,49 @@ export default function RepairPlanCard({
               </div>
             )}
 
-            {(shopTasks.length > 0 || diyTasks.length > 0) && (
-              <div className="mb-4 grid gap-3 sm:grid-cols-2">
-                {diyTasks.length > 0 && (
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
-                    <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-emerald-700">
-                      <Hammer size={12} />
-                      DIY Tasks
-                    </h4>
-                    <ul className="space-y-1">
-                      {diyTasks.map((task, i) => (
-                        <li key={`diy-${i}`} className="text-xs text-emerald-900">
-                          · {task}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {shopTasks.length > 0 && (
-                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
-                    <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-indigo-700">
-                      <Building2 size={12} />
-                      Shop Tasks
-                    </h4>
-                    <ul className="space-y-1">
-                      {shopTasks.map((task, i) => (
-                        <li key={`shop-${i}`} className="text-xs text-indigo-900">
-                          · {task}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+            {diyTasks.length > 0 && (
+              <div className="mb-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
+                <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-emerald-700">
+                  <Hammer size={12} />
+                  DIY Tasks
+                </h4>
+                <ul className="space-y-1">
+                  {diyTasks.map((task, i) => (
+                    <li key={`diy-${i}`} className="text-xs text-emerald-900">
+                      · {task}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 
-            {plan.shop_services_needed.length > 0 && shopTasks.length === 0 && (
+            {(shopTasks.length > 0 || plan.shop_services_needed.length > 0) && (
               <div className="mb-4">
                 <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
                   <Building2 size={12} />
                   Shop Services
+                  <span className="font-normal normal-case text-slate-400">
+                    (needs a body shop)
+                  </span>
                 </h4>
                 <ul className="space-y-1.5">
-                  {plan.shop_services_needed.map((svc, i) => (
-                    <li key={`svc-${i}`} className="text-sm text-slate-700">
-                      · {svc.name}
-                      {svc.required === false && (
-                        <span className="ml-1 text-xs text-slate-400">(recommended)</span>
-                      )}
-                      {svc.notes && (
-                        <span className="block text-xs text-slate-500">{svc.notes}</span>
-                      )}
-                    </li>
-                  ))}
+                  {(shopTasks.length > 0 ? shopTasks : plan.shop_services_needed.map((s) => s.name)).map(
+                    (name, i) => {
+                      const svc =
+                        plan.shop_services_needed.find((s) => s.name === name) || { name };
+                      return (
+                        <li key={`svc-${i}`} className="text-sm text-slate-700">
+                          · {name}
+                          {svc.required === false && (
+                            <span className="ml-1 text-xs text-slate-400">(recommended)</span>
+                          )}
+                          {svc.notes && (
+                            <span className="block text-xs text-slate-500">{svc.notes}</span>
+                          )}
+                        </li>
+                      );
+                    }
+                  )}
                 </ul>
               </div>
             )}

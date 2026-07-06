@@ -1,3 +1,5 @@
+import { parseRepairItems, sumRepairItems } from "./repairBreakdown";
+
 function parseJsonArray(value) {
   if (value == null || value === "") return [];
   if (Array.isArray(value)) return value;
@@ -57,7 +59,9 @@ const SEVERE_SHOP_SERVICE_KEYWORDS = [
 ];
 
 const DIY_CATEGORIES = new Set(["body", "lighting", "interior", "trim", "cosmetic", "general"]);
-const SHOP_CATEGORIES = new Set(["paint", "frame", "alignment", "adas", "electrical", "structural"]);
+
+const SHOP_TASK_KEYWORDS =
+  /paint|blend|refinish|align|calibrat|frame|measure|diagnostic|dent repair|body shop|gap check|hinge|structural|airbag|adas/i;
 
 export function getRepairDifficultyLabel(score) {
   const n = safeNumber(score);
@@ -122,6 +126,29 @@ export function hasRepairPlanData(vehicle) {
   );
 }
 
+export function buildAllInRepairBreakdown(vehicle) {
+  const lineItems = parseRepairItems(vehicle);
+  const fromLines = sumRepairItems(lineItems);
+  const total = fromLines > 0 ? fromLines : Math.max(0, Number(vehicle?.repair_estimate) || 0);
+
+  const partsLow = (parseRepairPlan(vehicle).parts_needed || []).reduce(
+    (sum, p) => sum + (Number(p.estimated_price_low) || 0),
+    0
+  );
+  const partsHigh = (parseRepairPlan(vehicle).parts_needed || []).reduce(
+    (sum, p) => sum + (Number(p.estimated_price_high) || 0),
+    0
+  );
+
+  return {
+    lineItems,
+    total,
+    partsOnlyLow: partsLow,
+    partsOnlyHigh: partsHigh,
+    hasLineItems: lineItems.length > 0,
+  };
+}
+
 export function formatRepairTimeline(plan) {
   const min = plan?.estimated_repair_days_min;
   const max = plan?.estimated_repair_days_max;
@@ -160,6 +187,23 @@ function normalizeText(value) {
   return String(value || "").toLowerCase();
 }
 
+function normalizeName(value) {
+  return normalizeText(value).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function namesOverlap(a, b) {
+  const na = normalizeName(a);
+  const nb = normalizeName(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.length >= 8 && nb.length >= 8 && (na.includes(nb) || nb.includes(na))) return true;
+  return false;
+}
+
+function isShopOnlyTask(name) {
+  return SHOP_TASK_KEYWORDS.test(String(name || ""));
+}
+
 function listContainsKeyword(items, keywords) {
   const texts = items.map((item) => {
     if (typeof item === "string") return normalizeText(item);
@@ -171,25 +215,26 @@ function listContainsKeyword(items, keywords) {
 export function inferDiyAndShopTasks(repairPlan) {
   const diyTasks = [];
   const shopTasks = [];
+  const partNames = (repairPlan?.parts_needed || []).map((p) => p.name).filter(Boolean);
 
   (repairPlan?.parts_needed || []).forEach((part) => {
     const category = normalizeText(part?.category);
-    const name = part?.name || "Part replacement";
-    if (DIY_CATEGORIES.has(category) || category.includes("body") || category.includes("light")) {
-      diyTasks.push(`Replace ${name.toLowerCase()}`);
-    } else if (SHOP_CATEGORIES.has(category)) {
-      shopTasks.push(name);
-    } else {
-      diyTasks.push(`Inspect / replace ${name.toLowerCase()}`);
+    const name = part?.name || "";
+    if (!name || category === "paint") return;
+    if (DIY_CATEGORIES.has(category) || category.includes("body") || category.includes("light") || category.includes("trim")) {
+      diyTasks.push(`Install ${name}`);
     }
   });
 
   (repairPlan?.shop_services_needed || []).forEach((svc) => {
-    const name = svc?.name || svc;
-    if (name) shopTasks.push(typeof name === "string" ? name : String(name));
+    const name = typeof svc === "string" ? svc : svc?.name;
+    if (!name) return;
+    const duplicatesPart = partNames.some((partName) => namesOverlap(partName, name));
+    if (duplicatesPart && !isShopOnlyTask(name)) return;
+    shopTasks.push(name);
   });
 
-  if (repairPlan?.repair_difficulty_score >= 7) {
+  if (repairPlan?.repair_difficulty_score >= 7 && shopTasks.length === 0) {
     shopTasks.push("Professional body shop work likely required");
   }
 
@@ -216,8 +261,10 @@ export function getRepairPlanWarnings(vehicle, repairPlan) {
   if (listContainsKeyword(plan.hidden_damage_risks, ["frame", "structural", "radiator support"])) {
     warnings.push("Hidden structural damage could change the repair cost.");
   }
-  if (listContainsKeyword(plan.hidden_damage_risks, ["adas"]) ||
-      listContainsKeyword(plan.shop_services_needed, ["adas"])) {
+  if (
+    listContainsKeyword(plan.hidden_damage_risks, ["adas"]) ||
+    listContainsKeyword(plan.shop_services_needed, ["adas"])
+  ) {
     warnings.push("ADAS calibration may add cost after repair.");
   }
   if (score >= 7 || listContainsKeyword(plan.shop_services_needed, ["paint", "body"])) {
@@ -238,11 +285,7 @@ export function evaluateRepairPlanImpact(repairPlan, context = {}) {
   const severeShop = listContainsKeyword(plan.shop_services_needed, SEVERE_SHOP_SERVICE_KEYWORDS);
 
   const downgradeBuyToMaybe =
-    score >= 7 ||
-    partsAvail === "poor" ||
-    daysMax > 21 ||
-    severeHidden ||
-    severeShop;
+    score >= 7 || partsAvail === "poor" || daysMax > 21 || severeHidden || severeShop;
 
   const thinProfit = profit > 0 && profit < 1500;
   const downgradeMaybeToPass =
@@ -253,13 +296,9 @@ export function evaluateRepairPlanImpact(repairPlan, context = {}) {
     (daysMax > 28 && profit < 2000);
 
   const confidenceBoost =
-    (score <= 6 && score > 0) &&
-    (partsAvail === "good" || partsAvail === "high") &&
-    !severeHidden &&
-    daysMax <= 14;
+    score <= 6 && score > 0 && (partsAvail === "good" || partsAvail === "high") && !severeHidden && daysMax <= 14;
 
-  const confidencePenalty =
-    score >= 7 || partsAvail === "poor" || severeHidden || daysMax > 21;
+  const confidencePenalty = score >= 7 || partsAvail === "poor" || severeHidden || daysMax > 21;
 
   let scoreAdjustment = 0;
   if (score >= 9) scoreAdjustment -= 20;

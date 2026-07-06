@@ -948,20 +948,43 @@ def _normalize_parts_needed(parsed: dict) -> list:
     return normalized[:12]
 
 
-def _normalize_shop_services(parsed: dict) -> list:
+def _is_shop_only_service(name: str) -> bool:
+    n = name.lower()
+    return any(k in n for k in (
+        "paint", "blend", "refinish", "align", "calibrat", "frame", "measure",
+        "diagnostic", "dent repair", "body shop", "gap check", "hinge", "structural",
+    ))
+
+
+def _normalize_shop_services(parsed: dict, parts_needed: list | None = None) -> list:
     repair_items = parsed.get("repair_items") or parsed.get("recon_items") or []
     services = parsed.get("shop_services_needed") or []
     normalized = []
+    part_names = [p.get("name", "") for p in (parts_needed or []) if isinstance(p, dict)]
+
     if isinstance(services, list):
         for item in services:
             if isinstance(item, dict) and item.get("name"):
+                name = str(item["name"]).strip()
+                dupes_part = any(
+                    name.lower() == pn.lower()
+                    or (len(name) > 8 and name.lower() in pn.lower())
+                    or (len(pn) > 8 and pn.lower() in name.lower())
+                    for pn in part_names
+                )
+                if dupes_part and not _is_shop_only_service(name):
+                    continue
                 normalized.append({
-                    "name": str(item["name"]).strip(),
+                    "name": name,
                     "required": bool(item.get("required", True)),
                     "notes": str(item.get("notes") or "").strip(),
                 })
             elif isinstance(item, str) and item.strip():
-                normalized.append({"name": item.strip(), "required": True, "notes": ""})
+                name = item.strip()
+                dupes_part = any(name.lower() in pn.lower() or pn.lower() in name.lower() for pn in part_names)
+                if dupes_part and not _is_shop_only_service(name):
+                    continue
+                normalized.append({"name": name, "required": True, "notes": ""})
 
     _, from_items = _parts_from_repair_items(repair_items)
     seen = {s["name"].lower() for s in normalized}
@@ -1021,7 +1044,7 @@ def _extract_repair_plan(parsed: dict) -> dict:
         label = _difficulty_label_from_score(score)
 
     parts_needed = _normalize_parts_needed(parsed)
-    shop_services = _normalize_shop_services(parsed)
+    shop_services = _normalize_shop_services(parsed, parts_needed)
 
     parts_availability = str(parsed.get("parts_availability") or "").strip()
     if parts_availability not in ("Good", "Medium", "Poor", "Unknown"):

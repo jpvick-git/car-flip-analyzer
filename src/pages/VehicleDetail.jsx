@@ -32,9 +32,92 @@ import {
   costLabel,
   maxOfferLabel,
   askingPrice,
+  parseRedFlags,
 } from "../utils/vehicleSource";
+import { getDealVerdict } from "../utils/dealVerdict";
 
 const API = process.env.REACT_APP_API_BASE_URL ?? "";
+
+function VerdictSplitCard({ verdict, bid, asking, isPrivate, margin, profit }) {
+  const s = verdict.styles;
+  const offerLabel = isPrivate ? "Max Offer" : "Max Bid";
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-200/50">
+      <div className="grid grid-cols-2 divide-x divide-slate-200">
+        <div className={`flex min-h-[140px] flex-col justify-between p-5 sm:p-6 ${s.bgLight}`}>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Verdict</p>
+          <div>
+            <p className={`text-3xl font-black tracking-tight sm:text-4xl ${s.text}`}>{verdict.label}</p>
+            <p className={`mt-1.5 text-xs leading-snug sm:text-sm ${s.textMuted}`}>{verdict.summary}</p>
+          </div>
+          <p
+            className={`text-xs font-semibold tabular-nums ${
+              profit >= 0 ? "text-emerald-600" : "text-red-600"
+            }`}
+          >
+            Est. profit {formatCurrency(profit)}
+          </p>
+        </div>
+
+        <div className="flex min-h-[140px] flex-col justify-between bg-white p-5 sm:p-6">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Your {offerLabel}
+          </p>
+          <div>
+            <p className="text-4xl font-extrabold tabular-nums tracking-tight text-slate-900 sm:text-5xl">
+              {formatCurrency(bid)}
+            </p>
+            {asking != null && (
+              <p className="mt-1 text-xs text-slate-500">
+                Ask{" "}
+                <span className="font-semibold text-slate-700">{formatCurrency(asking)}</span>
+              </p>
+            )}
+          </div>
+          <p className="text-xs text-slate-400">@ {margin}% target margin</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FormulaRibbon({
+  resale,
+  repair,
+  buyerFee,
+  taxAmt,
+  titleFee,
+  targetProfit,
+  bid,
+  isPrivate,
+  repairLabel,
+}) {
+  const feesAndTax = buyerFee + taxAmt + titleFee;
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-3.5">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+        The math
+      </p>
+      <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 text-xs font-medium leading-relaxed text-slate-300 sm:text-sm">
+        <span className="text-emerald-400">{formatCurrency(resale)}</span>
+        <span className="text-slate-500">resale</span>
+        <span className="text-slate-600">−</span>
+        <span className="text-amber-400">{formatCurrency(repair)}</span>
+        <span className="text-slate-500">{repairLabel.toLowerCase()}</span>
+        <span className="text-slate-600">−</span>
+        <span>{formatCurrency(feesAndTax)}</span>
+        <span className="text-slate-500">{isPrivate ? "tax & title" : "fees, tax & title"}</span>
+        <span className="text-slate-600">−</span>
+        <span className="text-blue-400">{formatCurrency(targetProfit)}</span>
+        <span className="text-slate-500">target profit</span>
+        <span className="text-slate-600">=</span>
+        <span className="text-base font-bold text-white sm:text-lg">{formatCurrency(bid)}</span>
+      </p>
+    </div>
+  );
+}
 
 export default function VehicleDetail() {
   const { id } = useParams();
@@ -115,6 +198,7 @@ export default function VehicleDetail() {
     resale,
     taxRate,
     marginActual,
+    targetProfit,
   } = useFlipMetrics({
     carId: car?.id ?? id,
     resale: car?.resale_estimate || car?.ai_resale_estimate || 0,
@@ -169,16 +253,50 @@ export default function VehicleDetail() {
 
   const profitPositive = profit >= 0;
   const marginFill = (margin / 40) * 100;
+  const repairLabel = costLabel(car);
+  const verdict = getDealVerdict({
+    profit,
+    marginActual,
+    targetMargin: margin,
+    bid,
+    asking,
+    resale,
+    redFlagCount: parseRedFlags(car).length,
+  });
+
+  const splitCard = (
+    <>
+      <VerdictSplitCard
+        verdict={verdict}
+        bid={bid}
+        asking={asking}
+        isPrivate={isPrivate}
+        margin={margin}
+        profit={profit}
+      />
+      <FormulaRibbon
+        resale={resale}
+        repair={repair}
+        buyerFee={buyerFee}
+        taxAmt={taxAmt}
+        titleFee={titleFee}
+        targetProfit={targetProfit}
+        bid={bid}
+        isPrivate={isPrivate}
+        repairLabel={repairLabel}
+      />
+    </>
+  );
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
 
       {/* ── STICKY NAV ── */}
-      <nav className="sticky top-0 z-20 border-b border-white/10 bg-slate-900/90 backdrop-blur">
+      <nav className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center px-4 py-3 sm:px-6">
           <button
             onClick={() => navigate("/")}
-            className="group flex items-center gap-2 text-sm font-medium text-slate-300 transition hover:text-white"
+            className="group flex items-center gap-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
           >
             <ArrowLeft size={18} className="transition group-hover:-translate-x-0.5" />
             <span>Back to Dashboard</span>
@@ -186,53 +304,49 @@ export default function VehicleDetail() {
         </div>
       </nav>
 
-      {/* ── HERO ── */}
-      <header className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-blue-600/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
-        <div className="relative mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
-          <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
+      {/* ── BODY ── */}
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+        {/* Vehicle identity — report header */}
+        <header className="mb-6">
+          <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-slate-900 sm:text-3xl lg:text-4xl">
             {formatVehicleTitle(car)}
           </h1>
-
-          {/* Title / location / date pills — below the name */}
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
               {sourceLabel(car)}
             </span>
             {car.title_code && (
-              <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200">
+              <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
                 {car.title_code}
               </span>
             )}
-            {car.sale_name && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-slate-200">
-                <MapPin size={13} className="text-blue-400" />
-                {car.sale_name}
+            {(car.sale_name || car.location) && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
+                <MapPin size={13} className="text-slate-400" />
+                {car.sale_name || car.location}
               </span>
             )}
             {car.sale_date && !isPrivate && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-slate-200">
-                <Calendar size={13} className="text-blue-400" />
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
+                <Calendar size={13} className="text-slate-400" />
                 {new Date(car.sale_date).toLocaleDateString()}
               </span>
             )}
           </div>
-
           {(car.lot_number || car.vin) && (
-            <p className="mt-3 text-sm text-slate-400">
+            <p className="mt-2 text-sm text-slate-500">
               {car.lot_number && (
-                <>Lot <span className="font-semibold text-slate-200">{car.lot_number}</span></>
+                <>Lot <span className="font-semibold text-slate-700">{car.lot_number}</span></>
               )}
-              {car.lot_number && car.vin && <span className="mx-2 text-slate-600">·</span>}
+              {car.lot_number && car.vin && <span className="mx-2 text-slate-300">·</span>}
               {car.vin && <span className="font-mono text-slate-500">{car.vin}</span>}
             </p>
           )}
-        </div>
-      </header>
+        </header>
 
-      {/* ── BODY ── */}
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+        {/* Mobile: verdict split card above gallery */}
+        <div className="mb-6 space-y-3 lg:hidden">{splitCard}</div>
+
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
 
           {/* LEFT — Gallery + details + analysis */}
@@ -362,51 +476,45 @@ export default function VehicleDetail() {
             <RedFlagsCard car={car} />
           </div>
 
-          {/* RIGHT — Bidding rail (sticky) */}
+          {/* RIGHT — 2a sticky sidebar: verdict split + controls */}
           <div className="lg:col-span-5">
-            <div className="space-y-4 lg:sticky lg:top-20">
+            <div className="space-y-4 lg:sticky lg:top-16">
 
-              {/* Repair / Resale — the only place these appear */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-center">
-                  <div className="mb-1 flex items-center justify-center gap-1.5 text-amber-600">
-                    <Wrench size={14} />
-                    <span className="text-[11px] font-semibold uppercase tracking-wide">Est. {costLabel(car)}</span>
+              {/* Desktop: split card + formula ribbon */}
+              <div className="hidden space-y-3 lg:block">{splitCard}</div>
+
+              {/* Estimates row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+                  <div className="mb-0.5 flex items-center gap-1.5 text-amber-600">
+                    <Wrench size={13} />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide">Est. {repairLabel}</span>
                   </div>
-                  <p className="text-2xl font-bold tabular-nums text-amber-700">{formatCurrency(repair)}</p>
+                  <p className="text-xl font-bold tabular-nums text-amber-800">{formatCurrency(repair)}</p>
                 </div>
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-center">
-                  <div className="mb-1 flex items-center justify-center gap-1.5 text-emerald-600">
-                    <DollarSign size={14} />
-                    <span className="text-[11px] font-semibold uppercase tracking-wide">Est. {isPrivate ? "Retail Exit" : "Resale"}</span>
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                  <div className="mb-0.5 flex items-center gap-1.5 text-emerald-600">
+                    <DollarSign size={13} />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide">
+                      Est. {isPrivate ? "Retail Exit" : "Resale"}
+                    </span>
                   </div>
-                  <p className="text-2xl font-bold tabular-nums text-emerald-700">{formatCurrency(resale)}</p>
+                  <p className="text-xl font-bold tabular-nums text-emerald-800">{formatCurrency(resale)}</p>
                 </div>
               </div>
 
-              {/* Bid card */}
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-200/60">
-
-                {/* Max bid / offer — focal point */}
-                <div className="border-b border-slate-100 bg-gradient-to-b from-white to-slate-50 px-6 py-7 text-center">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.15em] text-blue-600">
-                    Your {maxOfferLabel(car)}
+              {/* Controls card */}
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="border-b border-slate-100 px-5 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Adjust your numbers
                   </p>
-                  <p className="text-5xl font-extrabold tracking-tight tabular-nums text-slate-900 sm:text-6xl">
-                    {formatCurrency(bid)}
-                  </p>
-                  {isPrivate && asking != null && (
-                    <p className="mt-1 text-sm text-slate-500">
-                      Seller asking <span className="font-semibold text-slate-700">{formatCurrency(asking)}</span>
-                    </p>
-                  )}
-                  <p className="mt-2 text-xs text-slate-400">
-                    {maxOfferLabel(car).toLowerCase()} set at <span className="font-semibold text-slate-500">{margin}%</span> margin
-                    · profit updates when you edit {isPrivate ? "recon" : "repair"} costs
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {maxOfferLabel(car)} updates with margin · profit updates when you edit {isPrivate ? "recon" : "repair"}
                   </p>
                 </div>
 
-                <div className="space-y-5 p-6">
+                <div className="space-y-5 p-5">
                   {/* Margin slider */}
                   <div>
                     <div className="mb-2 flex items-center justify-between text-sm">

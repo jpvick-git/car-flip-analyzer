@@ -22,7 +22,7 @@ def run_ai(vehicle: dict, mode: str = "full"):
             response["known_issues"] = result.get("known_issues") or []
             response["wear_items"] = result.get("wear_items") or []
 
-        if mode == "negotiation":
+        if mode in ("full", "negotiation"):
             response["negotiation_summary"] = result.get("negotiation_summary") or "No negotiation summary available."
             response["negotiation_talking_points"] = result.get("negotiation_talking_points") or []
             response["suggested_offer_low"] = result.get("suggested_offer_low")

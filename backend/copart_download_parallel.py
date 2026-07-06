@@ -316,7 +316,7 @@ def download_copart_images(lot_number):
 # --------------------------------------------------
 def process_lots_directly(lots, uid):
     try:
-        from ai_repair_estimator import analyze_vehicle, _load_vehicle_for_lot
+        from ai_repair_estimator import analyze_vehicle, _load_vehicle_for_lot, negotiation_db_params
     except ImportError:
         print("⚠️ Warning: ai_repair_estimator.py not found. AI steps will fail if run.")
         analyze_vehicle = lambda v, mode="full": {}
@@ -376,6 +376,11 @@ def process_lots_directly(lots, uid):
                                 red_flags = :red_flags,
                                 needs_manual_review = :needs_manual_review,
                                 review_reasons = :review_reasons,
+                                negotiation_summary = :negotiation_summary,
+                                negotiation_talking_points = :negotiation_talking_points,
+                                suggested_offer_low = :suggested_offer_low,
+                                suggested_offer_high = :suggested_offer_high,
+                                offer_rationale = :offer_rationale,
                                 updated_at = NOW()
                             WHERE lot_number = :lot AND user_id = :uid
                         """),
@@ -393,6 +398,7 @@ def process_lots_directly(lots, uid):
                             "review_reasons": json.dumps(result.get("review_reasons") or []),
                             "lot": lot,
                             "uid": user_id,
+                            **negotiation_db_params(result),
                         },
                     )
                     print(f"✅ AI updated lot {lot}")

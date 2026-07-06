@@ -32,6 +32,7 @@ export default function FlipDecisionCard({
   flipMetrics,
   decision,
   compact = false,
+  hideNarrative = false,
 }) {
   if (!decision) return null;
 
@@ -120,8 +121,8 @@ export default function FlipDecisionCard({
         <MetricCell label="Walk Away" value={formatCurrency(decision.walkAwayPrice)} />
       </div>
 
-      {/* Explanation */}
-      {decision.explanation && (
+      {/* Explanation, reasons & warnings — shown in Deal Summary / Deal Risks when hideNarrative */}
+      {!hideNarrative && decision.explanation && (
         <div className="border-t border-slate-100 px-6 py-4">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             Why we recommend it
@@ -131,7 +132,7 @@ export default function FlipDecisionCard({
       )}
 
       {/* Reasons & warnings */}
-      {(decision.reasons?.length > 0 || decision.warnings?.length > 0) && (
+      {!hideNarrative && (decision.reasons?.length > 0 || decision.warnings?.length > 0) && (
         <div className="grid gap-4 border-t border-slate-100 px-6 py-4 sm:grid-cols-2">
           {decision.reasons?.length > 0 && (
             <div>

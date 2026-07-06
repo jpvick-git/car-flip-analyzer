@@ -10,6 +10,8 @@ export default function RepairBreakdown({
   readOnly = false,
   onTotalChange,
   className = "",
+  hideSummary = false,
+  hideTotal = false,
 }) {
   const [items, setItems] = useState(() => parseRepairItems(car));
   const saveTimer = useRef(null);
@@ -83,19 +85,21 @@ export default function RepairBreakdown({
           />
         </li>
       ))}
-      <li className="flex items-center justify-between pt-1 text-sm font-semibold text-slate-700">
-        <span>Total repair</span>
-        <span className="tabular-nums">{formatCurrency(sumRepairItems(items))}</span>
-      </li>
+      {!hideTotal && (
+        <li className="flex items-center justify-between pt-1 text-sm font-semibold text-slate-700">
+          <span>Total repair</span>
+          <span className="tabular-nums">{formatCurrency(sumRepairItems(items))}</span>
+        </li>
+      )}
     </ul>
   ) : null;
 
   return (
     <div className={`space-y-4 ${className}`}>
-      {hasSummary && (
+      {hasSummary && !hideSummary && (
         <p className="text-sm leading-relaxed text-slate-600">{summary}</p>
       )}
-      {hasSummary && hasItems && <div className="border-t border-slate-100" />}
+      {hasSummary && !hideSummary && hasItems && <div className="border-t border-slate-100" />}
       {itemList}
     </div>
   );

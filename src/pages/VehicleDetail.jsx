@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
   ArrowLeft,
-  DollarSign,
   X,
   ChevronLeft,
   ChevronRight,
@@ -14,12 +13,13 @@ import {
   ExternalLink,
   Images,
 } from "lucide-react";
-import RepairAnalysisCard from "../components/RepairAnalysisCard";
 import RepairPlanCard from "../components/RepairPlanCard";
 import FlipDecisionCard from "../components/FlipDecisionCard";
+import DealSummaryCard from "../components/DealSummaryCard";
+import DealRisksCard from "../components/DealRisksCard";
+import RawAIDetailsCard from "../components/RawAIDetailsCard";
 import KnownIssuesCard from "../components/KnownIssuesCard";
 import NegotiationCard from "../components/NegotiationCard";
-import RedFlagsCard from "../components/RedFlagsCard";
 import { parseRepairItems } from "../utils/repairBreakdown";
 import { formatCurrency } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
@@ -187,7 +187,6 @@ export default function VehicleDetail() {
   ].filter(Boolean);
 
   const marginFill = (margin / 40) * 100;
-  const hasResaleData = Boolean(car.resale_details);
 
   const flipDecision = calculateFlipDecision(
     car,
@@ -364,6 +363,7 @@ export default function VehicleDetail() {
                 vehicle={car}
                 flipMetrics={{ bid, profit, resale, repair, marginActual, transportCost }}
                 decision={flipDecision}
+                hideNarrative
               />
 
               <TransportCostCard
@@ -476,12 +476,19 @@ export default function VehicleDetail() {
           </div>
         </div>
 
-        {/* ── Analysis sections (below the fold) ── */}
+        {/* ── Buying report (below the fold) ── */}
         <div className="mt-8 space-y-6">
+          <DealSummaryCard
+            vehicle={car}
+            decision={flipDecision}
+            flipMetrics={{ bid, profit, repair, transportCost }}
+          />
+
           <RepairPlanCard
             car={car}
             apiBase={API}
             readOnly={isDemo}
+            onTotalChange={setRepairTotal}
             onUpdate={(data) => {
               if (data.repair_estimate != null) {
                 setRepairTotal(Number(data.repair_estimate) || 0);
@@ -511,28 +518,11 @@ export default function VehicleDetail() {
             }}
           />
 
-          <RepairAnalysisCard
-            car={car}
-            apiBase={API}
-            readOnly={isDemo}
-            onTotalChange={setRepairTotal}
-            repairTotal={repairTotal}
-          />
-
-          <RedFlagsCard car={car} />
-
-          <KnownIssuesCard
-            car={car}
-            apiBase={API}
-            readOnly={isDemo}
-            onUpdate={(data) =>
-              setCar((prev) => ({
-                ...prev,
-                reliability_summary: data.reliability_summary,
-                known_issues: data.known_issues,
-                wear_items: data.wear_items,
-              }))
-            }
+          <DealRisksCard
+            vehicle={car}
+            decision={flipDecision}
+            flipMetrics={{ profit, repair, transportCost }}
+            transportCost={transportCost}
           />
 
           {isPrivate && (
@@ -553,17 +543,21 @@ export default function VehicleDetail() {
             />
           )}
 
-          {hasResaleData && (
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-emerald-600">
-                  <DollarSign size={13} />
-                </span>
-                {isPrivate ? "Retail Exit Analysis" : "Resale Analysis"}
-              </h3>
-              <p className="text-sm leading-relaxed text-slate-600">{car.resale_details}</p>
-            </section>
-          )}
+          <KnownIssuesCard
+            car={car}
+            apiBase={API}
+            readOnly={isDemo}
+            onUpdate={(data) =>
+              setCar((prev) => ({
+                ...prev,
+                reliability_summary: data.reliability_summary,
+                known_issues: data.known_issues,
+                wear_items: data.wear_items,
+              }))
+            }
+          />
+
+          <RawAIDetailsCard car={car} />
         </div>
 
         <p className="mt-10 border-t border-slate-200 pt-6 text-center text-xs leading-relaxed text-slate-400">

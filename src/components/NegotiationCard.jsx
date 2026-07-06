@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import axios from "axios";
-import { HandCoins, RefreshCw, MessageCircle } from "lucide-react";
+import { HandCoins, RefreshCw, MessageCircle, Copy, Check } from "lucide-react";
 import { formatCurrency } from "../utils/formatCurrency";
 import { hasNegotiationData, parseTalkingPoints } from "../utils/negotiation";
 
@@ -24,6 +24,66 @@ function categoryLabel(category) {
   return labels[String(category || "").toLowerCase()] || "Strategy";
 }
 
+function buildNegotiationMessage(car, talkingPoints) {
+  const offerLow = car?.suggested_offer_low;
+  const offerHigh = car?.suggested_offer_high;
+  const primary = talkingPoints[0];
+
+  let opener = "Hi, I'm interested in the vehicle you have listed.";
+  if (primary?.point) {
+    opener = `Hi, I'm interested in your vehicle. ${primary.point}`;
+  }
+
+  const leverage = talkingPoints
+    .slice(0, 2)
+    .map((tp) => {
+      if (tp.how_to_use) return tp.how_to_use;
+      return tp.point;
+    })
+    .filter(Boolean);
+
+  const leverageText = leverage.length
+    ? leverage.map((l) => `• ${l}`).join("\n")
+    : "";
+
+  let offerLine = "";
+  if (offerLow != null && offerHigh != null && offerLow !== offerHigh) {
+    offerLine = `\n\nBased on the condition and what I'd need to put into it, I'd like to offer ${formatCurrency(offerLow)}–${formatCurrency(offerHigh)}.`;
+  } else if (offerLow != null || offerHigh != null) {
+    offerLine = `\n\nBased on the condition and what I'd need to put into it, I'd like to offer ${formatCurrency(offerLow ?? offerHigh)}.`;
+  }
+
+  const close = "\n\nI'm ready to move quickly with cash if we can agree on a fair number. Let me know if you'd like to discuss.";
+
+  return `${opener}${leverageText ? `\n\n${leverageText}` : ""}${offerLine}${close}`;
+}
+
+function inferDiscountRange(car, talkingPoints) {
+  if (car?.suggested_offer_low != null || car?.suggested_offer_high != null) {
+    const low = car.suggested_offer_low;
+    const high = car.suggested_offer_high;
+    if (low != null && high != null && low !== high) {
+      return `${formatCurrency(low)} – ${formatCurrency(high)}`;
+    }
+    return formatCurrency(low ?? high);
+  }
+
+  const withCost = talkingPoints.find((tp) =>
+    normalizeText(tp.point).includes("$") || normalizeText(tp.how_to_use).includes("$")
+  );
+  if (withCost) {
+    const text = withCost.how_to_use || withCost.point;
+    const match = text.match(/\$[\d,]+(?:\s*[-–]\s*\$[\d,]+)?/);
+    if (match) return match[0].replace(/–/g, "–");
+  }
+
+  return "Use suggested offer range";
+}
+
+function normalizeText(value) {
+  return String(value || "").toLowerCase();
+}
+
 export default function NegotiationCard({
   car,
   apiBase = "",
@@ -32,14 +92,28 @@ export default function NegotiationCard({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [generatedMessage, setGeneratedMessage] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const talkingPoints = parseTalkingPoints(car);
   const hasData = hasNegotiationData(car);
   const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
 
-  const offerLow = car?.suggested_offer_low;
-  const offerHigh = car?.suggested_offer_high;
-  const hasOfferRange = offerLow != null || offerHigh != null;
+  const sayThis = useMemo(() => {
+    const primary = talkingPoints[0];
+    if (!primary) return null;
+    if (primary.how_to_use) return primary.how_to_use;
+    if (primary.point) {
+      const costMatch = primary.point.match(/\$[\d,]+/);
+      if (costMatch) {
+        return `"${primary.point}"`;
+      }
+      return `"I noticed ${primary.point.toLowerCase().replace(/\.$/, "")} — that affects what I can offer."`;
+    }
+    return null;
+  }, [talkingPoints]);
+
+  const suggestedDiscount = inferDiscountRange(car, talkingPoints);
 
   const refresh = async () => {
     if (readOnly || !car?.id) return;
@@ -52,11 +126,27 @@ export default function NegotiationCard({
         { headers }
       );
       onUpdate?.(res.data);
+      setGeneratedMessage(null);
     } catch (err) {
       console.error("Negotiation analysis failed:", err);
       setError("Could not generate negotiation tips. Try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateMessage = () => {
+    setGeneratedMessage(buildNegotiationMessage(car, talkingPoints));
+  };
+
+  const handleCopy = async () => {
+    if (!generatedMessage) return;
+    try {
+      await navigator.clipboard.writeText(generatedMessage);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback ignored
     }
   };
 
@@ -92,40 +182,88 @@ export default function NegotiationCard({
         </div>
       ) : hasData ? (
         <div className="space-y-5">
+          {/* Actionable summary */}
+          <div className="grid gap-3 sm:grid-cols-3">
+            {sayThis && (
+              <div className="rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3 sm:col-span-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-sky-600">
+                  Say This
+                </p>
+                <p className="mt-1.5 text-sm font-medium leading-relaxed text-sky-900">
+                  {sayThis.startsWith('"') ? sayThis : `"${sayThis}"`}
+                </p>
+              </div>
+            )}
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                Tone
+              </p>
+              <p className="mt-1.5 text-sm font-semibold text-slate-800">Respectful but firm</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600">
+              Suggested Discount / Offer
+            </p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-emerald-800">
+              {suggestedDiscount}
+            </p>
+            {car.offer_rationale && (
+              <p className="mt-1.5 text-xs leading-relaxed text-emerald-800/80">
+                {car.offer_rationale}
+              </p>
+            )}
+          </div>
+
           {car.negotiation_summary && (
             <p className="text-sm leading-relaxed text-slate-600">
               {car.negotiation_summary}
             </p>
           )}
 
-          {hasOfferRange && (
-            <div className="rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-sky-600">
-                Suggested Offer Range
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleGenerateMessage}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-sky-700"
+            >
+              <MessageCircle size={14} />
+              Generate Message
+            </button>
+            {generatedMessage && (
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+              >
+                {copied ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                {copied ? "Copied" : "Copy"}
+              </button>
+            )}
+          </div>
+
+          {generatedMessage && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Ready-to-send message
               </p>
-              <p className="mt-1 text-lg font-bold tabular-nums text-sky-900">
-                {offerLow != null && offerHigh != null && offerLow !== offerHigh
-                  ? `${formatCurrency(offerLow)} – ${formatCurrency(offerHigh)}`
-                  : formatCurrency(offerLow ?? offerHigh)}
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                {generatedMessage}
               </p>
-              {car.offer_rationale && (
-                <p className="mt-1.5 text-xs leading-relaxed text-sky-800/80">
-                  {car.offer_rationale}
-                </p>
-              )}
             </div>
           )}
 
           {talkingPoints.length > 0 && (
             <div>
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Key Talking Points
+                All Talking Points
               </h4>
               <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {talkingPoints.map((item, index) => (
                   <li
                     key={`point-${index}`}
-                    className="flex min-h-[7.5rem] flex-col rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3"
+                    className="flex min-h-[5rem] flex-col rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <p className="text-sm font-medium text-slate-800">{item.point}</p>
@@ -133,25 +271,20 @@ export default function NegotiationCard({
                         <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 ring-1 ring-slate-200">
                           {categoryLabel(item.category)}
                         </span>
-                        {item.strength ? (
+                        {item.strength && (
                           <span
                             className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${strengthClass(item.strength)}`}
                           >
                             {item.strength}
                           </span>
-                        ) : (
-                          <span className="invisible rounded-full px-2 py-0.5 text-[10px]">—</span>
                         )}
                       </div>
                     </div>
-                    <div className="mt-auto min-h-[2.5rem] pt-2">
-                      {item.how_to_use && (
-                        <p className="flex gap-1.5 text-xs leading-relaxed text-slate-500">
-                          <MessageCircle size={12} className="mt-0.5 shrink-0 text-slate-400" />
-                          {item.how_to_use}
-                        </p>
-                      )}
-                    </div>
+                    {item.how_to_use && (
+                      <p className="mt-auto pt-2 text-xs leading-relaxed text-slate-500">
+                        {item.how_to_use}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -162,8 +295,8 @@ export default function NegotiationCard({
         <div className="space-y-2">
           <p className="flex items-start gap-2 text-sm leading-relaxed text-slate-600">
             <HandCoins size={14} className="mt-0.5 shrink-0 text-slate-400" />
-            AI reviews the listing, photos, and condition to suggest respectful talking points
-            and a realistic offer range when negotiating with the seller.
+            AI reviews the listing, photos, and condition to suggest what to say, how much to offer,
+            and a ready-to-send message for the seller.
           </p>
           {!readOnly && (
             <p className="text-xs text-slate-400">

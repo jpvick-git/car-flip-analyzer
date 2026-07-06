@@ -11,6 +11,8 @@ import {
 import CurrencyInput from "./CurrencyInput";
 import { formatCurrency } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
+import { calculateFlipMetrics } from "../utils/flipCalculator";
+import { calculateFlipDecision, recommendationStyles } from "../utils/flipDecision";
 import {
   isPrivateParty,
   sourceLabel,
@@ -18,6 +20,7 @@ import {
   maxOfferLabel,
   askingPrice,
   formatSaleDate,
+  buyerFeeRate,
 } from "../utils/vehicleSource";
 
 export default function VehicleListRow({
@@ -28,9 +31,25 @@ export default function VehicleListRow({
   setCarToDelete,
   updateCarValue,
   onViewDetails,
+  marginPercent = 15,
 }) {
   const odometer = Number(car.odometer);
   const hasOdometer = !Number.isNaN(odometer) && odometer > 0;
+
+  const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
+  const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
+  const flipMetrics = calculateFlipMetrics({
+    resale,
+    repair,
+    marginPercent,
+    taxRate: car.avg_tax_rate || 0,
+    titleFee: car.title_fee || 0,
+    buyerFeeRate: buyerFeeRate(car),
+    fixedBid: car.max_bid,
+  });
+  const decision = calculateFlipDecision(car, flipMetrics, { marginPercent });
+  const styles = recommendationStyles(decision.recommendation);
+  const profitPositive = decision.expectedProfit >= 0;
 
   return (
     <div className="group grid grid-cols-1 gap-4 border-b border-slate-100 bg-white p-4 transition last:border-b-0 hover:bg-slate-50/80 lg:grid-cols-[120px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center lg:gap-5 lg:px-5 lg:py-4">
@@ -125,52 +144,62 @@ export default function VehicleListRow({
         {car.keys && <p>{car.keys}</p>}
       </div>
 
-      {/* Estimates */}
-      <div className="grid min-w-0 grid-cols-2 gap-2">
-        <div className="rounded-lg border border-amber-100 bg-amber-50 p-2.5">
-          <div className="mb-0.5 flex items-center gap-1 text-amber-600">
-            <Wrench size={12} />
-            <span className="text-[10px] font-semibold uppercase tracking-wide">{costLabel(car)}</span>
+      {/* Flip decision + estimates */}
+      <div className="min-w-0 space-y-2">
+        <div>
+          <div className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold ${styles.badge}`}>
+            {decision.recommendation}
+            <span className="opacity-80">· {decision.flipScore}</span>
           </div>
-          <CurrencyInput
-            readOnly={isDemo}
-            value={car.repair_estimate || car.ai_repair_estimate || 0}
-            onChange={(value) => updateCarValue(car.id, "repair_estimate", value)}
-            inputClassName={`w-full min-w-0 bg-transparent text-sm font-bold tabular-nums text-amber-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
-          />
-        </div>
-        <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-2.5">
-          <div className="mb-0.5 flex items-center gap-1 text-emerald-600">
-            <DollarSign size={12} />
-            <span className="text-[10px] font-semibold uppercase tracking-wide">
-              {isPrivateParty(car) ? "Exit" : "Resale"}
+          <p className={`mt-1 text-lg font-extrabold tabular-nums ${profitPositive ? "text-emerald-700" : "text-red-600"}`}>
+            {formatCurrency(decision.expectedProfit)}
+            <span className="ml-1 text-xs font-semibold text-slate-400">profit</span>
+          </p>
+          <p className="text-xs text-slate-500">
+            {maxOfferLabel(car)} {formatCurrency(flipMetrics.bid)} ·{" "}
+            <span className={decision.riskLevel === "Low" ? "text-emerald-600" : decision.riskLevel === "Medium" ? "text-amber-600" : "text-red-600"}>
+              {decision.riskLevel} risk
             </span>
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-lg border border-amber-100 bg-amber-50 p-2">
+            <div className="mb-0.5 flex items-center gap-1 text-amber-600">
+              <Wrench size={11} />
+              <span className="text-[10px] font-semibold uppercase">{costLabel(car)}</span>
+            </div>
+            <CurrencyInput
+              readOnly={isDemo}
+              value={repair}
+              onChange={(value) => updateCarValue(car.id, "repair_estimate", value)}
+              inputClassName={`w-full min-w-0 bg-transparent text-xs font-bold tabular-nums text-amber-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
+            />
           </div>
-          <CurrencyInput
-            readOnly={isDemo}
-            value={car.resale_estimate || car.ai_resale_estimate || 0}
-            onChange={(value) => updateCarValue(car.id, "resale_estimate", value)}
-            inputClassName={`w-full min-w-0 bg-transparent text-sm font-bold tabular-nums text-emerald-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
-          />
+          <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-2">
+            <div className="mb-0.5 flex items-center gap-1 text-emerald-600">
+              <DollarSign size={11} />
+              <span className="text-[10px] font-semibold uppercase">
+                {isPrivateParty(car) ? "Exit" : "Resale"}
+              </span>
+            </div>
+            <CurrencyInput
+              readOnly={isDemo}
+              value={resale}
+              onChange={(value) => updateCarValue(car.id, "resale_estimate", value)}
+              inputClassName={`w-full min-w-0 bg-transparent text-xs font-bold tabular-nums text-emerald-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Max bid + actions */}
+      {/* Actions */}
       <div className="flex min-w-0 flex-col gap-2">
-        <div className="rounded-lg bg-blue-50 px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600">
-            {maxOfferLabel(car)}
-          </p>
-          <p className="text-xl font-extrabold tabular-nums text-blue-700">
-            {formatCurrency(car.max_bid)}
-          </p>
-        </div>
         <button
           type="button"
           className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 active:scale-[0.99]"
           onClick={onViewDetails}
         >
-          View Details
+          View Decision
           <ArrowRight size={14} />
         </button>
       </div>

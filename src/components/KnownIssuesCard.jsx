@@ -96,12 +96,17 @@ export default function KnownIssuesCard({
   return (
     <section className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-3 flex shrink-0 items-start justify-between gap-3">
-        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-100 text-violet-600">
-            <AlertTriangle size={13} />
-          </span>
-          Platform Reliability
-        </h3>
+        <div>
+          <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-100 text-violet-600">
+              <AlertTriangle size={13} />
+            </span>
+            Ownership Risks
+          </h3>
+          <p className="mt-0.5 text-[10px] font-medium text-slate-400">
+            What Could Cost You Later
+          </p>
+        </div>
         {!readOnly && (
           <button
             type="button"
@@ -132,7 +137,7 @@ export default function KnownIssuesCard({
               {car.reliability_summary}
             </p>
           )}
-          <IssueList title="Known Issues" items={knownIssues} labelKey="issue" />
+          <IssueList title="Common Problems" items={knownIssues} labelKey="issue" />
           <IssueList title="Wear & Maintenance" items={wearItems} labelKey="item" />
           {!knownIssues.length && !wearItems.length && car.reliability_summary && (
             <p className="text-sm text-slate-500">
@@ -144,8 +149,8 @@ export default function KnownIssuesCard({
         <div className="space-y-2">
           <p className="flex items-start gap-2 text-sm leading-relaxed text-slate-600">
             <Wrench size={14} className="mt-0.5 shrink-0 text-slate-400" />
-            Documented reliability problems and typical wear items for this year, make, and model
-            — separate from accident damage. Does not affect repair or resale estimates.
+            Long-term ownership costs and typical wear items for this year, make, and model
+            — separate from accident damage. Budget these beyond the visible repair estimate.
           </p>
           {!readOnly && (
             <p className="text-xs text-slate-400">

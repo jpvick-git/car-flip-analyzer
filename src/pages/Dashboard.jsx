@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import RepairBreakdown from "../components/RepairBreakdown";
 import VehicleListRow from "../components/VehicleListRow";
+import CarCard from "../components/CarCard";
 import CurrencyInput from "../components/CurrencyInput";
 import { formatCurrency, parseCurrencyInput } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
@@ -822,13 +823,13 @@ export default function Dashboard({
           </div>
         ) : viewMode === "list" ? (
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="hidden bg-slate-800 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white lg:grid lg:grid-cols-[120px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-5">
+            <div className="hidden bg-slate-800 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white lg:grid lg:grid-cols-[120px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-5">
               <span>Image</span>
               <span>Lot info</span>
               <span>Vehicle info</span>
               <span>Condition</span>
-              <span>Estimates</span>
-              <span>Max bid / offer</span>
+              <span>Flip decision</span>
+              <span>Action</span>
             </div>
             {visibleCars.map((car) => (
               <VehicleListRow
@@ -838,6 +839,7 @@ export default function Dashboard({
                 menuOpenId={menuOpenId}
                 setMenuOpenId={setMenuOpenId}
                 setCarToDelete={setCarToDelete}
+                marginPercent={tempMargin}
                 updateCarValue={updateCarValue}
                 onViewDetails={() => navigate(`/vehicle/${car.id}`)}
               />
@@ -845,134 +847,23 @@ export default function Dashboard({
           </div>
         ) : (
           <div className="grid grid-cols-1 items-stretch gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {visibleCars.map((car) => {
-              const saleDate = formatSaleDate(car);
-              return (
-              <div
+            {visibleCars.map((car) => (
+              <CarCard
                 key={car.id}
-                className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-              >
-                <div className="relative">
-                  <img
-                    src={car.image_url || "https://placehold.co/400x250?text=No+Image"}
-                    className="h-52 w-full object-cover"
-                    alt=""
-                  />
-                  <span className="absolute left-3 top-3 rounded-full bg-black/70 px-3 py-1 text-xs font-medium text-white backdrop-blur">
-                    {sourceLabel(car)}
-                  </span>
-                  <span className="absolute bottom-3 left-3 max-w-[70%] truncate rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white backdrop-blur">
-                    {isPrivateParty(car)
-                      ? (askingPrice(car) ? `Ask ${formatCurrency(askingPrice(car))}` : "Private listing")
-                      : (car.damage_description || "Unknown damage")}
-                  </span>
-
-                  {/* Card menu */}
-                  {!isDemo && (
-                  <div className="absolute right-3 top-3" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      aria-label="Vehicle options"
-                      onClick={() => setMenuOpenId(menuOpenId === car.id ? null : car.id)}
-                      className="rounded-full bg-black/70 p-1.5 text-white backdrop-blur transition hover:bg-black/85"
-                    >
-                      <MoreVertical size={16} />
-                    </button>
-                    {menuOpenId === car.id && (
-                      <div className="absolute right-0 top-full z-10 mt-1 w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMenuOpenId(null);
-                            setCarToDelete(car);
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
-                        >
-                          <Trash2 size={14} />
-                          Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  )}
-                </div>
-
-                <div className="flex flex-1 flex-col p-5">
-                  <h2 className="line-clamp-2 min-h-[3.5rem] text-lg font-bold leading-snug tracking-tight text-slate-900">
-                    {formatVehicleTitle(car)}
-                  </h2>
-
-                  <div className="mt-2 min-h-[4.75rem] space-y-1.5 text-sm text-slate-500">
-                    <p className="flex items-center gap-2">
-                      <Hash size={13} className="shrink-0 text-slate-400" />
-                      {isPrivateParty(car)
-                        ? (askingPrice(car) ? `Ask ${formatCurrency(askingPrice(car))}` : "Private party")
-                        : `Lot ${car.lot_number || "—"}`}
-                    </p>
-                    <p className="flex items-center gap-2">
-                      <MapPin size={13} className="shrink-0 text-slate-400" />
-                      {car.sale_name || car.location || "N/A"}
-                    </p>
-                    <p className={`flex items-center gap-2 ${saleDate ? "" : "invisible"}`}>
-                      <Calendar size={13} className="shrink-0 text-slate-400" />
-                      {saleDate || "—"}
-                    </p>
-                  </div>
-
-                  <div className="mt-auto flex flex-col pt-4">
-                  {/* Repairs / Resale */}
-                  <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
-                    <div className="flex min-h-[5.25rem] flex-col rounded-xl border border-amber-100 bg-amber-50 p-3">
-                      <div className="mb-1 flex items-center gap-1.5 text-amber-600">
-                        <Wrench size={13} />
-                        <span className="text-[11px] font-semibold uppercase tracking-wide">{costLabel(car)}</span>
-                      </div>
-                      <CurrencyInput
-                        readOnly={isDemo}
-                        value={car.repair_estimate || car.ai_repair_estimate || 0}
-                        onChange={(value) => updateCarValue(car.id, "repair_estimate", value)}
-                        inputClassName={`w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-amber-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
-                      />
-                    </div>
-
-                    <div className="flex min-h-[5.25rem] flex-col rounded-xl border border-emerald-100 bg-emerald-50 p-3">
-                      <div className="mb-1 flex items-center gap-1.5 text-emerald-600">
-                        <DollarSign size={13} />
-                        <span className="text-[11px] font-semibold uppercase tracking-wide">
-                          {isPrivateParty(car) ? "Exit" : "Resale"}
-                        </span>
-                      </div>
-                      <CurrencyInput
-                        readOnly={isDemo}
-                        value={car.resale_estimate || car.ai_resale_estimate || 0}
-                        onChange={(value) => updateCarValue(car.id, "resale_estimate", value)}
-                        inputClassName={`w-full min-w-0 bg-transparent text-base font-bold tabular-nums text-emerald-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Max Bid / Offer */}
-                  <div className="mt-3 flex items-baseline justify-between rounded-xl bg-blue-50 px-4 py-3">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-blue-600">
-                      {maxOfferLabel(car)}
-                    </span>
-                    <span className="text-2xl font-extrabold tabular-nums text-blue-700">
-                      {formatCurrency(car.max_bid)}
-                    </span>
-                  </div>
-
-                  <button
-                    className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 active:scale-[0.99]"
-                    onClick={() => navigate(`/vehicle/${car.id}`)}
-                  >
-                    View Details
-                    <ArrowRight size={15} />
-                  </button>
-                  </div>
-                </div>
-              </div>
-            );
-            })}
+                car={car}
+                isDemo={isDemo}
+                marginPercent={tempMargin}
+                menuOpenId={menuOpenId}
+                setMenuOpenId={setMenuOpenId}
+                setCarToDelete={setCarToDelete}
+                onViewDetails={() => navigate(`/vehicle/${car.id}`)}
+                onUpdateValues={(carId, updates) => {
+                  Object.entries(updates).forEach(([field, value]) => {
+                    updateCarValue(carId, field, value);
+                  });
+                }}
+              />
+            ))}
           </div>
         )}
       </div>

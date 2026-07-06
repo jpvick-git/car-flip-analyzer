@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
   ArrowLeft,
-  Wrench,
   DollarSign,
   X,
   ChevronLeft,
@@ -11,13 +10,12 @@ import {
   ChevronDown,
   MapPin,
   Calendar,
-  TrendingUp,
-  TrendingDown,
   Maximize2,
   ExternalLink,
   Images,
 } from "lucide-react";
-import RepairBreakdown from "../components/RepairBreakdown";
+import RepairAnalysisCard from "../components/RepairAnalysisCard";
+import FlipDecisionCard from "../components/FlipDecisionCard";
 import KnownIssuesCard from "../components/KnownIssuesCard";
 import NegotiationCard from "../components/NegotiationCard";
 import RedFlagsCard from "../components/RedFlagsCard";
@@ -25,12 +23,12 @@ import { parseRepairItems } from "../utils/repairBreakdown";
 import { formatCurrency } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
 import { useFlipMetrics } from "../utils/useFlipMetrics";
+import { calculateFlipDecision } from "../utils/flipDecision";
 import {
   isPrivateParty,
   buyerFeeRate,
   sourceLabel,
   costLabel,
-  maxOfferLabel,
   askingPrice,
 } from "../utils/vehicleSource";
 
@@ -167,11 +165,14 @@ export default function VehicleDetail() {
     !isPrivate && car.damage_description && ["Damage", car.damage_description],
   ].filter(Boolean);
 
-  const profitPositive = profit >= 0;
   const marginFill = (margin / 40) * 100;
-  const hasReconData = Boolean(car.repair_details || car.repair_breakdown);
   const hasResaleData = Boolean(car.resale_details);
-  const showAnalysisRow = hasReconData || hasResaleData;
+
+  const flipDecision = calculateFlipDecision(
+    car,
+    { bid, buyerFee, taxAmt, titleFee, repair, totalCost, profit, resale, taxRate, marginActual },
+    { marginPercent: margin }
+  );
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -238,7 +239,7 @@ export default function VehicleDetail() {
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
 
-          {/* LEFT — Gallery + details + analysis */}
+          {/* LEFT — Gallery + basic details */}
           <div className="space-y-6 lg:col-span-7">
 
             {/* Gallery */}
@@ -328,117 +329,25 @@ export default function VehicleDetail() {
                 </dl>
               </section>
             )}
-
-            {/* AI Details — equal-height paired tiles */}
-            {showAnalysisRow && (
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-stretch">
-                <section className="flex min-h-[12rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h3 className="mb-3 flex shrink-0 items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-600">
-                      <Wrench size={13} />
-                    </span>
-                    {isPrivate ? "Recon Analysis" : "Repair Analysis"}
-                  </h3>
-                  <div className="flex flex-1 flex-col">
-                    {hasReconData ? (
-                      <RepairBreakdown
-                        car={car}
-                        apiBase={API}
-                        readOnly={isDemo}
-                        onTotalChange={setRepairTotal}
-                        className="flex-1"
-                      />
-                    ) : (
-                      <p className="text-sm text-slate-400">No repair analysis available.</p>
-                    )}
-                  </div>
-                </section>
-
-                <section className="flex min-h-[12rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h3 className="mb-3 flex shrink-0 items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-emerald-600">
-                      <DollarSign size={13} />
-                    </span>
-                    {isPrivate ? "Retail Exit" : "Resale Analysis"}
-                  </h3>
-                  <div className="flex flex-1 flex-col">
-                    {hasResaleData ? (
-                      <p className="text-sm leading-relaxed text-slate-600">{car.resale_details}</p>
-                    ) : (
-                      <p className="text-sm text-slate-400">No resale analysis available.</p>
-                    )}
-                  </div>
-                </section>
-              </div>
-            )}
-
-            <RedFlagsCard car={car} />
-
-            {isPrivate && (
-              <NegotiationCard
-                car={car}
-                apiBase={API}
-                readOnly={isDemo}
-                onUpdate={(data) =>
-                  setCar((prev) => ({
-                    ...prev,
-                    negotiation_summary: data.negotiation_summary,
-                    negotiation_talking_points: data.negotiation_talking_points,
-                    suggested_offer_low: data.suggested_offer_low,
-                    suggested_offer_high: data.suggested_offer_high,
-                    offer_rationale: data.offer_rationale,
-                  }))
-                }
-              />
-            )}
           </div>
 
-          {/* RIGHT — Bidding rail (sticky) */}
+          {/* RIGHT — Flip decision + margin controls */}
           <div className="lg:col-span-5">
             <div className="space-y-4 lg:sticky lg:top-20">
+              <FlipDecisionCard
+                vehicle={car}
+                flipMetrics={{ bid, profit, resale, repair, marginActual }}
+                decision={flipDecision}
+              />
 
-              {/* Repair / Resale summary tiles */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex min-h-[5.5rem] flex-col justify-center rounded-2xl border border-amber-100 bg-amber-50 p-4 text-center">
-                  <div className="mb-1 flex items-center justify-center gap-1.5 text-amber-600">
-                    <Wrench size={14} />
-                    <span className="text-[11px] font-semibold uppercase tracking-wide">Est. {costLabel(car)}</span>
-                  </div>
-                  <p className="text-2xl font-bold tabular-nums text-amber-700">{formatCurrency(repair)}</p>
+              {/* Margin & tax controls */}
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="border-b border-slate-100 px-5 py-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Deal Controls
+                  </h3>
                 </div>
-                <div className="flex min-h-[5.5rem] flex-col justify-center rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-center">
-                  <div className="mb-1 flex items-center justify-center gap-1.5 text-emerald-600">
-                    <DollarSign size={14} />
-                    <span className="text-[11px] font-semibold uppercase tracking-wide">Est. {isPrivate ? "Retail Exit" : "Resale"}</span>
-                  </div>
-                  <p className="text-2xl font-bold tabular-nums text-emerald-700">{formatCurrency(resale)}</p>
-                </div>
-              </div>
-
-              {/* Bid card */}
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-200/60">
-
-                {/* Max bid / offer — focal point */}
-                <div className="border-b border-slate-100 bg-gradient-to-b from-white to-slate-50 px-6 py-7 text-center">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.15em] text-blue-600">
-                    Your {maxOfferLabel(car)}
-                  </p>
-                  <p className="text-5xl font-extrabold tracking-tight tabular-nums text-slate-900 sm:text-6xl">
-                    {formatCurrency(bid)}
-                  </p>
-                  {isPrivate && asking != null && (
-                    <p className="mt-1 text-sm text-slate-500">
-                      Seller asking <span className="font-semibold text-slate-700">{formatCurrency(asking)}</span>
-                    </p>
-                  )}
-                  <p className="mt-2 text-xs text-slate-400">
-                    {maxOfferLabel(car).toLowerCase()} set at <span className="font-semibold text-slate-500">{margin}%</span> margin
-                    · profit updates when you edit {isPrivate ? "recon" : "repair"} costs
-                  </p>
-                </div>
-
-                <div className="space-y-5 p-6">
-                  {/* Margin slider */}
+                <div className="space-y-5 p-5">
                   <div>
                     <div className="mb-2 flex items-center justify-between text-sm">
                       <span className="font-medium text-slate-700">Desired Margin</span>
@@ -457,7 +366,6 @@ export default function VehicleDetail() {
                     </div>
                   </div>
 
-                  {/* State selector */}
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-slate-700">Purchase State</label>
                     <div className="relative">
@@ -480,7 +388,6 @@ export default function VehicleDetail() {
                     )}
                   </div>
 
-                  {/* Cost breakdown */}
                   <div className="space-y-2 rounded-xl bg-slate-50 p-4 text-sm">
                     {!isPrivate && (
                       <div className="flex justify-between text-slate-500">
@@ -500,28 +407,14 @@ export default function VehicleDetail() {
                       <span>{costLabel(car)}</span>
                       <span className="tabular-nums text-slate-700">{formatCurrency(repair)}</span>
                     </div>
+                    <div className="flex justify-between text-slate-500">
+                      <span>{isPrivate ? "Retail Exit" : "Resale"}</span>
+                      <span className="tabular-nums text-slate-700">{formatCurrency(resale)}</span>
+                    </div>
                     <div className="mt-1 flex justify-between border-t border-slate-200 pt-2 font-semibold text-slate-900">
                       <span>Total Cost</span>
                       <span className="tabular-nums">{formatCurrency(totalCost)}</span>
                     </div>
-                  </div>
-
-                  {/* Profit highlight */}
-                  <div
-                    className={`flex items-center justify-between rounded-xl border px-4 py-3 ${
-                      profitPositive
-                        ? "border-emerald-100 bg-emerald-50"
-                        : "border-red-100 bg-red-50"
-                    }`}
-                  >
-                    <span className={`flex items-center gap-1.5 text-sm font-semibold ${profitPositive ? "text-emerald-700" : "text-red-700"}`}>
-                      {profitPositive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                      Estimated Profit
-                      <span className="ml-1 text-xs font-normal text-slate-400">({marginActual}% of resale)</span>
-                    </span>
-                    <span className={`text-lg font-bold tabular-nums ${profitPositive ? "text-emerald-700" : "text-red-700"}`}>
-                      {formatCurrency(profit)}
-                    </span>
                   </div>
 
                   {car.lot_url && (
@@ -537,23 +430,65 @@ export default function VehicleDetail() {
                   )}
                 </div>
               </div>
-
-              <KnownIssuesCard
-                car={car}
-                apiBase={API}
-                readOnly={isDemo}
-                onUpdate={(data) =>
-                  setCar((prev) => ({
-                    ...prev,
-                    reliability_summary: data.reliability_summary,
-                    known_issues: data.known_issues,
-                    wear_items: data.wear_items,
-                  }))
-                }
-              />
-
             </div>
           </div>
+        </div>
+
+        {/* ── Analysis sections (below the fold) ── */}
+        <div className="mt-8 space-y-6">
+          <RepairAnalysisCard
+            car={car}
+            apiBase={API}
+            readOnly={isDemo}
+            onTotalChange={setRepairTotal}
+            repairTotal={repairTotal}
+          />
+
+          <RedFlagsCard car={car} />
+
+          <KnownIssuesCard
+            car={car}
+            apiBase={API}
+            readOnly={isDemo}
+            onUpdate={(data) =>
+              setCar((prev) => ({
+                ...prev,
+                reliability_summary: data.reliability_summary,
+                known_issues: data.known_issues,
+                wear_items: data.wear_items,
+              }))
+            }
+          />
+
+          {isPrivate && (
+            <NegotiationCard
+              car={car}
+              apiBase={API}
+              readOnly={isDemo}
+              onUpdate={(data) =>
+                setCar((prev) => ({
+                  ...prev,
+                  negotiation_summary: data.negotiation_summary,
+                  negotiation_talking_points: data.negotiation_talking_points,
+                  suggested_offer_low: data.suggested_offer_low,
+                  suggested_offer_high: data.suggested_offer_high,
+                  offer_rationale: data.offer_rationale,
+                }))
+              }
+            />
+          )}
+
+          {hasResaleData && (
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-emerald-600">
+                  <DollarSign size={13} />
+                </span>
+                {isPrivate ? "Retail Exit Analysis" : "Resale Analysis"}
+              </h3>
+              <p className="text-sm leading-relaxed text-slate-600">{car.resale_details}</p>
+            </section>
+          )}
         </div>
 
         <p className="mt-10 border-t border-slate-200 pt-6 text-center text-xs leading-relaxed text-slate-400">

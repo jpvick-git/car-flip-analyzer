@@ -42,7 +42,6 @@ export function recommendationStyles(recommendation) {
 // ── Inference helpers ──────────────────────────────────────────
 
 const SEVERE_TITLE_KEYWORDS = [
-  "salvage",
   "rebuilt",
   "junk",
   "parts only",
@@ -51,6 +50,8 @@ const SEVERE_TITLE_KEYWORDS = [
   "flood",
   "fire",
 ];
+
+// Salvage-branded title is normal at auction — not treated as severe there.
 
 const SEVERE_DAMAGE_KEYWORDS = [
   "structural",
@@ -103,11 +104,42 @@ function countSevereRedFlags(vehicle) {
   }).length;
 }
 
-function hasBadTitle(vehicle) {
+function capitalizeLevel(level) {
+  const s = String(level || "medium").toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function hasEstimates(vehicle) {
+  const hasResale = Boolean(
+    vehicle?.resale_details ||
+    vehicle?.resale_estimate ||
+    vehicle?.ai_resale_estimate
+  );
+  const hasRepair = Boolean(
+    vehicle?.repair_details ||
+    vehicle?.repair_breakdown ||
+    vehicle?.repair_estimate ||
+    vehicle?.ai_repair_estimate
+  );
+  return { hasResale, hasRepair };
+}
+
+function hasSevereTitleRisk(vehicle) {
   const title = normalizeText(
     [vehicle?.title_code, vehicle?.title_status].filter(Boolean).join(" ")
   );
-  return SEVERE_TITLE_KEYWORDS.some((kw) => title.includes(kw));
+  if (!title) return false;
+
+  if (SEVERE_TITLE_KEYWORDS.some((kw) => title.includes(kw))) return true;
+
+  // Branded salvage title is a red flag for private-party buys, not Copart baseline.
+  if (isPrivateParty(vehicle) && title.includes("salvage")) return true;
+
+  return false;
+}
+
+function hasBadTitle(vehicle) {
+  return hasSevereTitleRisk(vehicle);
 }
 
 function damageSeverityScore(vehicle) {
@@ -145,14 +177,33 @@ export function inferRepairConfidence(vehicle) {
   const severeFlags = countSevereRedFlags(vehicle);
   const damage = normalizeText(vehicle?.damage_description);
   const hasStructural = SEVERE_DAMAGE_KEYWORDS.some((kw) => damage.includes(kw));
-  const imageCount = Number(vehicle?.image_count || vehicle?.image_urls?.length || 0);
+  const { hasResale, hasRepair } = hasEstimates(vehicle);
+  const manualReview = Boolean(vehicle?.needs_manual_review);
+
+  if (!hasResale || !hasRepair) return "Low";
 
   if (
     severeFlags > 0 ||
     hasStructural ||
-    hasBadTitle(vehicle) ||
-    repairRatio > 0.45 ||
-    vehicle?.needs_manual_review
+    hasSevereTitleRisk(vehicle) ||
+    repairRatio > 0.5
+  ) {
+    return "Low";
+  }
+
+  if (
+    repairRatio <= 0.15 &&
+    redFlags.length === 0 &&
+    !manualReview &&
+    !hasStructural
+  ) {
+    return "High";
+  }
+
+  if (
+    repairRatio > 0.35 ||
+    redFlags.length > 1 ||
+    repair > 12000
   ) {
     return "Low";
   }
@@ -160,30 +211,26 @@ export function inferRepairConfidence(vehicle) {
   if (
     repairRatio > 0.25 ||
     redFlags.length > 0 ||
-    imageCount > 0 && imageCount < 4 ||
-    repair > 8000
+    repair > 8000 ||
+    manualReview
   ) {
     return "Medium";
-  }
-
-  if (repairRatio <= 0.15 && redFlags.length === 0) {
-    return "High";
   }
 
   return "Medium";
 }
 
 function inferEstimateConfidence(vehicle) {
-  if (vehicle?.confidence) return String(vehicle.confidence);
-  if (vehicle?.flip_confidence) return String(vehicle.flip_confidence);
+  if (vehicle?.confidence) return capitalizeLevel(vehicle.confidence);
+  if (vehicle?.flip_confidence) return capitalizeLevel(vehicle.flip_confidence);
+
+  const { hasResale, hasRepair } = hasEstimates(vehicle);
+  if (!hasResale || !hasRepair) return "Low";
 
   const repairConf = inferRepairConfidence(vehicle);
-  const hasResale = Boolean(vehicle?.resale_details || vehicle?.resale_estimate);
-  const hasRepair = Boolean(vehicle?.repair_details || vehicle?.repair_breakdown || vehicle?.repair_estimate);
 
-  if (!hasResale || !hasRepair) return "Low";
-  if (repairConf === "High" && !vehicle?.needs_manual_review) return "High";
-  if (repairConf === "Low" || vehicle?.needs_manual_review) return "Low";
+  if (repairConf === "High") return "High";
+  if (repairConf === "Low") return "Low";
   return "Medium";
 }
 

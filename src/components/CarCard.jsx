@@ -4,7 +4,7 @@ import { formatCurrency } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
 import { calculateFlipMetrics } from "../utils/flipCalculator";
 import { calculateFlipDecision, recommendationStyles } from "../utils/flipDecision";
-import { getTransportCostForFlip, hasTransportConfigured } from "../utils/userSettings";
+import { getTransportCostInfo } from "../utils/userSettings";
 import { useUserSettings } from "../context/UserSettingsContext";
 import {
   isPrivateParty,
@@ -29,7 +29,8 @@ export default function CarCard({
   const { settings } = useUserSettings();
   const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
   const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
-  const transportCost = getTransportCostForFlip(car, settings);
+  const transport = getTransportCostInfo(car, settings);
+  const transportCost = transport.cost;
 
   const flipMetrics = calculateFlipMetrics({
     resale,
@@ -59,39 +60,41 @@ export default function CarCard({
         <span className={`absolute left-3 top-3 rounded-lg px-2.5 py-1 text-xs font-bold tracking-wide shadow-sm ${styles.badge}`}>
           {decision.recommendation}
         </span>
-        <span className="absolute right-3 top-3 rounded-full bg-black/70 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">
-          Score {decision.flipScore}
-        </span>
+        <div className="absolute right-3 top-3 flex items-center gap-1.5">
+          <span className="rounded-full bg-black/70 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">
+            Score {decision.flipScore}
+          </span>
+          {!isDemo && setMenuOpenId && setCarToDelete && (
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                aria-label="Vehicle options"
+                onClick={() => setMenuOpenId(menuOpenId === car.id ? null : car.id)}
+                className="rounded-full bg-black/70 p-1.5 text-white backdrop-blur transition hover:bg-black/85"
+              >
+                <MoreVertical size={16} />
+              </button>
+              {menuOpenId === car.id && (
+                <div className="absolute right-0 top-full z-10 mt-1 w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpenId(null);
+                      setCarToDelete(car);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                  >
+                    <Trash2 size={14} />
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         <span className="absolute bottom-3 left-3 max-w-[70%] truncate rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white backdrop-blur">
           {sourceLabel(car)}
         </span>
-        {!isDemo && setMenuOpenId && setCarToDelete && (
-          <div className="absolute right-3 top-3" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              aria-label="Vehicle options"
-              onClick={() => setMenuOpenId(menuOpenId === car.id ? null : car.id)}
-              className="rounded-full bg-black/70 p-1.5 text-white backdrop-blur transition hover:bg-black/85"
-            >
-              <MoreVertical size={16} />
-            </button>
-            {menuOpenId === car.id && (
-              <div className="absolute right-0 top-full z-10 mt-1 w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpenId(null);
-                    setCarToDelete(car);
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
-                >
-                  <Trash2 size={14} />
-                  Delete
-                </button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="flex flex-1 flex-col p-5">
@@ -130,8 +133,9 @@ export default function CarCard({
 
         <p className="mt-2 text-xs text-slate-500">
           Transport{" "}
-          {hasTransportConfigured(car) ? (
+          {transport.hasValue ? (
             <span className="font-semibold tabular-nums text-slate-700">
+              {transport.isEstimated ? "est. " : ""}
               {formatCurrency(transportCost)}
             </span>
           ) : (

@@ -5,6 +5,7 @@ import {
   getEffectiveTransportCost,
   hasTransportConfigured,
 } from "./transportCalculator";
+import { getCachedTransportEstimate, isTransportSavedOnVehicle } from "./transportEstimate";
 
 export const SETTINGS_CACHE_KEY = "user_settings";
 
@@ -97,18 +98,31 @@ export function getTransportCostForFlip(vehicle, settings = DEFAULT_USER_SETTING
   if (saved > 0) return saved;
 
   const miles = Number(vehicle?.transport_distance_miles);
-  if (!Number.isFinite(miles) || miles <= 0) return 0;
+  if (Number.isFinite(miles) && miles > 0) {
+    const type =
+      vehicle?.transport_type ||
+      settings?.default_transport_type ||
+      DEFAULT_USER_SETTINGS.default_transport_type;
 
-  const type =
-    vehicle?.transport_type ||
-    settings?.default_transport_type ||
-    DEFAULT_USER_SETTINGS.default_transport_type;
+    return estimateTransportCost({
+      distanceMiles: miles,
+      transportType: type,
+      manualOverride: vehicle?.transport_cost_manual_override,
+    });
+  }
 
-  return estimateTransportCost({
-    distanceMiles: miles,
-    transportType: type,
-    manualOverride: vehicle?.transport_cost_manual_override,
-  });
+  const cached = getCachedTransportEstimate(vehicle, settings);
+  return cached != null ? cached : 0;
+}
+
+export function getTransportCostInfo(vehicle, settings = DEFAULT_USER_SETTINGS) {
+  const cost = getTransportCostForFlip(vehicle, settings);
+  const saved = isTransportSavedOnVehicle(vehicle);
+  return {
+    cost,
+    isEstimated: cost > 0 && !saved,
+    hasValue: cost > 0,
+  };
 }
 
 export function defaultDeliveryLocation(vehicle, settings = DEFAULT_USER_SETTINGS) {

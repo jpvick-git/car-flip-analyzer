@@ -27,6 +27,10 @@ import { formatVehicleTitle } from "../utils/vehicleName";
 import { calculateFlipMetrics } from "../utils/flipCalculator";
 import { getTransportCostForFlip } from "../utils/userSettings";
 import { useUserSettings } from "../context/UserSettingsContext";
+import {
+  clearTransportEstimateCache,
+  prefetchTransportEstimates,
+} from "../utils/transportEstimate";
 import { useFlipMetrics } from "../utils/useFlipMetrics";
 import {
   isPrivateParty,
@@ -595,6 +599,10 @@ export default function Dashboard({
     setTempMargin(settings.default_margin_percent);
   }, [settings.default_margin_percent]);
 
+  useEffect(() => {
+    clearTransportEstimateCache();
+  }, [settings.shop_location, settings.default_transport_type]);
+
   // MAX BID CALC
   const calculateCarWithMargin = (car, marginInput) => {
     const transportCost = getTransportCostForFlip(car, settings);
@@ -619,6 +627,40 @@ export default function Dashboard({
       transport_cost: transportCost,
     };
   };
+
+  useEffect(() => {
+    if (loading || cars.length === 0 || !settings.shop_location?.trim()) return;
+
+    let alive = true;
+
+    (async () => {
+      await prefetchTransportEstimates(cars, settings);
+      if (!alive) return;
+
+      setCars((prev) => {
+        const next = prev.map((car) =>
+          calculateCarWithMargin(car, settings.default_margin_percent)
+        );
+        const changed = next.some(
+          (car, i) =>
+            car.transport_cost !== prev[i].transport_cost ||
+            car.profit !== prev[i].profit ||
+            car.max_bid !== prev[i].max_bid
+        );
+        return changed ? next : prev;
+      });
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [
+    loading,
+    cars.length,
+    settings.shop_location,
+    settings.default_transport_type,
+    settings.default_margin_percent,
+  ]);
 
   // LOAD VEHICLES
   const fetchVehicles = async () => {

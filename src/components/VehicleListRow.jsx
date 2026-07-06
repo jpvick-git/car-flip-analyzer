@@ -13,7 +13,7 @@ import { formatCurrency } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
 import { calculateFlipMetrics } from "../utils/flipCalculator";
 import { calculateFlipDecision, recommendationStyles } from "../utils/flipDecision";
-import { getTransportCostForFlip, hasTransportConfigured } from "../utils/userSettings";
+import { getTransportCostInfo } from "../utils/userSettings";
 import { useUserSettings } from "../context/UserSettingsContext";
 import {
   isPrivateParty,
@@ -41,7 +41,8 @@ export default function VehicleListRow({
 
   const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
   const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
-  const transportCost = getTransportCostForFlip(car, settings);
+  const transport = getTransportCostInfo(car, settings);
+  const transportCost = transport.cost;
   const flipMetrics = calculateFlipMetrics({
     resale,
     repair,
@@ -165,8 +166,12 @@ export default function VehicleListRow({
           <span className={decision.riskLevel === "Low" ? "text-emerald-600" : decision.riskLevel === "Medium" ? "text-amber-600" : "text-red-600"}>
             {decision.riskLevel} risk
           </span>
-          {hasTransportConfigured(car) && (
-            <> · Transport {formatCurrency(transportCost)}</>
+          {transport.hasValue && (
+            <>
+              {" "}
+              · Transport {transport.isEstimated ? "est. " : ""}
+              {formatCurrency(transportCost)}
+            </>
           )}
         </p>
         </div>

@@ -360,6 +360,24 @@ export default function VehicleDetail() {
             )}
 
             <RedFlagsCard car={car} />
+
+            {isPrivate && (
+              <NegotiationCard
+                car={car}
+                apiBase={API}
+                readOnly={isDemo}
+                onUpdate={(data) =>
+                  setCar((prev) => ({
+                    ...prev,
+                    negotiation_summary: data.negotiation_summary,
+                    negotiation_talking_points: data.negotiation_talking_points,
+                    suggested_offer_low: data.suggested_offer_low,
+                    suggested_offer_high: data.suggested_offer_high,
+                    offer_rationale: data.offer_rationale,
+                  }))
+                }
+              />
+            )}
           </div>
 
           {/* RIGHT — Bidding rail (sticky) */}
@@ -520,24 +538,6 @@ export default function VehicleDetail() {
                   }))
                 }
               />
-
-              {isPrivate && (
-                <NegotiationCard
-                  car={car}
-                  apiBase={API}
-                  readOnly={isDemo}
-                  onUpdate={(data) =>
-                    setCar((prev) => ({
-                      ...prev,
-                      negotiation_summary: data.negotiation_summary,
-                      negotiation_talking_points: data.negotiation_talking_points,
-                      suggested_offer_low: data.suggested_offer_low,
-                      suggested_offer_high: data.suggested_offer_high,
-                      offer_rationale: data.offer_rationale,
-                    }))
-                  }
-                />
-              )}
 
             </div>
           </div>

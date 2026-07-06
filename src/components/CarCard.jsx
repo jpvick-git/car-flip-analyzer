@@ -4,6 +4,7 @@ import { formatCurrency } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
 import { calculateFlipMetrics } from "../utils/flipCalculator";
 import { calculateFlipDecision, recommendationStyles } from "../utils/flipDecision";
+import { getEffectiveTransportCost, hasTransportConfigured } from "../utils/transportCalculator";
 import {
   isPrivateParty,
   sourceLabel,
@@ -26,6 +27,7 @@ export default function CarCard({
 }) {
   const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
   const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
+  const transportCost = getEffectiveTransportCost(car);
 
   const flipMetrics = calculateFlipMetrics({
     resale,
@@ -34,6 +36,7 @@ export default function CarCard({
     taxRate: car.avg_tax_rate || 0,
     titleFee: car.title_fee || 0,
     buyerFeeRate: buyerFeeRate(car),
+    transportCost,
     fixedBid: car.max_bid,
   });
 
@@ -122,6 +125,17 @@ export default function CarCard({
             </span>
           </div>
         </div>
+
+        <p className="mt-2 text-xs text-slate-500">
+          Transport{" "}
+          {hasTransportConfigured(car) ? (
+            <span className="font-semibold tabular-nums text-slate-700">
+              {formatCurrency(transportCost)}
+            </span>
+          ) : (
+            <span className="italic text-slate-400">not set</span>
+          )}
+        </p>
 
         {/* Secondary: repair / resale */}
         <div className="mt-3 grid grid-cols-2 gap-2">

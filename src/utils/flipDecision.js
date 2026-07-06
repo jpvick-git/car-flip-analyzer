@@ -1,4 +1,5 @@
-import { parseRedFlags, isPrivateParty, askingPrice } from "./vehicleSource";
+import { parseRedFlags, isPrivateParty, askingPrice, isSalvageAuction } from "./vehicleSource";
+import { getEffectiveTransportCost, getTransportWarnings } from "./transportCalculator";
 import { parseKnownIssues, parseWearItems } from "./knownIssues";
 import { parseRepairItems } from "./repairBreakdown";
 
@@ -258,6 +259,7 @@ function computeFlipScore(vehicle, flipMetrics, context) {
     repairRatio,
     knownIssueCount,
     confidenceLabel,
+    transportCost = 0,
   } = context;
 
   let score = 50;
@@ -307,6 +309,12 @@ function computeFlipScore(vehicle, flipMetrics, context) {
   else if (confidenceLabel === "Low") score -= 10;
 
   if (vehicle?.needs_manual_review) score -= 12;
+
+  if (transportCost > 0 && profit + transportCost > 0) {
+    const transportShare = transportCost / (profit + transportCost);
+    if (transportShare > 0.35) score -= 15;
+    else if (transportShare > 0.25) score -= 8;
+  }
 
   // Backend override
   if (vehicle?.flip_score != null) {
@@ -363,7 +371,7 @@ function buildReasons(vehicle, context) {
 
 function buildWarnings(vehicle, context) {
   const warnings = [];
-  const { repairRatio, severeRedFlagCount, redFlagCount, knownIssueCount } = context;
+  const { repairRatio, severeRedFlagCount, redFlagCount, knownIssueCount, transportCost, profit } = context;
 
   parseRedFlags(vehicle).forEach((flag) => {
     const text = typeof flag === "string" ? flag : flag?.flag || flag?.message || flag?.description;
@@ -378,12 +386,12 @@ function buildWarnings(vehicle, context) {
     warnings.push("Repair costs eat a large share of resale value.");
   }
 
-  if (severeRedFlagCount > 0 && warnings.length < 4) {
+  if (severeRedFlagCount > 0 && warnings.length < 6) {
     warnings.push("Severe condition or structural concerns detected.");
   }
 
   const issues = parseKnownIssues(vehicle);
-  if (knownIssueCount > 0 && warnings.length < 4) {
+  if (knownIssueCount > 0 && warnings.length < 6) {
     const top = issues[0]?.issue || issues[0]?.item;
     if (top) warnings.push(`Platform risk: ${top}.`);
   }
@@ -393,11 +401,11 @@ function buildWarnings(vehicle, context) {
   }
 
   const miles = Number(vehicle?.odometer);
-  if (Number.isFinite(miles) && miles > 120000 && warnings.length < 4) {
+  if (Number.isFinite(miles) && miles > 120000 && warnings.length < 6) {
     warnings.push("Higher mileage increases recon and exit risk.");
   }
 
-  if (context.profit > 0 && context.profit < 500 && warnings.length < 4) {
+  if (profit > 0 && profit < 500 && warnings.length < 6) {
     warnings.push("Profit margin is thin — small overruns erase the deal.");
   }
 
@@ -405,7 +413,19 @@ function buildWarnings(vehicle, context) {
     warnings.push("Moderate repair exposure — verify estimates in person.");
   }
 
-  return [...new Set(warnings)].slice(0, 4);
+  const profitBeforeTransport = profit + (transportCost || 0);
+  const transportWarnings = getTransportWarnings({
+    vehicle,
+    distanceMiles: vehicle?.transport_distance_miles,
+    transportType: vehicle?.transport_type,
+    transportCost,
+    expectedProfitBeforeTransport: profitBeforeTransport,
+  });
+  transportWarnings.forEach((w) => {
+    if (warnings.length < 6) warnings.push(w);
+  });
+
+  return [...new Set(warnings)].slice(0, 6);
 }
 
 function deriveRecommendation(flipScore, context, vehicle, marginPercent) {
@@ -414,7 +434,22 @@ function deriveRecommendation(flipScore, context, vehicle, marginPercent) {
     if (Object.values(RECOMMENDATION).includes(rec)) return rec;
   }
 
-  const { profit, roiPercent, severeRedFlagCount, repairRatio, confidenceLabel, bid, resale } = context;
+  const {
+    profit,
+    roiPercent,
+    severeRedFlagCount,
+    repairRatio,
+    confidenceLabel,
+    bid,
+    resale,
+    transportCost,
+  } = context;
+
+  const profitBeforeTransport = profit + (transportCost || 0);
+  const transportHeavy =
+    transportCost > 0 &&
+    profitBeforeTransport > 0 &&
+    transportCost / profitBeforeTransport > 0.25;
 
   if (
     profit < 0 ||
@@ -426,6 +461,8 @@ function deriveRecommendation(flipScore, context, vehicle, marginPercent) {
     return RECOMMENDATION.PASS;
   }
 
+  let recommendation = RECOMMENDATION.MAYBE;
+
   if (
     flipScore >= 72 &&
     profit > 0 &&
@@ -434,14 +471,18 @@ function deriveRecommendation(flipScore, context, vehicle, marginPercent) {
     severeRedFlagCount === 0 &&
     repairRatio <= 0.35
   ) {
-    return RECOMMENDATION.BUY;
+    recommendation = RECOMMENDATION.BUY;
   }
 
   if (flipScore < 45 || profit < 0) {
     return RECOMMENDATION.PASS;
   }
 
-  return RECOMMENDATION.MAYBE;
+  if (recommendation === RECOMMENDATION.BUY && transportHeavy) {
+    return RECOMMENDATION.MAYBE;
+  }
+
+  return recommendation;
 }
 
 // ── Main exports ───────────────────────────────────────────────
@@ -463,6 +504,9 @@ export function calculateFlipDecision(vehicle, flipMetrics, options = {}) {
   }
 
   const marginPercent = Number(options.marginPercent ?? 15);
+  const transportCost = Math.round(
+    Number(flipMetrics.transportCost) || getEffectiveTransportCost(vehicle)
+  );
   const profit = Math.round(Number(flipMetrics.profit) || 0);
   const bid = Math.round(Number(flipMetrics.bid) || 0);
   const resale = Math.round(Number(flipMetrics.resale) || getResaleAmount(vehicle));
@@ -475,7 +519,15 @@ export function calculateFlipDecision(vehicle, flipMetrics, options = {}) {
   const severeRedFlagCount = countSevereRedFlags(vehicle);
   const repairRatio = resale > 0 ? repair / resale : 1;
   const knownIssueCount = parseKnownIssues(vehicle).length + parseWearItems(vehicle).length;
-  const confidenceLabel = inferEstimateConfidence(vehicle);
+  let confidenceLabel = inferEstimateConfidence(vehicle);
+
+  if (
+    vehicle?.transport_type === "drive_home" &&
+    isSalvageAuction(vehicle) &&
+    confidenceLabel === "High"
+  ) {
+    confidenceLabel = "Medium";
+  }
 
   const context = {
     profit,
@@ -488,6 +540,7 @@ export function calculateFlipDecision(vehicle, flipMetrics, options = {}) {
     repairRatio,
     knownIssueCount,
     confidenceLabel,
+    transportCost,
   };
 
   const flipScore = computeFlipScore(vehicle, flipMetrics, context);

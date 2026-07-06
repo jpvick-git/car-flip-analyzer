@@ -86,3 +86,22 @@ def normalize_vehicle(vehicle: dict) -> dict:
         )
 
     return out
+
+
+def effective_transport_cost(vehicle: dict) -> int:
+    """Resolved transport cost: manual override, then estimate, else 0."""
+    if not vehicle:
+        return 0
+    override = vehicle.get("transport_cost_manual_override")
+    if override is not None and str(override).strip() != "":
+        try:
+            return max(0, int(float(override)))
+        except (TypeError, ValueError):
+            pass
+    estimate = vehicle.get("transport_cost_estimate")
+    if estimate is not None and str(estimate).strip() != "":
+        try:
+            return max(0, int(float(estimate)))
+        except (TypeError, ValueError):
+            pass
+    return 0

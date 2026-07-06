@@ -40,6 +40,13 @@ def _ensure_schema_columns():
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS suggested_offer_low INTEGER",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS suggested_offer_high INTEGER",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS offer_rationale TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS transport_pickup_location TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS transport_delivery_location TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS transport_distance_miles NUMERIC",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS transport_type TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS transport_cost_estimate NUMERIC",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS transport_cost_manual_override NUMERIC",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS transport_notes TEXT",
         ):
             conn.execute(text(stmt))
 
@@ -54,6 +61,25 @@ class RepairItem(BaseModel):
 
 class RepairUpdatePayload(BaseModel):
     repair_items: list[RepairItem]
+
+
+TRANSPORT_TYPES = frozenset({
+    "local_tow",
+    "self_pickup",
+    "open_carrier",
+    "enclosed_carrier",
+    "drive_home",
+})
+
+
+class TransportUpdatePayload(BaseModel):
+    transport_pickup_location: str | None = None
+    transport_delivery_location: str | None = None
+    transport_distance_miles: float | None = None
+    transport_type: str | None = None
+    transport_cost_estimate: int | None = None
+    transport_cost_manual_override: int | None = None
+    transport_notes: str | None = None
 
 
 # --------------------------------------------------------------
@@ -157,6 +183,71 @@ def update_vehicle_repair(
         "repair_estimate": total,
         "repair_breakdown": items,
     }
+
+
+@router.patch("/vehicle/{vehicle_id}/transport")
+def update_vehicle_transport(
+    vehicle_id: int,
+    payload: TransportUpdatePayload,
+    current_user: dict = Depends(get_current_user),
+):
+    require_not_demo(current_user)
+    owner_id = get_vehicle_owner_id(current_user)
+
+    transport_type = payload.transport_type
+    if transport_type is not None and transport_type not in TRANSPORT_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid transport type")
+
+    manual_override = payload.transport_cost_manual_override
+    if manual_override is not None and manual_override < 0:
+        raise HTTPException(status_code=400, detail="Manual transport override cannot be negative")
+
+    distance = payload.transport_distance_miles
+    if distance is not None and distance < 0:
+        raise HTTPException(status_code=400, detail="Distance cannot be negative")
+
+    estimate = payload.transport_cost_estimate
+    if estimate is not None and estimate < 0:
+        raise HTTPException(status_code=400, detail="Transport estimate cannot be negative")
+
+    with engine.begin() as conn:
+        result = conn.execute(
+            text("""
+                UPDATE user_vehicles
+                SET transport_pickup_location = :pickup,
+                    transport_delivery_location = :delivery,
+                    transport_distance_miles = :distance,
+                    transport_type = COALESCE(:transport_type, transport_type, 'local_tow'),
+                    transport_cost_estimate = :estimate,
+                    transport_cost_manual_override = :manual_override,
+                    transport_notes = :notes,
+                    updated_at = NOW()
+                WHERE id = :id AND user_id = :uid
+            """),
+            {
+                "pickup": payload.transport_pickup_location,
+                "delivery": payload.transport_delivery_location,
+                "distance": distance,
+                "transport_type": transport_type or "local_tow",
+                "estimate": estimate,
+                "manual_override": manual_override,
+                "notes": payload.transport_notes,
+                "id": vehicle_id,
+                "uid": owner_id,
+            },
+        )
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Vehicle not found")
+
+        row = conn.execute(
+            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
+            {"id": vehicle_id, "uid": owner_id},
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+
+    return normalize_vehicle(enrich_vehicle(dict(row._mapping)))
 
 
 @router.post("/vehicle/{vehicle_id}/known_issues")

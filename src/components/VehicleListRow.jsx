@@ -13,6 +13,7 @@ import { formatCurrency } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
 import { calculateFlipMetrics } from "../utils/flipCalculator";
 import { calculateFlipDecision, recommendationStyles } from "../utils/flipDecision";
+import { getEffectiveTransportCost, hasTransportConfigured } from "../utils/transportCalculator";
 import {
   isPrivateParty,
   sourceLabel,
@@ -38,6 +39,7 @@ export default function VehicleListRow({
 
   const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
   const resale = Number(car.resale_estimate || car.ai_resale_estimate || 0);
+  const transportCost = getEffectiveTransportCost(car);
   const flipMetrics = calculateFlipMetrics({
     resale,
     repair,
@@ -45,6 +47,7 @@ export default function VehicleListRow({
     taxRate: car.avg_tax_rate || 0,
     titleFee: car.title_fee || 0,
     buyerFeeRate: buyerFeeRate(car),
+    transportCost,
     fixedBid: car.max_bid,
   });
   const decision = calculateFlipDecision(car, flipMetrics, { marginPercent });
@@ -155,12 +158,15 @@ export default function VehicleListRow({
             {formatCurrency(decision.expectedProfit)}
             <span className="ml-1 text-xs font-semibold text-slate-400">profit</span>
           </p>
-          <p className="text-xs text-slate-500">
-            {maxOfferLabel(car)} {formatCurrency(flipMetrics.bid)} ·{" "}
-            <span className={decision.riskLevel === "Low" ? "text-emerald-600" : decision.riskLevel === "Medium" ? "text-amber-600" : "text-red-600"}>
-              {decision.riskLevel} risk
-            </span>
-          </p>
+        <p className="text-xs text-slate-500">
+          {maxOfferLabel(car)} {formatCurrency(flipMetrics.bid)} ·{" "}
+          <span className={decision.riskLevel === "Low" ? "text-emerald-600" : decision.riskLevel === "Medium" ? "text-amber-600" : "text-red-600"}>
+            {decision.riskLevel} risk
+          </span>
+          {hasTransportConfigured(car) && (
+            <> · Transport {formatCurrency(transportCost)}</>
+          )}
+        </p>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-lg border border-amber-100 bg-amber-50 p-2">

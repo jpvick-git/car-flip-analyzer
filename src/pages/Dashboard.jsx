@@ -25,6 +25,7 @@ import CurrencyInput from "../components/CurrencyInput";
 import { formatCurrency, parseCurrencyInput } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
 import { calculateFlipMetrics } from "../utils/flipCalculator";
+import { getEffectiveTransportCost } from "../utils/transportCalculator";
 import { useFlipMetrics } from "../utils/useFlipMetrics";
 import {
   isPrivateParty,
@@ -372,6 +373,7 @@ function VehicleDetailModal({
     taxRate: car.avg_tax_rate || 0,
     titleFee: car.title_fee || 0,
     buyerFeeRate: buyerFeeRate(car),
+    transportCost: getEffectiveTransportCost(car),
   });
   const profitPositive = metrics.profit >= 0;
 
@@ -588,6 +590,7 @@ export default function Dashboard({
 
   // MAX BID CALC
   const calculateCarWithMargin = (car, marginInput) => {
+    const transportCost = getEffectiveTransportCost(car);
     const metrics = calculateFlipMetrics({
       resale: car.resale_estimate || car.ai_resale_estimate || 0,
       repair: car.repair_estimate || car.ai_repair_estimate || 0,
@@ -595,6 +598,7 @@ export default function Dashboard({
       taxRate: car.avg_tax_rate || 0,
       titleFee: car.title_fee || 0,
       buyerFeeRate: buyerFeeRate(car),
+      transportCost,
     });
 
     return {
@@ -605,6 +609,7 @@ export default function Dashboard({
       total_cost: metrics.totalCost,
       profit: metrics.profit,
       margin_actual: metrics.marginActual,
+      transport_cost: transportCost,
     };
   };
 

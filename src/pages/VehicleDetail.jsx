@@ -23,6 +23,8 @@ import { parseRepairItems } from "../utils/repairBreakdown";
 import { formatCurrency } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
 import { useFlipMetrics } from "../utils/useFlipMetrics";
+import TransportCostCard from "../components/TransportCostCard";
+import { getEffectiveTransportCost } from "../utils/transportCalculator";
 import { calculateFlipDecision } from "../utils/flipDecision";
 import {
   isPrivateParty,
@@ -47,6 +49,7 @@ export default function VehicleDetail() {
   const [states, setStates] = useState([]);
   const [selectedState, setSelectedState] = useState("");
   const [repairTotal, setRepairTotal] = useState(0);
+  const [previewTransportCost, setPreviewTransportCost] = useState(null);
 
   const isDemo = localStorage.getItem("is_demo") === "1";
   const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
@@ -95,12 +98,22 @@ export default function VehicleDetail() {
     return () => window.removeEventListener("keydown", handler);
   }, [lightbox, images.length]);
 
+  useEffect(() => {
+    setPreviewTransportCost(null);
+  }, [car?.id]);
+
   const stateData = states.find((s) => s.state_code === selectedState) || null;
   const overrideTax = stateData ? Number(stateData.avg_tax_rate) : null;
   const overrideTitle = stateData ? Number(stateData.title_fee) : null;
 
   const isPrivate = isPrivateParty(car);
   const asking = askingPrice(car);
+  const transportCost =
+    previewTransportCost !== null
+      ? previewTransportCost
+      : car
+        ? getEffectiveTransportCost(car)
+        : 0;
 
   const {
     bid,
@@ -121,6 +134,7 @@ export default function VehicleDetail() {
     taxRate: overrideTax !== null ? overrideTax : Number(car?.avg_tax_rate || 0),
     titleFee: overrideTitle !== null ? overrideTitle : Number(car?.title_fee || 0),
     buyerFeeRate: buyerFeeRate(car),
+    transportCost,
   });
 
   if (loading)
@@ -170,9 +184,14 @@ export default function VehicleDetail() {
 
   const flipDecision = calculateFlipDecision(
     car,
-    { bid, buyerFee, taxAmt, titleFee, repair, totalCost, profit, resale, taxRate, marginActual },
+    { bid, buyerFee, taxAmt, titleFee, repair, totalCost, profit, resale, taxRate, marginActual, transportCost },
     { marginPercent: margin }
   );
+
+  const handleTransportSave = (updatedVehicle) => {
+    setCar(updatedVehicle);
+    setPreviewTransportCost(null);
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -336,8 +355,17 @@ export default function VehicleDetail() {
             <div className="space-y-4 lg:sticky lg:top-20">
               <FlipDecisionCard
                 vehicle={car}
-                flipMetrics={{ bid, profit, resale, repair, marginActual }}
+                flipMetrics={{ bid, profit, resale, repair, marginActual, transportCost }}
                 decision={flipDecision}
+              />
+
+              <TransportCostCard
+                vehicle={car}
+                flipMetrics={{ bid, profit, transportCost }}
+                apiBase={API}
+                readOnly={isDemo}
+                onSave={handleTransportSave}
+                onPreviewChange={setPreviewTransportCost}
               />
 
               {/* Margin & tax controls */}
@@ -407,6 +435,12 @@ export default function VehicleDetail() {
                       <span>{costLabel(car)}</span>
                       <span className="tabular-nums text-slate-700">{formatCurrency(repair)}</span>
                     </div>
+                    {transportCost > 0 && (
+                      <div className="flex justify-between text-slate-500">
+                        <span>Transport</span>
+                        <span className="tabular-nums text-slate-700">{formatCurrency(transportCost)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-slate-500">
                       <span>{isPrivate ? "Retail Exit" : "Resale"}</span>
                       <span className="tabular-nums text-slate-700">{formatCurrency(resale)}</span>

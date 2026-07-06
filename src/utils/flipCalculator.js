@@ -5,10 +5,12 @@ export function calculateFlipMetrics({
   taxRate = 0,
   titleFee = 0,
   buyerFeeRate = 0.075,
+  transportCost = 0,
   fixedBid = null,
 }) {
   const resaleNum = Math.max(0, Number(resale) || 0);
   const repairNum = Math.max(0, Number(repair) || 0);
+  const transportNum = Math.max(0, Number(transportCost) || 0);
   const margin = Number(marginPercent) / 100;
   const tax = Number(taxRate) || 0;
   const title = Math.max(0, Number(titleFee) || 0);
@@ -21,7 +23,7 @@ export function calculateFlipMetrics({
     bid = Math.round(fixedBid);
   } else {
     const targetTotalCost = resaleNum - targetProfit;
-    const bidBudget = targetTotalCost - title - repairNum;
+    const bidBudget = targetTotalCost - title - repairNum - transportNum;
 
     if (bidBudget > 0) {
       const estimate = Math.round(bidBudget / feeMultiplier);
@@ -31,7 +33,7 @@ export function calculateFlipMetrics({
       for (let candidate = Math.max(0, estimate - 3); candidate <= estimate + 3; candidate++) {
         const buyerFee = Math.round(candidate * buyerFeeRate);
         const taxAmt = Math.round(candidate * (tax / 100));
-        const totalCost = candidate + buyerFee + taxAmt + title + repairNum;
+        const totalCost = candidate + buyerFee + taxAmt + title + repairNum + transportNum;
         const profit = resaleNum - totalCost;
         const score =
           Math.abs(totalCost - targetTotalCost) * 10 + Math.abs(profit - targetProfit);
@@ -48,7 +50,7 @@ export function calculateFlipMetrics({
 
   const buyerFee = Math.round(bid * buyerFeeRate);
   const taxAmt = Math.round(bid * (tax / 100));
-  const totalCost = bid + buyerFee + taxAmt + title + repairNum;
+  const totalCost = bid + buyerFee + taxAmt + title + repairNum + transportNum;
   const profit = resaleNum - totalCost;
   const marginActual = resaleNum > 0 ? Number(((profit / resaleNum) * 100).toFixed(1)) : 0;
 
@@ -58,6 +60,7 @@ export function calculateFlipMetrics({
     taxAmt,
     titleFee: title,
     repair: repairNum,
+    transportCost: transportNum,
     totalCost,
     profit,
     resale: resaleNum,
@@ -74,6 +77,7 @@ export function calculateMaxBidForMargin({
   marginPercent,
   taxRate = 0,
   titleFee = 0,
+  transportCost = 0,
 }) {
   return calculateFlipMetrics({
     resale,
@@ -81,6 +85,7 @@ export function calculateMaxBidForMargin({
     marginPercent,
     taxRate,
     titleFee,
+    transportCost,
   }).bid;
 }
 
@@ -92,6 +97,7 @@ export function calculateMetricsAtBid({
   marginPercent,
   taxRate = 0,
   titleFee = 0,
+  transportCost = 0,
 }) {
   return calculateFlipMetrics({
     resale,
@@ -99,6 +105,7 @@ export function calculateMetricsAtBid({
     marginPercent,
     taxRate,
     titleFee,
+    transportCost,
     fixedBid: bid,
   });
 }

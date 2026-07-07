@@ -262,223 +262,140 @@ export default function VehicleDetail() {
 
       {/* ── BODY ── */}
       <main className="w-full px-4 py-6 sm:px-6 xl:px-8 2xl:px-10">
-        {/* Copart-style top row: gallery | specs | action frame */}
-        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12 lg:gap-6">
+        {/*
+          Page-level layout:
+          - Left column flows normally: gallery, details, and report cards.
+          - Right column is a sticky action sidebar.
+          This prevents the large blank gap caused by a tall top-row card forcing
+          everything below the grid to wait until the full row finishes.
+        */}
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-12 xl:gap-6">
+          <div className="space-y-5 xl:col-span-7">
+{/* LEFT — Large photo gallery */}
+<div className="w-full">
+  {images.length > 0 ? (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div
+        className="group relative flex aspect-[4/3] cursor-zoom-in items-center justify-center bg-slate-900 lg:min-h-[420px] xl:min-h-[480px]"
+        onClick={() => setLightbox(activePhoto)}
+      >
+        <img
+          src={images[activePhoto]}
+          alt={`Photo ${activePhoto + 1}`}
+          className="h-full w-full object-contain"
+        />
 
-          {/* LEFT — Large photo gallery */}
-          <div className="lg:col-span-6 xl:col-span-6">
-            {images.length > 0 ? (
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div
-                  className="group relative flex aspect-[4/3] cursor-zoom-in items-center justify-center bg-slate-900 lg:min-h-[420px] xl:min-h-[480px]"
-                  onClick={() => setLightbox(activePhoto)}
-                >
-                  <img
-                    src={images[activePhoto]}
-                    alt={`Photo ${activePhoto + 1}`}
-                    className="h-full w-full object-contain"
-                  />
-
-                  <div className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
-                    <Images size={13} />
-                    {activePhoto + 1} / {images.length}
-                  </div>
-
-                  <div className="absolute right-3 top-3 rounded-full bg-black/60 p-2 text-white opacity-0 backdrop-blur transition group-hover:opacity-100">
-                    <Maximize2 size={16} />
-                  </div>
-
-                  {images.length > 1 && (
-                    <>
-                      <button
-                        aria-label="Previous photo"
-                        className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2.5 text-white opacity-80 backdrop-blur transition hover:bg-black/75"
-                        onClick={(e) => { e.stopPropagation(); setActivePhoto((activePhoto - 1 + images.length) % images.length); }}
-                      ><ChevronLeft size={22} /></button>
-                      <button
-                        aria-label="Next photo"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2.5 text-white opacity-80 backdrop-blur transition hover:bg-black/75"
-                        onClick={(e) => { e.stopPropagation(); setActivePhoto((activePhoto + 1) % images.length); }}
-                      ><ChevronRight size={22} /></button>
-                    </>
-                  )}
-                </div>
-
-                {images.length > 1 && (
-                  <div className="flex gap-2 overflow-x-auto border-t border-slate-100 p-3">
-                    {images.map((src, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setActivePhoto(i)}
-                        className={`relative h-16 w-24 shrink-0 overflow-hidden rounded-md transition sm:h-20 sm:w-28 ${
-                          i === activePhoto
-                            ? "ring-2 ring-blue-600 ring-offset-1"
-                            : "opacity-70 ring-1 ring-slate-200 hover:opacity-100"
-                        }`}
-                      >
-                        <img src={src} alt="" className="h-full w-full object-cover" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex aspect-[4/3] min-h-[320px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white text-sm font-medium text-slate-400">
-                No photos available
-              </div>
-            )}
-          </div>
-
-          {/* CENTER — Specs + flip decision + transport */}
-          <div className="space-y-4 lg:col-span-3 xl:col-span-3">
-            {details.length > 0 && (
-              <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-100 px-4 py-3">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Vehicle Details</h2>
-                </div>
-                <dl className="divide-y divide-slate-100">
-                  {details.map(([label, value]) => (
-                    <div
-                      key={label}
-                      className="flex items-start justify-between gap-4 px-4 py-2.5"
-                    >
-                      <dt className="shrink-0 text-sm text-slate-500">{label}</dt>
-                      <dd className={`text-right text-sm font-semibold text-slate-800 ${label === "VIN" ? "font-mono text-xs tracking-tight" : ""}`}>
-                        {value}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </section>
-            )}
-
-            <FlipDecisionCard
-              vehicle={car}
-              flipMetrics={{ bid, profit, resale, repair, marginActual, transportCost }}
-              decision={flipDecision}
-              hideNarrative
-            />
-
-            <TransportCostCard
-              vehicle={car}
-              flipMetrics={{ bid, profit, transportCost }}
-              apiBase={API}
-              readOnly={isDemo}
-              onSave={handleTransportSave}
-              onPreviewChange={setPreviewTransportCost}
-              userSettings={settings}
-            />
-          </div>
-
-          {/* RIGHT — Sticky deal controls frame (Copart bid panel) */}
-          <div className="lg:col-span-3 xl:col-span-3">
-            <div className="lg:sticky lg:top-[72px]">
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-100 px-4 py-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    Deal Controls
-                  </h3>
-                </div>
-                <div className="space-y-4 p-4">
-                  <div>
-                    <div className="mb-2 flex items-center justify-between text-sm">
-                      <span className="font-medium text-slate-700">Desired Margin</span>
-                      <span className="rounded-md bg-blue-50 px-2 py-0.5 text-sm font-bold tabular-nums text-blue-700">{margin}%</span>
-                    </div>
-                    <input
-                      type="range" min={0} max={40} value={margin}
-                      onChange={(e) => setMargin(Number(e.target.value))}
-                      className="h-2 w-full cursor-pointer appearance-none rounded-full accent-blue-600"
-                      style={{
-                        background: `linear-gradient(to right, #2563eb 0%, #2563eb ${marginFill}%, #e2e8f0 ${marginFill}%, #e2e8f0 100%)`,
-                      }}
-                    />
-                    <div className="mt-1 flex justify-between text-xs text-slate-400">
-                      <span>0%</span><span>40%</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Purchase State</label>
-                    <div className="relative">
-                      <select
-                        value={selectedState}
-                        onChange={(e) => setSelectedState(e.target.value)}
-                        className="w-full appearance-none rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 pr-10 text-sm font-medium text-slate-800 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                      >
-                        <option value="">— Use vehicle defaults —</option>
-                        {states.map((s) => (
-                          <option key={s.state_code} value={s.state_code}>
-                            {s.state_name} ({s.state_code}) — Tax: {s.avg_tax_rate}% | Title: {formatCurrency(s.title_fee)}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    </div>
-                    {stateData && (
-                      <p className="mt-1.5 text-xs text-slate-400">{stateData.notes}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2 rounded-xl bg-slate-50 p-4 text-sm">
-                    {!isPrivate && (
-                      <div className="flex justify-between text-slate-500">
-                        <span>Buyer Fee (7.5%)</span>
-                        <span className="tabular-nums text-slate-700">{formatCurrency(buyerFee)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-slate-500">
-                      <span>Tax ({taxRate}%)</span>
-                      <span className="tabular-nums text-slate-700">{formatCurrency(taxAmt)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-500">
-                      <span>Title Fee</span>
-                      <span className="tabular-nums text-slate-700">{formatCurrency(titleFee)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-500">
-                      <span>{costLabel(car)}</span>
-                      <span className="tabular-nums text-slate-700">{formatCurrency(repair)}</span>
-                    </div>
-                    {transportCost > 0 && (
-                      <div className="flex justify-between text-slate-500">
-                        <span>Transport</span>
-                        <span className="tabular-nums text-slate-700">{formatCurrency(transportCost)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-slate-500">
-                      <span>{isPrivate ? "Retail Exit" : "Resale"}</span>
-                      <span className="tabular-nums text-slate-700">{formatCurrency(resale)}</span>
-                    </div>
-                    <div className="mt-1 flex justify-between border-t border-slate-200 pt-2 font-semibold text-slate-900">
-                      <span>Total Cost</span>
-                      <span className="tabular-nums">{formatCurrency(totalCost)}</span>
-                    </div>
-                  </div>
-
-                  {car.lot_url && (
-                    <a
-                      href={car.lot_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 active:scale-[0.99]"
-                    >
-                      {isPrivate ? "View Listing" : "View on Copart"}
-                      <ExternalLink size={16} />
-                    </a>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
+          <Images size={13} />
+          {activePhoto + 1} / {images.length}
         </div>
 
-        {/* ── Buying report (below the fold) ── */}
-        <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-2 xl:gap-6">
-          <div className="space-y-5">
+        <div className="absolute right-3 top-3 rounded-full bg-black/60 p-2 text-white opacity-0 backdrop-blur transition group-hover:opacity-100">
+          <Maximize2 size={16} />
+        </div>
+
+        {images.length > 1 && (
+          <>
+            <button
+              aria-label="Previous photo"
+              className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2.5 text-white opacity-80 backdrop-blur transition hover:bg-black/75"
+              onClick={(e) => { e.stopPropagation(); setActivePhoto((activePhoto - 1 + images.length) % images.length); }}
+            ><ChevronLeft size={22} /></button>
+            <button
+              aria-label="Next photo"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2.5 text-white opacity-80 backdrop-blur transition hover:bg-black/75"
+              onClick={(e) => { e.stopPropagation(); setActivePhoto((activePhoto + 1) % images.length); }}
+            ><ChevronRight size={22} /></button>
+          </>
+        )}
+      </div>
+
+      {images.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto border-t border-slate-100 p-3">
+          {images.map((src, i) => (
+            <button
+              key={i}
+              onClick={() => setActivePhoto(i)}
+              className={`relative h-16 w-24 shrink-0 overflow-hidden rounded-md transition sm:h-20 sm:w-28 ${
+                i === activePhoto
+                  ? "ring-2 ring-blue-600 ring-offset-1"
+                  : "opacity-70 ring-1 ring-slate-200 hover:opacity-100"
+              }`}
+            >
+              <img src={src} alt="" className="h-full w-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  ) : (
+    <div className="flex aspect-[4/3] min-h-[320px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white text-sm font-medium text-slate-400">
+      No photos available
+    </div>
+  )}
+</div>
+
+
+{details.length > 0 && (
+  <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="border-b border-slate-100 px-4 py-3">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Vehicle Details</h2>
+    </div>
+    <dl className="divide-y divide-slate-100">
+      {details.map(([label, value]) => (
+        <div
+          key={label}
+          className="flex items-start justify-between gap-4 px-4 py-2.5"
+        >
+          <dt className="shrink-0 text-sm text-slate-500">{label}</dt>
+          <dd className={`text-right text-sm font-semibold text-slate-800 ${label === "VIN" ? "font-mono text-xs tracking-tight" : ""}`}>
+            {value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  </section>
+)}
+
+
             <DealSummaryCard
               vehicle={car}
               decision={flipDecision}
               flipMetrics={{ bid, profit, repair, transportCost }}
+            />
+
+            <RepairPlanCard
+              car={car}
+              apiBase={API}
+              readOnly={isDemo}
+              onTotalChange={setRepairTotal}
+              onUpdate={(data) => {
+                if (data.repair_estimate != null) {
+                  setRepairTotal(Number(data.repair_estimate) || 0);
+                } else if (Array.isArray(data.repair_breakdown)) {
+                  setRepairTotal(
+                    data.repair_breakdown.reduce((s, i) => s + (Number(i.cost) || 0), 0)
+                  );
+                }
+                setCar((prev) => ({
+                  ...prev,
+                  repair_difficulty_score: data.repair_difficulty_score,
+                  repair_difficulty_label: data.repair_difficulty_label,
+                  parts_availability: data.parts_availability,
+                  estimated_labor_hours: data.estimated_labor_hours,
+                  estimated_repair_days_min: data.estimated_repair_days_min,
+                  estimated_repair_days_max: data.estimated_repair_days_max,
+                  diy_friendly: data.diy_friendly,
+                  parts_needed: data.parts_needed,
+                  shop_services_needed: data.shop_services_needed,
+                  repair_plan_summary: data.repair_plan_summary,
+                  repair_plan_warnings: data.repair_plan_warnings,
+                  hidden_damage_risks: data.hidden_damage_risks,
+                  repair_estimate: data.repair_estimate ?? prev.repair_estimate,
+                  repair_details: data.repair_details ?? prev.repair_details,
+                  repair_breakdown: data.repair_breakdown ?? prev.repair_breakdown,
+                }));
+              }}
             />
 
             <DealRisksCard
@@ -523,41 +440,122 @@ export default function VehicleDetail() {
             <RawAIDetailsCard car={car} />
           </div>
 
-          <div className="space-y-5">
-            <RepairPlanCard
-              car={car}
-              apiBase={API}
-              readOnly={isDemo}
-              onTotalChange={setRepairTotal}
-              onUpdate={(data) => {
-                if (data.repair_estimate != null) {
-                  setRepairTotal(Number(data.repair_estimate) || 0);
-                } else if (Array.isArray(data.repair_breakdown)) {
-                  setRepairTotal(
-                    data.repair_breakdown.reduce((s, i) => s + (Number(i.cost) || 0), 0)
-                  );
-                }
-                setCar((prev) => ({
-                  ...prev,
-                  repair_difficulty_score: data.repair_difficulty_score,
-                  repair_difficulty_label: data.repair_difficulty_label,
-                  parts_availability: data.parts_availability,
-                  estimated_labor_hours: data.estimated_labor_hours,
-                  estimated_repair_days_min: data.estimated_repair_days_min,
-                  estimated_repair_days_max: data.estimated_repair_days_max,
-                  diy_friendly: data.diy_friendly,
-                  parts_needed: data.parts_needed,
-                  shop_services_needed: data.shop_services_needed,
-                  repair_plan_summary: data.repair_plan_summary,
-                  repair_plan_warnings: data.repair_plan_warnings,
-                  hidden_damage_risks: data.hidden_damage_risks,
-                  repair_estimate: data.repair_estimate ?? prev.repair_estimate,
-                  repair_details: data.repair_details ?? prev.repair_details,
-                  repair_breakdown: data.repair_breakdown ?? prev.repair_breakdown,
-                }));
-              }}
-            />
-          </div>
+          <aside className="space-y-4 xl:col-span-5">
+            <div className="space-y-4 xl:sticky xl:top-[72px]">
+              <FlipDecisionCard
+                vehicle={car}
+                flipMetrics={{ bid, profit, resale, repair, marginActual, transportCost }}
+                decision={flipDecision}
+                hideNarrative
+              />
+
+              <TransportCostCard
+                vehicle={car}
+                flipMetrics={{ bid, profit, transportCost }}
+                apiBase={API}
+                readOnly={isDemo}
+                onSave={handleTransportSave}
+                onPreviewChange={setPreviewTransportCost}
+                userSettings={settings}
+              />
+
+<div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+  <div className="border-b border-slate-100 px-4 py-3">
+    <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+      Deal Controls
+    </h3>
+  </div>
+  <div className="space-y-4 p-4">
+    <div>
+      <div className="mb-2 flex items-center justify-between text-sm">
+        <span className="font-medium text-slate-700">Desired Margin</span>
+        <span className="rounded-md bg-blue-50 px-2 py-0.5 text-sm font-bold tabular-nums text-blue-700">{margin}%</span>
+      </div>
+      <input
+        type="range" min={0} max={40} value={margin}
+        onChange={(e) => setMargin(Number(e.target.value))}
+        className="h-2 w-full cursor-pointer appearance-none rounded-full accent-blue-600"
+        style={{
+          background: `linear-gradient(to right, #2563eb 0%, #2563eb ${marginFill}%, #e2e8f0 ${marginFill}%, #e2e8f0 100%)`,
+        }}
+      />
+      <div className="mt-1 flex justify-between text-xs text-slate-400">
+        <span>0%</span><span>40%</span>
+      </div>
+    </div>
+
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-slate-700">Purchase State</label>
+      <div className="relative">
+        <select
+          value={selectedState}
+          onChange={(e) => setSelectedState(e.target.value)}
+          className="w-full appearance-none rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 pr-10 text-sm font-medium text-slate-800 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+        >
+          <option value="">— Use vehicle defaults —</option>
+          {states.map((s) => (
+            <option key={s.state_code} value={s.state_code}>
+              {s.state_name} ({s.state_code}) — Tax: {s.avg_tax_rate}% | Title: {formatCurrency(s.title_fee)}
+            </option>
+          ))}
+        </select>
+        <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      </div>
+      {stateData && (
+        <p className="mt-1.5 text-xs text-slate-400">{stateData.notes}</p>
+      )}
+    </div>
+
+    <div className="space-y-2 rounded-xl bg-slate-50 p-4 text-sm">
+      {!isPrivate && (
+        <div className="flex justify-between text-slate-500">
+          <span>Buyer Fee (7.5%)</span>
+          <span className="tabular-nums text-slate-700">{formatCurrency(buyerFee)}</span>
+        </div>
+      )}
+      <div className="flex justify-between text-slate-500">
+        <span>Tax ({taxRate}%)</span>
+        <span className="tabular-nums text-slate-700">{formatCurrency(taxAmt)}</span>
+      </div>
+      <div className="flex justify-between text-slate-500">
+        <span>Title Fee</span>
+        <span className="tabular-nums text-slate-700">{formatCurrency(titleFee)}</span>
+      </div>
+      <div className="flex justify-between text-slate-500">
+        <span>{costLabel(car)}</span>
+        <span className="tabular-nums text-slate-700">{formatCurrency(repair)}</span>
+      </div>
+      {transportCost > 0 && (
+        <div className="flex justify-between text-slate-500">
+          <span>Transport</span>
+          <span className="tabular-nums text-slate-700">{formatCurrency(transportCost)}</span>
+        </div>
+      )}
+      <div className="flex justify-between text-slate-500">
+        <span>{isPrivate ? "Retail Exit" : "Resale"}</span>
+        <span className="tabular-nums text-slate-700">{formatCurrency(resale)}</span>
+      </div>
+      <div className="mt-1 flex justify-between border-t border-slate-200 pt-2 font-semibold text-slate-900">
+        <span>Total Cost</span>
+        <span className="tabular-nums">{formatCurrency(totalCost)}</span>
+      </div>
+    </div>
+
+    {car.lot_url && (
+      <a
+        href={car.lot_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 active:scale-[0.99]"
+      >
+        {isPrivate ? "View Listing" : "View on Copart"}
+        <ExternalLink size={16} />
+      </a>
+    )}
+  </div>
+</div>
+            </div>
+          </aside>
         </div>
 
         <p className="mt-10 border-t border-slate-200 pt-6 text-center text-xs leading-relaxed text-slate-400">

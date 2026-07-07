@@ -266,7 +266,7 @@ export default function VehicleDetail() {
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12 lg:gap-6">
 
           {/* LEFT — Large photo gallery */}
-          <div className="lg:col-span-6 xl:col-span-7">
+          <div className="lg:col-span-6 xl:col-span-6">
             {images.length > 0 ? (
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div
@@ -330,7 +330,7 @@ export default function VehicleDetail() {
           </div>
 
           {/* CENTER — Specs + flip decision + transport */}
-          <div className="space-y-4 lg:col-span-3">
+          <div className="space-y-4 lg:col-span-3 xl:col-span-3">
             {details.length > 0 && (
               <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 px-4 py-3">
@@ -371,8 +371,8 @@ export default function VehicleDetail() {
           </div>
 
           {/* RIGHT — Sticky deal controls frame (Copart bid panel) */}
-          <div className="lg:col-span-3">
-            <div className="lg:sticky lg:top-[52px]">
+          <div className="lg:col-span-3 xl:col-span-3">
+            <div className="lg:sticky lg:top-[72px]">
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 px-4 py-3">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">

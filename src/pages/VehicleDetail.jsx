@@ -262,17 +262,15 @@ export default function VehicleDetail() {
 
       {/* ── BODY ── */}
       <main className="w-full px-4 py-6 sm:px-6 xl:px-8 2xl:px-10">
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:items-start">
+        {/* Copart-style top row: gallery | specs | action frame */}
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12 lg:gap-6">
 
-          {/* LEFT — Gallery + vehicle details */}
-          <div className="space-y-4 xl:col-span-5 2xl:col-span-4">
-
-            {/* Gallery */}
+          {/* LEFT — Large photo gallery */}
+          <div className="lg:col-span-6 xl:col-span-7">
             {images.length > 0 ? (
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                {/* Main photo */}
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div
-                  className="group relative flex h-56 cursor-zoom-in items-center justify-center bg-slate-900 sm:h-72 xl:h-[320px]"
+                  className="group relative flex aspect-[4/3] cursor-zoom-in items-center justify-center bg-slate-900 lg:min-h-[420px] xl:min-h-[480px]"
                   onClick={() => setLightbox(activePhoto)}
                 >
                   <img
@@ -281,13 +279,11 @@ export default function VehicleDetail() {
                     className="h-full w-full object-contain"
                   />
 
-                  {/* counter */}
                   <div className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
                     <Images size={13} />
                     {activePhoto + 1} / {images.length}
                   </div>
 
-                  {/* expand hint */}
                   <div className="absolute right-3 top-3 rounded-full bg-black/60 p-2 text-white opacity-0 backdrop-blur transition group-hover:opacity-100">
                     <Maximize2 size={16} />
                   </div>
@@ -296,55 +292,58 @@ export default function VehicleDetail() {
                     <>
                       <button
                         aria-label="Previous photo"
-                        className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white opacity-0 backdrop-blur transition hover:bg-black/75 group-hover:opacity-100"
+                        className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2.5 text-white opacity-80 backdrop-blur transition hover:bg-black/75"
                         onClick={(e) => { e.stopPropagation(); setActivePhoto((activePhoto - 1 + images.length) % images.length); }}
-                      ><ChevronLeft size={20} /></button>
+                      ><ChevronLeft size={22} /></button>
                       <button
                         aria-label="Next photo"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white opacity-0 backdrop-blur transition hover:bg-black/75 group-hover:opacity-100"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2.5 text-white opacity-80 backdrop-blur transition hover:bg-black/75"
                         onClick={(e) => { e.stopPropagation(); setActivePhoto((activePhoto + 1) % images.length); }}
-                      ><ChevronRight size={20} /></button>
+                      ><ChevronRight size={22} /></button>
                     </>
                   )}
                 </div>
 
-                {/* Thumbnail strip */}
-                <div className="grid grid-cols-5 gap-2 border-t border-slate-100 p-3 sm:grid-cols-6 xl:grid-cols-8">
-                  {images.map((src, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setActivePhoto(i)}
-                      className={`relative aspect-[4/3] overflow-hidden rounded-lg transition ${
-                        i === activePhoto
-                          ? "ring-2 ring-blue-600 ring-offset-1"
-                          : "opacity-70 ring-1 ring-slate-200 hover:opacity-100"
-                      }`}
-                    >
-                      <img src={src} alt="" className="h-full w-full object-cover" />
-                    </button>
-                  ))}
-                </div>
+                {images.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto border-t border-slate-100 p-3">
+                    {images.map((src, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setActivePhoto(i)}
+                        className={`relative h-16 w-24 shrink-0 overflow-hidden rounded-md transition sm:h-20 sm:w-28 ${
+                          i === activePhoto
+                            ? "ring-2 ring-blue-600 ring-offset-1"
+                            : "opacity-70 ring-1 ring-slate-200 hover:opacity-100"
+                        }`}
+                      >
+                        <img src={src} alt="" className="h-full w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="flex h-72 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white text-sm font-medium text-slate-400">
+              <div className="flex aspect-[4/3] min-h-[320px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white text-sm font-medium text-slate-400">
                 No photos available
               </div>
             )}
+          </div>
 
-            {/* Vehicle Details */}
+          {/* CENTER — Specs + flip decision + transport */}
+          <div className="space-y-4 lg:col-span-3">
             {details.length > 0 && (
-              <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 px-4 py-3">
                   <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Vehicle Details</h2>
                 </div>
-                <dl className="grid grid-cols-2 gap-px bg-slate-100 xl:grid-cols-3">
+                <dl className="divide-y divide-slate-100">
                   {details.map(([label, value]) => (
                     <div
                       key={label}
-                      className="flex flex-col gap-0.5 bg-white px-3 py-2.5"
+                      className="flex items-start justify-between gap-4 px-4 py-2.5"
                     >
-                      <dt className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</dt>
-                      <dd className={`text-sm font-semibold text-slate-800 ${label === "VIN" ? "font-mono text-xs tracking-tight" : ""}`}>
+                      <dt className="shrink-0 text-sm text-slate-500">{label}</dt>
+                      <dd className={`text-right text-sm font-semibold text-slate-800 ${label === "VIN" ? "font-mono text-xs tracking-tight" : ""}`}>
                         {value}
                       </dd>
                     </div>
@@ -352,29 +351,29 @@ export default function VehicleDetail() {
                 </dl>
               </section>
             )}
+
+            <FlipDecisionCard
+              vehicle={car}
+              flipMetrics={{ bid, profit, resale, repair, marginActual, transportCost }}
+              decision={flipDecision}
+              hideNarrative
+            />
+
+            <TransportCostCard
+              vehicle={car}
+              flipMetrics={{ bid, profit, transportCost }}
+              apiBase={API}
+              readOnly={isDemo}
+              onSave={handleTransportSave}
+              onPreviewChange={setPreviewTransportCost}
+              userSettings={settings}
+            />
           </div>
 
-          {/* RIGHT — Flip decision, transport & controls side-by-side */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:col-span-7 xl:grid-cols-3 2xl:col-span-8">
-              <FlipDecisionCard
-                vehicle={car}
-                flipMetrics={{ bid, profit, resale, repair, marginActual, transportCost }}
-                decision={flipDecision}
-                hideNarrative
-              />
-
-              <TransportCostCard
-                vehicle={car}
-                flipMetrics={{ bid, profit, transportCost }}
-                apiBase={API}
-                readOnly={isDemo}
-                onSave={handleTransportSave}
-                onPreviewChange={setPreviewTransportCost}
-                userSettings={settings}
-              />
-
-              {/* Margin & tax controls */}
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:col-span-2 xl:col-span-1">
+          {/* RIGHT — Sticky deal controls frame (Copart bid panel) */}
+          <div className="lg:col-span-3">
+            <div className="lg:sticky lg:top-[52px]">
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 px-4 py-3">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                     Deal Controls
@@ -469,6 +468,7 @@ export default function VehicleDetail() {
                   )}
                 </div>
               </div>
+            </div>
           </div>
         </div>
 

@@ -204,7 +204,7 @@ export default function VehicleDetail() {
 
       {/* ── STICKY NAV ── */}
       <nav className="sticky top-0 z-20 border-b border-white/10 bg-slate-900/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center px-4 py-3 sm:px-6">
+        <div className="flex w-full items-center px-4 py-3 sm:px-6 xl:px-8">
           <button
             onClick={() => navigate("/")}
             className="group flex items-center gap-2 text-sm font-medium text-slate-300 transition hover:text-white"
@@ -219,7 +219,7 @@ export default function VehicleDetail() {
       <header className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800">
         <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-blue-600/20 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-24 left-1/3 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
-        <div className="relative mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
+        <div className="relative w-full px-4 py-6 sm:px-6 sm:py-8 xl:px-8">
           <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
             {formatVehicleTitle(car)}
           </h1>
@@ -261,18 +261,18 @@ export default function VehicleDetail() {
       </header>
 
       {/* ── BODY ── */}
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <main className="w-full px-4 py-6 sm:px-6 xl:px-8 2xl:px-10">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:items-start">
 
-          {/* LEFT — Gallery + basic details */}
-          <div className="space-y-6 lg:col-span-7">
+          {/* LEFT — Gallery + vehicle details */}
+          <div className="space-y-4 xl:col-span-5 2xl:col-span-4">
 
             {/* Gallery */}
             {images.length > 0 ? (
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 {/* Main photo */}
                 <div
-                  className="group relative flex aspect-[16/10] cursor-zoom-in items-center justify-center bg-slate-900"
+                  className="group relative flex h-56 cursor-zoom-in items-center justify-center bg-slate-900 sm:h-72 xl:h-[320px]"
                   onClick={() => setLightbox(activePhoto)}
                 >
                   <img
@@ -309,7 +309,7 @@ export default function VehicleDetail() {
                 </div>
 
                 {/* Thumbnail strip */}
-                <div className="grid grid-cols-5 gap-2 border-t border-slate-100 p-3 sm:grid-cols-6">
+                <div className="grid grid-cols-5 gap-2 border-t border-slate-100 p-3 sm:grid-cols-6 xl:grid-cols-8">
                   {images.map((src, i) => (
                     <button
                       key={i}
@@ -334,19 +334,17 @@ export default function VehicleDetail() {
             {/* Vehicle Details */}
             {details.length > 0 && (
               <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-100 px-5 py-4">
+                <div className="border-b border-slate-100 px-4 py-3">
                   <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Vehicle Details</h2>
                 </div>
-                <dl className="grid grid-cols-1 sm:grid-cols-2">
-                  {details.map(([label, value], idx) => (
+                <dl className="grid grid-cols-2 gap-px bg-slate-100 xl:grid-cols-3">
+                  {details.map(([label, value]) => (
                     <div
                       key={label}
-                      className={`flex items-start justify-between gap-4 px-5 py-3 ${
-                        idx % 2 === 0 ? "sm:border-r sm:border-slate-100" : ""
-                      } border-b border-slate-100`}
+                      className="flex flex-col gap-0.5 bg-white px-3 py-2.5"
                     >
-                      <dt className="shrink-0 text-sm text-slate-500">{label}</dt>
-                      <dd className={`text-right text-sm font-semibold text-slate-800 ${label === "VIN" ? "font-mono tracking-tight" : ""}`}>
+                      <dt className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</dt>
+                      <dd className={`text-sm font-semibold text-slate-800 ${label === "VIN" ? "font-mono text-xs tracking-tight" : ""}`}>
                         {value}
                       </dd>
                     </div>
@@ -356,9 +354,8 @@ export default function VehicleDetail() {
             )}
           </div>
 
-          {/* RIGHT — Flip decision + margin controls */}
-          <div className="lg:col-span-5">
-            <div className="space-y-4 lg:sticky lg:top-20">
+          {/* RIGHT — Flip decision, transport & controls side-by-side */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:col-span-7 xl:grid-cols-3 2xl:col-span-8">
               <FlipDecisionCard
                 vehicle={car}
                 flipMetrics={{ bid, profit, resale, repair, marginActual, transportCost }}
@@ -377,13 +374,13 @@ export default function VehicleDetail() {
               />
 
               {/* Margin & tax controls */}
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-100 px-5 py-4">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:col-span-2 xl:col-span-1">
+                <div className="border-b border-slate-100 px-4 py-3">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                     Deal Controls
                   </h3>
                 </div>
-                <div className="space-y-5 p-5">
+                <div className="space-y-4 p-4">
                   <div>
                     <div className="mb-2 flex items-center justify-between text-sm">
                       <span className="font-medium text-slate-700">Desired Margin</span>
@@ -464,7 +461,7 @@ export default function VehicleDetail() {
                       href={car.lot_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 active:scale-[0.99]"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 active:scale-[0.99]"
                     >
                       {isPrivate ? "View Listing" : "View on Copart"}
                       <ExternalLink size={16} />
@@ -472,92 +469,95 @@ export default function VehicleDetail() {
                   )}
                 </div>
               </div>
-            </div>
           </div>
         </div>
 
         {/* ── Buying report (below the fold) ── */}
-        <div className="mt-8 space-y-6">
-          <DealSummaryCard
-            vehicle={car}
-            decision={flipDecision}
-            flipMetrics={{ bid, profit, repair, transportCost }}
-          />
+        <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-2 xl:gap-6">
+          <div className="space-y-5">
+            <DealSummaryCard
+              vehicle={car}
+              decision={flipDecision}
+              flipMetrics={{ bid, profit, repair, transportCost }}
+            />
 
-          <RepairPlanCard
-            car={car}
-            apiBase={API}
-            readOnly={isDemo}
-            onTotalChange={setRepairTotal}
-            onUpdate={(data) => {
-              if (data.repair_estimate != null) {
-                setRepairTotal(Number(data.repair_estimate) || 0);
-              } else if (Array.isArray(data.repair_breakdown)) {
-                setRepairTotal(
-                  data.repair_breakdown.reduce((s, i) => s + (Number(i.cost) || 0), 0)
-                );
-              }
-              setCar((prev) => ({
-                ...prev,
-                repair_difficulty_score: data.repair_difficulty_score,
-                repair_difficulty_label: data.repair_difficulty_label,
-                parts_availability: data.parts_availability,
-                estimated_labor_hours: data.estimated_labor_hours,
-                estimated_repair_days_min: data.estimated_repair_days_min,
-                estimated_repair_days_max: data.estimated_repair_days_max,
-                diy_friendly: data.diy_friendly,
-                parts_needed: data.parts_needed,
-                shop_services_needed: data.shop_services_needed,
-                repair_plan_summary: data.repair_plan_summary,
-                repair_plan_warnings: data.repair_plan_warnings,
-                hidden_damage_risks: data.hidden_damage_risks,
-                repair_estimate: data.repair_estimate ?? prev.repair_estimate,
-                repair_details: data.repair_details ?? prev.repair_details,
-                repair_breakdown: data.repair_breakdown ?? prev.repair_breakdown,
-              }));
-            }}
-          />
+            <DealRisksCard
+              vehicle={car}
+              decision={flipDecision}
+              flipMetrics={{ profit, repair, transportCost }}
+              transportCost={transportCost}
+            />
 
-          <DealRisksCard
-            vehicle={car}
-            decision={flipDecision}
-            flipMetrics={{ profit, repair, transportCost }}
-            transportCost={transportCost}
-          />
+            {isPrivate && (
+              <NegotiationCard
+                car={car}
+                apiBase={API}
+                readOnly={isDemo}
+                onUpdate={(data) =>
+                  setCar((prev) => ({
+                    ...prev,
+                    negotiation_summary: data.negotiation_summary,
+                    negotiation_talking_points: data.negotiation_talking_points,
+                    suggested_offer_low: data.suggested_offer_low,
+                    suggested_offer_high: data.suggested_offer_high,
+                    offer_rationale: data.offer_rationale,
+                  }))
+                }
+              />
+            )}
 
-          {isPrivate && (
-            <NegotiationCard
+            <KnownIssuesCard
               car={car}
               apiBase={API}
               readOnly={isDemo}
               onUpdate={(data) =>
                 setCar((prev) => ({
                   ...prev,
-                  negotiation_summary: data.negotiation_summary,
-                  negotiation_talking_points: data.negotiation_talking_points,
-                  suggested_offer_low: data.suggested_offer_low,
-                  suggested_offer_high: data.suggested_offer_high,
-                  offer_rationale: data.offer_rationale,
+                  reliability_summary: data.reliability_summary,
+                  known_issues: data.known_issues,
+                  wear_items: data.wear_items,
                 }))
               }
             />
-          )}
 
-          <KnownIssuesCard
-            car={car}
-            apiBase={API}
-            readOnly={isDemo}
-            onUpdate={(data) =>
-              setCar((prev) => ({
-                ...prev,
-                reliability_summary: data.reliability_summary,
-                known_issues: data.known_issues,
-                wear_items: data.wear_items,
-              }))
-            }
-          />
+            <RawAIDetailsCard car={car} />
+          </div>
 
-          <RawAIDetailsCard car={car} />
+          <div className="space-y-5">
+            <RepairPlanCard
+              car={car}
+              apiBase={API}
+              readOnly={isDemo}
+              onTotalChange={setRepairTotal}
+              onUpdate={(data) => {
+                if (data.repair_estimate != null) {
+                  setRepairTotal(Number(data.repair_estimate) || 0);
+                } else if (Array.isArray(data.repair_breakdown)) {
+                  setRepairTotal(
+                    data.repair_breakdown.reduce((s, i) => s + (Number(i.cost) || 0), 0)
+                  );
+                }
+                setCar((prev) => ({
+                  ...prev,
+                  repair_difficulty_score: data.repair_difficulty_score,
+                  repair_difficulty_label: data.repair_difficulty_label,
+                  parts_availability: data.parts_availability,
+                  estimated_labor_hours: data.estimated_labor_hours,
+                  estimated_repair_days_min: data.estimated_repair_days_min,
+                  estimated_repair_days_max: data.estimated_repair_days_max,
+                  diy_friendly: data.diy_friendly,
+                  parts_needed: data.parts_needed,
+                  shop_services_needed: data.shop_services_needed,
+                  repair_plan_summary: data.repair_plan_summary,
+                  repair_plan_warnings: data.repair_plan_warnings,
+                  hidden_damage_risks: data.hidden_damage_risks,
+                  repair_estimate: data.repair_estimate ?? prev.repair_estimate,
+                  repair_details: data.repair_details ?? prev.repair_details,
+                  repair_breakdown: data.repair_breakdown ?? prev.repair_breakdown,
+                }));
+              }}
+            />
+          </div>
         </div>
 
         <p className="mt-10 border-t border-slate-200 pt-6 text-center text-xs leading-relaxed text-slate-400">

@@ -74,6 +74,9 @@ function ManualVehicleModal({ API, close, reload }) {
     rear_image: null,
     interior_image: null,
     dash_image: null,
+    extra_image_1: null,
+    extra_image_2: null,
+    extra_image_3: null,
   });
 
   const update = (e) =>
@@ -276,6 +279,9 @@ function ManualVehicleModal({ API, close, reload }) {
             ["rear_image", "Rear"],
             ["interior_image", "Interior"],
             ["dash_image", "Dash"],
+            ["extra_image_1", "Additional Photo 1 (optional)"],
+            ["extra_image_2", "Additional Photo 2 (optional)"],
+            ["extra_image_3", "Additional Photo 3 (optional)"],
           ].map(([key, label]) => (
             <div key={key} className="mb-3">
               <label className="mb-1 block text-sm font-medium text-slate-600">{label}</label>

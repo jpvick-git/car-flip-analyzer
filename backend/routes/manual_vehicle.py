@@ -44,6 +44,9 @@ async def add_manual_vehicle(
     rear_image: UploadFile = File(None),
     interior_image: UploadFile = File(None),
     dash_image: UploadFile = File(None),
+    extra_image_1: UploadFile = File(None),
+    extra_image_2: UploadFile = File(None),
+    extra_image_3: UploadFile = File(None),
 
     current_user=Depends(get_current_user),
 ):
@@ -58,17 +61,23 @@ async def add_manual_vehicle(
         os.makedirs(lot_dir, exist_ok=True)
 
         image_inputs = [
-            front_image, driver_image, passenger_image,
-            rear_image, interior_image, dash_image
+            (front_image, "front"),
+            (driver_image, "driver"),
+            (passenger_image, "passenger"),
+            (rear_image, "rear"),
+            (interior_image, "interior"),
+            (dash_image, "dash"),
+            (extra_image_1, "detail_1"),
+            (extra_image_2, "detail_2"),
+            (extra_image_3, "detail_3"),
         ]
 
         saved_image_urls = []
-        idx = 1
 
-        for file in image_inputs:
-            if file:
+        for file, label in image_inputs:
+            if file and file.filename:
                 ext = os.path.splitext(file.filename)[1] or ".jpg"
-                name = f"{lot_number}_Image_{idx}{ext}"
+                name = f"{lot_number}_{label}{ext}"
                 save_path = os.path.join(lot_dir, name)
 
                 with open(save_path, "wb") as buffer:
@@ -76,7 +85,6 @@ async def add_manual_vehicle(
 
                 url = f"{IMAGE_BASE_URL.rstrip('/')}/{lot_number}/{name}"
                 saved_image_urls.append(url)
-                idx += 1
 
         primary_image = saved_image_urls[0] if saved_image_urls else None
         asking_price_int = parse_money(asking_price)

@@ -37,17 +37,6 @@ export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
 
 			  {!isDemo && (
 			    <>
-			  {/* Upload CSV */}
-			  <button
-				onClick={() => {
-				  setMenuOpen(false);
-				  onUploadCSV();
-				}}
-				className="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-gray-100"
-			  >
-				Upload CSV
-			  </button>
-
 			  {/* Add Vehicle */}
 			  <button
 				onClick={() => {

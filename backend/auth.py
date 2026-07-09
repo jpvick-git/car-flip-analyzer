@@ -19,7 +19,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 DEMO_EMAIL = os.getenv("DEMO_EMAIL", "demo@carflipanalyzer.com")
 DAILY_VEHICLE_LIMIT = int(os.getenv("DAILY_VEHICLE_LIMIT", "2"))
-UPLOAD_EXEMPT_EMAIL = os.getenv("UPLOAD_EXEMPT_EMAIL", "jpvick@gmail.com")
+UPLOAD_EXEMPT_EMAILS = {
+    e.strip().lower()
+    for e in os.getenv("UPLOAD_EXEMPT_EMAIL", "jpvick@gmail.com").split(",")
+    if e.strip()
+}
 
 # --------------------------------------------------
 # PASSWORD HELPERS
@@ -86,7 +90,7 @@ def require_not_demo(current_user: dict):
 
 def is_upload_exempt(current_user: dict) -> bool:
     email = (current_user.get("email") or "").lower()
-    return email == UPLOAD_EXEMPT_EMAIL.lower()
+    return email in UPLOAD_EXEMPT_EMAILS
 
 def count_vehicles_added_today(user_id: int) -> int:
     with engine.connect() as conn:

@@ -7,7 +7,7 @@
 
 # testing
 /coverage
-
+login.txt
 # production
 /build
 

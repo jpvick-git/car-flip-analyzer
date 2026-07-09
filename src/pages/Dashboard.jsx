@@ -547,6 +547,15 @@ function VehicleDetailModal({
 //  HELPERS
 ///////////////////////////////////////////////////////////////////////////////////////////
 
+const PROCESSING_WINDOW_MS = 60 * 60 * 1000;
+
+function vehicleTimestamp(car) {
+  const raw = car.updated_at || car.created_at;
+  if (!raw) return null;
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
 function isCarReady(car) {
   if (!car.image_url) return false;
   const repairSet =
@@ -555,6 +564,12 @@ function isCarReady(car) {
     car.resale_estimate ?? car.ai_resale_estimate ?? 0
   );
   return repairSet && resale > 0;
+}
+
+function isCarProcessing(car) {
+  if (isCarReady(car)) return false;
+  const ts = vehicleTimestamp(car);
+  return ts != null && Date.now() - ts < PROCESSING_WINDOW_MS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -680,7 +695,7 @@ export default function Dashboard({
     const load = async () => {
       try {
         const list = await fetchVehicles();
-        if (list.some((car) => !isCarReady(car))) setDownloading(true);
+        if (list.some(isCarProcessing)) setDownloading(true);
       } catch (err) {
         console.error(err);
         setError("Failed to load vehicles");
@@ -699,7 +714,7 @@ export default function Dashboard({
     const interval = setInterval(async () => {
       try {
         const list = await fetchVehicles();
-        if (list.every(isCarReady)) setDownloading(false);
+        if (!list.some(isCarProcessing)) setDownloading(false);
       } catch (err) {
         console.error(err);
       }
@@ -768,19 +783,20 @@ export default function Dashboard({
     );
 
   const visibleCars = cars.filter(isCarReady);
+  const processingCars = cars.filter(isCarProcessing);
   const readyCount = visibleCars.length;
-  const totalCount = cars.length;
+  const processingCount = processingCars.length;
 
   return (
     <main className="min-h-screen bg-slate-100">
 
-      {downloading && totalCount > readyCount && (
+      {downloading && processingCount > 0 && (
         <div className="fixed top-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-blue-600 px-6 py-3 text-sm font-medium text-white shadow-lg">
           <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
           </svg>
-          Processing vehicles… ({readyCount} of {totalCount} ready)
+          Processing vehicles… ({readyCount} of {readyCount + processingCount} ready)
         </div>
       )}
 
@@ -861,7 +877,7 @@ export default function Dashboard({
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
               <Car size={22} />
             </div>
-            {totalCount > 0 && downloading ? (
+            {processingCount > 0 && downloading ? (
               <>
                 <p className="text-base font-semibold text-slate-700">Processing vehicles…</p>
                 <p className="mt-1 text-sm text-slate-500">

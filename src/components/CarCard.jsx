@@ -56,7 +56,7 @@ export default function CarCard({
   const saleDate = formatSaleDate(car);
 
   return (
-    <div className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <div className="group flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70 transition duration-200 hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-300/50">
       {/* Image */}
       <div className="relative">
         <img
@@ -64,11 +64,12 @@ export default function CarCard({
           alt={formatVehicleTitle(car)}
           className="h-52 w-full object-cover"
         />
-        <span className={`absolute left-3 top-3 rounded-lg px-2.5 py-1 text-xs font-bold tracking-wide shadow-sm ${styles.badge}`}>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-brand-navy/25 via-transparent to-transparent" />
+        <span className={`absolute left-3 top-3 rounded-xl px-2.5 py-1 text-xs font-bold tracking-wide shadow-sm ${styles.badge}`}>
           {decision.recommendation}
         </span>
         <div className="absolute right-3 top-3 flex items-center gap-1.5">
-          <span className="rounded-full bg-black/70 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">
+          <span className="rounded-full bg-brand-navy/75 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">
             Score {decision.flipScore}
           </span>
           {!isDemo && setMenuOpenId && setCarToDelete && (
@@ -77,19 +78,19 @@ export default function CarCard({
                 type="button"
                 aria-label="Vehicle options"
                 onClick={() => setMenuOpenId(menuOpenId === car.id ? null : car.id)}
-                className="rounded-full bg-black/70 p-1.5 text-white backdrop-blur transition hover:bg-black/85"
+                className="rounded-full bg-brand-navy/75 p-1.5 text-white backdrop-blur transition hover:bg-brand-navy/90"
               >
                 <MoreVertical size={16} />
               </button>
               {menuOpenId === car.id && (
-                <div className="absolute right-0 top-full z-10 mt-1 w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                <div className="absolute right-0 top-full z-10 mt-1.5 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-white py-1 shadow-xl shadow-slate-200/80">
                   <button
                     type="button"
                     onClick={() => {
                       setMenuOpenId(null);
                       setCarToDelete(car);
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                    className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
                   >
                     <Trash2 size={14} />
                     Delete
@@ -99,13 +100,13 @@ export default function CarCard({
             </div>
           )}
         </div>
-        <span className="absolute bottom-3 left-3 max-w-[70%] truncate rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white backdrop-blur">
+        <span className="absolute bottom-3 left-3 max-w-[70%] truncate rounded-full bg-brand-navy/70 px-3 py-1 text-xs font-medium text-white backdrop-blur">
           {sourceLabel(car)}
         </span>
       </div>
 
-      <div className="flex flex-1 flex-col p-5">
-        <h2 className="line-clamp-2 min-h-[3.25rem] text-lg font-bold leading-snug tracking-tight text-slate-900">
+      <div className="flex flex-1 flex-col p-5 sm:p-6">
+        <h2 className="line-clamp-2 min-h-[3.25rem] text-lg font-bold leading-snug tracking-tight text-brand-navy">
           {formatVehicleTitle(car)}
         </h2>
 
@@ -217,7 +218,7 @@ export default function CarCard({
 
         <button
           type="button"
-          className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 active:scale-[0.99]"
+          className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 active:scale-[0.99]"
           onClick={onViewDetails}
         >
           View Decision

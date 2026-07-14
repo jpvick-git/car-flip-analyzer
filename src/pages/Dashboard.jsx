@@ -772,7 +772,7 @@ export default function Dashboard({
 
   if (loading)
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-100">
+      <div className="flex h-screen items-center justify-center bg-brand-bg">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
           <p className="text-sm font-medium text-slate-500">Loading vehicles…</p>
@@ -782,8 +782,8 @@ export default function Dashboard({
 
   if (error)
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-2 bg-slate-100 px-6 text-center">
-        <p className="text-lg font-semibold text-slate-700">Something went wrong</p>
+      <div className="flex h-screen flex-col items-center justify-center gap-2 bg-brand-bg px-6 text-center">
+        <p className="text-lg font-semibold text-brand-navy">Something went wrong</p>
         <p className="text-sm text-red-600">{error}</p>
       </div>
     );
@@ -794,10 +794,11 @@ export default function Dashboard({
   const processingCount = processingCars.length;
 
   return (
-    <main className="min-h-screen bg-slate-100">
+    <main className="relative min-h-screen bg-brand-bg">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-white via-brand-bg/80 to-transparent" />
 
       {downloading && processingCount > 0 && (
-        <div className="fixed top-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-blue-600 px-6 py-3 text-sm font-medium text-white shadow-lg">
+        <div className="fixed top-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-blue-500/20 bg-blue-600 px-5 py-3 text-sm font-medium text-white shadow-xl shadow-blue-600/25">
           <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
@@ -806,7 +807,6 @@ export default function Dashboard({
         </div>
       )}
 
-      {/* ADD VEHICLE MODAL */}
       {showAddModal && (
         <ManualVehicleModal
           API={API}
@@ -815,7 +815,6 @@ export default function Dashboard({
         />
       )}
 
-      {/* CSV MODAL */}
       <CSVUploadModal
         showCSVModal={showCSVModal}
         setShowCSVModal={setShowCSVModal}
@@ -824,20 +823,23 @@ export default function Dashboard({
         uploadUserFile={uploadUserFile}
       />
 
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-
-        {/* PAGE HEADER */}
-        <div className="mb-6 flex items-end justify-between gap-4">
+      <div className="relative mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
+        <div className="mb-8 flex flex-col gap-5 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Vehicle Inventory</h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="text-sm font-medium text-blue-600">Your pipeline</p>
+            <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-brand-navy sm:text-4xl">
+              Vehicle Inventory
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-slate-500 sm:text-base">
               {visibleCars.length} {visibleCars.length === 1 ? "vehicle" : "vehicles"}
-              {isDemo ? " in demo preview" : " in your pipeline"}
+              {isDemo ? " in demo preview" : " ready for flip decisions"}
+              {processingCount > 0 ? ` · ${processingCount} processing` : ""}
             </p>
           </div>
+
           {visibleCars.length > 0 && (
             <div
-              className="flex shrink-0 items-center rounded-lg border border-slate-200 bg-white p-1 shadow-sm"
+              className="flex shrink-0 items-center self-start rounded-2xl border border-slate-200 bg-white p-1.5 shadow-lg shadow-slate-200/60 sm:self-auto"
               role="group"
               aria-label="View mode"
             >
@@ -845,10 +847,10 @@ export default function Dashboard({
                 type="button"
                 aria-pressed={viewMode === "grid"}
                 onClick={() => setInventoryViewMode("grid")}
-                className={`rounded-md p-2 transition ${
+                className={`rounded-xl p-2.5 transition ${
                   viewMode === "grid"
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                    ? "bg-blue-600 text-white shadow-sm shadow-blue-600/30"
+                    : "text-slate-500 hover:bg-brand-bg hover:text-slate-700"
                 }`}
                 title="Tile view"
               >
@@ -858,10 +860,10 @@ export default function Dashboard({
                 type="button"
                 aria-pressed={viewMode === "list"}
                 onClick={() => setInventoryViewMode("list")}
-                className={`rounded-md p-2 transition ${
+                className={`rounded-xl p-2.5 transition ${
                   viewMode === "list"
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                    ? "bg-blue-600 text-white shadow-sm shadow-blue-600/30"
+                    : "text-slate-500 hover:bg-brand-bg hover:text-slate-700"
                 }`}
                 title="List view"
               >
@@ -872,34 +874,39 @@ export default function Dashboard({
         </div>
 
         {isDemo && (
-          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="mb-6 rounded-2xl border border-amber-200/80 bg-amber-50 px-4 py-3.5 text-sm text-amber-800 shadow-sm shadow-amber-100/50">
             Demo mode — browse only. Upload, add, and delete are disabled.
           </div>
         )}
 
-        {/* GRID */}
         {visibleCars.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white py-20 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
-              <Car size={22} />
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-slate-200 bg-white px-6 py-24 text-center shadow-xl shadow-slate-200/70">
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-bg text-slate-400">
+              <Car size={26} />
             </div>
             {processingCount > 0 && downloading ? (
               <>
-                <p className="text-base font-semibold text-slate-700">Processing vehicles…</p>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="text-xl font-bold tracking-tight text-brand-navy">
+                  Processing vehicles…
+                </p>
+                <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
                   Cards will appear one at a time as images and AI estimates finish.
                 </p>
               </>
             ) : (
               <>
-                <p className="text-base font-semibold text-slate-700">No vehicles yet</p>
-                <p className="mt-1 text-sm text-slate-500">Add a vehicle or upload a CSV to get started.</p>
+                <p className="text-xl font-bold tracking-tight text-brand-navy">
+                  No vehicles yet
+                </p>
+                <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
+                  Add a vehicle from the menu to start analyzing your next flip.
+                </p>
               </>
             )}
           </div>
         ) : viewMode === "list" ? (
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="hidden bg-slate-800 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white lg:grid lg:grid-cols-[120px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-5">
+          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+            <div className="hidden border-b border-slate-200 bg-brand-navy px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-white/90 lg:grid lg:grid-cols-[120px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-5">
               <span>Image</span>
               <span>Lot info</span>
               <span>Vehicle info</span>
@@ -922,7 +929,7 @@ export default function Dashboard({
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 items-stretch gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 items-stretch gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4">
             {visibleCars.map((car) => (
               <CarCard
                 key={car.id}
@@ -944,11 +951,12 @@ export default function Dashboard({
         )}
       </div>
 
-      {/* DELETE CONFIRMATION */}
       {carToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-            <h2 className="text-lg font-bold text-slate-900">Delete vehicle?</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-navy/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-7 shadow-2xl shadow-slate-900/20">
+            <h2 className="text-xl font-bold tracking-tight text-brand-navy">
+              Delete vehicle?
+            </h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
               Are you sure you want to delete the{" "}
               <span className="font-semibold text-slate-800">
@@ -956,12 +964,12 @@ export default function Dashboard({
               </span>
               ? This action is permanent and cannot be undone.
             </p>
-            <div className="mt-6 flex justify-end gap-2">
+            <div className="mt-6 flex justify-end gap-2.5">
               <button
                 type="button"
                 disabled={deleting}
                 onClick={() => setCarToDelete(null)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-brand-bg disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -969,7 +977,7 @@ export default function Dashboard({
                 type="button"
                 disabled={deleting}
                 onClick={() => deleteVehicle(carToDelete)}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-red-600/20 transition hover:bg-red-700 disabled:opacity-50"
               >
                 {deleting ? "Deleting…" : "Delete permanently"}
               </button>
@@ -989,8 +997,6 @@ export default function Dashboard({
           isDemo={isDemo}
         />
       )}
-
-
     </main>
   );
 }

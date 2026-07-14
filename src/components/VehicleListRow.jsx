@@ -58,15 +58,15 @@ export default function VehicleListRow({
   const profitPositive = decision.expectedProfit >= 0;
 
   return (
-    <div className="group grid grid-cols-1 gap-4 border-b border-slate-100 bg-white p-4 transition last:border-b-0 hover:bg-slate-50/80 lg:grid-cols-[120px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center lg:gap-5 lg:px-5 lg:py-4">
+    <div className="group grid grid-cols-1 gap-4 border-b border-slate-100 bg-white p-4 transition last:border-b-0 hover:bg-brand-bg/60 lg:grid-cols-[120px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center lg:gap-5 lg:px-5 lg:py-4">
       {/* Image */}
       <div className="relative shrink-0">
         <img
           src={car.image_url || "https://placehold.co/400x250?text=No+Image"}
-          className="h-24 w-full rounded-lg object-cover lg:h-20 lg:w-[120px]"
+          className="h-24 w-full rounded-xl object-cover lg:h-20 lg:w-[120px]"
           alt=""
         />
-        <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur lg:hidden">
+        <span className="absolute left-2 top-2 rounded-full bg-brand-navy/75 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur lg:hidden">
           {sourceLabel(car)}
         </span>
       </div>
@@ -76,7 +76,7 @@ export default function VehicleListRow({
         <button
           type="button"
           onClick={onViewDetails}
-          className="text-left text-base font-bold tracking-tight text-blue-700 transition hover:text-blue-800 hover:underline"
+          className="text-left text-base font-bold tracking-tight text-brand-navy transition hover:text-blue-700 hover:underline"
         >
           {formatVehicleTitle(car)}
         </button>
@@ -209,7 +209,7 @@ export default function VehicleListRow({
       <div className="flex min-w-0 flex-col gap-2">
         <button
           type="button"
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 active:scale-[0.99]"
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-blue-700 active:scale-[0.99]"
           onClick={onViewDetails}
         >
           View Decision

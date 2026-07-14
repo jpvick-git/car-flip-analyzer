@@ -20,7 +20,7 @@ export default function RedFlagsCard({ car, className = "" }) {
       >
         <span
           className={`flex h-6 w-6 items-center justify-center rounded-md ${
-            flags.length ? "bg-red-100 text-red-600" : "bg-brand-bg text-slate-500"
+            flags.length ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-500"
           }`}
         >
           <AlertTriangle size={13} />

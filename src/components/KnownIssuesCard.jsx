@@ -11,7 +11,7 @@ function confidenceClass(confidence) {
   const level = String(confidence || "").toLowerCase();
   if (level === "high") return "bg-emerald-100 text-emerald-700";
   if (level === "medium") return "bg-amber-100 text-amber-700";
-  return "bg-brand-bg text-slate-600";
+  return "bg-slate-100 text-slate-600";
 }
 
 function topIssues(knownIssues, wearItems, limit = 5) {
@@ -163,7 +163,7 @@ export default function KnownIssuesCard({
               <button
                 type="button"
                 onClick={() => setExpanded((v) => !v)}
-                className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-green hover:text-brand-green-dark"
+                className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
               >
                 {expanded ? (
                   <>

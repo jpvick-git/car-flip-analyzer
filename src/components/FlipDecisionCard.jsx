@@ -114,7 +114,7 @@ export default function FlipDecisionCard({
       </div>
 
       {/* Metrics grid */}
-      <div className="grid grid-cols-2 gap-px bg-brand-bg sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-4">
         <MetricCell label="Confidence" value={decision.confidenceLabel} valueClass={confidenceClass(decision.confidenceLabel)} />
         <MetricCell label={maxOfferLabel(vehicle)} value={formatCurrency(bid)} />
         <MetricCell label="Risk Level" value={decision.riskLevel} valueClass={riskClass(decision.riskLevel)} />

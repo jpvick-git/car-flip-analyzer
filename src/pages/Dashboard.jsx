@@ -174,7 +174,7 @@ function ManualVehicleModal({ API, close, reload }) {
   };
 
   const fieldClass =
-    "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 transition focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/30 disabled:bg-slate-50 disabled:text-slate-400";
+    "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:bg-slate-50 disabled:text-slate-400";
   const summaryClass =
     "cursor-pointer select-none pb-3 text-xs font-semibold uppercase tracking-wider text-slate-500";
 
@@ -305,7 +305,7 @@ function ManualVehicleModal({ API, close, reload }) {
             Cancel
           </button>
           <button
-            className="rounded-lg bg-brand-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-green-dark"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
             onClick={submit}
           >
             Save
@@ -350,7 +350,7 @@ function CSVUploadModal({
             Cancel
           </button>
           <button
-            className="rounded-lg bg-brand-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-green-dark"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
             onClick={uploadUserFile}
           >
             Upload
@@ -395,7 +395,7 @@ function VehicleDetailModal({
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-4 top-4 rounded-full p-1.5 text-slate-500 transition hover:bg-brand-bg hover:text-slate-900"
+          className="absolute right-4 top-4 rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
         >
           <X size={20} />
         </button>
@@ -453,14 +453,14 @@ function VehicleDetailModal({
               if (val > 90) val = 90;
               setTempMargin(val);
             }}
-            className="w-20 rounded-lg border border-slate-300 px-3 py-1.5 text-sm tabular-nums focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/30"
+            className="w-20 rounded-lg border border-slate-300 px-3 py-1.5 text-sm tabular-nums focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
           />
           <span className="text-sm text-slate-500">%</span>
         </div>
 
         <div className="mt-4 rounded-xl bg-slate-50 p-4">
           <div className="mb-1 flex items-baseline justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-brand-green">
+            <span className="text-xs font-semibold uppercase tracking-wide text-blue-600">
               {maxOfferLabel(car)}
             </span>
             <span className="text-3xl font-extrabold tabular-nums text-slate-900">
@@ -536,7 +536,7 @@ function VehicleDetailModal({
         {car.listing_url && (
           <a
             href={car.listing_url}
-            className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-green hover:text-brand-green-dark"
+            className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -772,9 +772,9 @@ export default function Dashboard({
 
   if (loading)
     return (
-      <div className="flex h-screen items-center justify-center bg-brand-bg">
+      <div className="flex h-screen items-center justify-center bg-slate-100">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-brand-green" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
           <p className="text-sm font-medium text-slate-500">Loading vehicles…</p>
         </div>
       </div>
@@ -782,7 +782,7 @@ export default function Dashboard({
 
   if (error)
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-2 bg-brand-bg px-6 text-center">
+      <div className="flex h-screen flex-col items-center justify-center gap-2 bg-slate-100 px-6 text-center">
         <p className="text-lg font-semibold text-slate-700">Something went wrong</p>
         <p className="text-sm text-red-600">{error}</p>
       </div>
@@ -794,10 +794,10 @@ export default function Dashboard({
   const processingCount = processingCars.length;
 
   return (
-    <main className="min-h-screen bg-brand-bg">
+    <main className="min-h-screen bg-slate-100">
 
       {downloading && processingCount > 0 && (
-        <div className="fixed top-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-brand-green px-6 py-3 text-sm font-medium text-white shadow-lg">
+        <div className="fixed top-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-blue-600 px-6 py-3 text-sm font-medium text-white shadow-lg">
           <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
@@ -847,8 +847,8 @@ export default function Dashboard({
                 onClick={() => setInventoryViewMode("grid")}
                 className={`rounded-md p-2 transition ${
                   viewMode === "grid"
-                    ? "bg-brand-green text-white shadow-sm"
-                    : "text-slate-500 hover:bg-brand-bg hover:text-slate-700"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                 }`}
                 title="Tile view"
               >
@@ -860,8 +860,8 @@ export default function Dashboard({
                 onClick={() => setInventoryViewMode("list")}
                 className={`rounded-md p-2 transition ${
                   viewMode === "list"
-                    ? "bg-brand-green text-white shadow-sm"
-                    : "text-slate-500 hover:bg-brand-bg hover:text-slate-700"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                 }`}
                 title="List view"
               >
@@ -880,7 +880,7 @@ export default function Dashboard({
         {/* GRID */}
         {visibleCars.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white py-20 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-bg text-slate-400">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
               <Car size={22} />
             </div>
             {processingCount > 0 && downloading ? (

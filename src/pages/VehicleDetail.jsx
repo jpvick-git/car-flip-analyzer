@@ -146,9 +146,9 @@ export default function VehicleDetail() {
 
   if (loading)
     return (
-      <div className="flex justify-center items-center h-screen bg-brand-bg">
+      <div className="flex justify-center items-center h-screen bg-slate-100">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-brand-green" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
           <p className="text-sm font-medium text-slate-500">Loading vehicle…</p>
         </div>
       </div>
@@ -156,7 +156,7 @@ export default function VehicleDetail() {
 
   if (!car)
     return (
-      <div className="flex flex-col items-center justify-center h-screen gap-4 bg-brand-bg px-6 text-center">
+      <div className="flex flex-col items-center justify-center h-screen gap-4 bg-slate-100 px-6 text-center">
         <p className="text-lg font-semibold text-slate-700">Vehicle not found</p>
         <p className="text-sm text-slate-500">This lot may have been removed or is no longer available.</p>
         <button
@@ -200,7 +200,7 @@ export default function VehicleDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-brand-bg text-slate-900">
+    <div className="min-h-screen bg-slate-100 text-slate-900">
 
       {/* ── STICKY NAV ── */}
       <nav className="sticky top-0 z-20 border-b border-white/10 bg-slate-900/90 backdrop-blur">
@@ -217,8 +217,8 @@ export default function VehicleDetail() {
 
       {/* ── HERO ── */}
       <header className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-brand-green/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-64 w-64 rounded-full bg-brand-green-light0/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-blue-600/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
         <div className="relative w-full px-4 py-6 sm:px-6 sm:py-8 xl:px-8">
           <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
             {formatVehicleTitle(car)}
@@ -236,13 +236,13 @@ export default function VehicleDetail() {
             )}
             {car.sale_name && (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-slate-200">
-                <MapPin size={13} className="text-brand-green" />
+                <MapPin size={13} className="text-blue-600" />
                 {car.sale_name}
               </span>
             )}
             {car.sale_date && !isPrivate && (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-slate-200">
-                <Calendar size={13} className="text-brand-green" />
+                <Calendar size={13} className="text-blue-600" />
                 {new Date(car.sale_date).toLocaleDateString()}
               </span>
             )}
@@ -318,7 +318,7 @@ export default function VehicleDetail() {
               onClick={() => setActivePhoto(i)}
               className={`relative h-16 w-24 shrink-0 overflow-hidden rounded-md transition sm:h-20 sm:w-28 ${
                 i === activePhoto
-                  ? "ring-2 ring-brand-green ring-offset-1"
+                  ? "ring-2 ring-blue-600 ring-offset-1"
                   : "opacity-70 ring-1 ring-slate-200 hover:opacity-100"
               }`}
             >
@@ -469,14 +469,14 @@ export default function VehicleDetail() {
     <div>
       <div className="mb-2 flex items-center justify-between text-sm">
         <span className="font-medium text-slate-700">Desired Margin</span>
-        <span className="rounded-md bg-brand-green-light px-2 py-0.5 text-sm font-bold tabular-nums text-brand-green">{margin}%</span>
+        <span className="rounded-md bg-blue-50 px-2 py-0.5 text-sm font-bold tabular-nums text-blue-600">{margin}%</span>
       </div>
       <input
         type="range" min={0} max={40} value={margin}
         onChange={(e) => setMargin(Number(e.target.value))}
-        className="h-2 w-full cursor-pointer appearance-none rounded-full accent-brand-green"
+        className="h-2 w-full cursor-pointer appearance-none rounded-full accent-blue-600"
         style={{
-          background: `linear-gradient(to right, #2E9D58 0%, #2E9D58 ${marginFill}%, #e2e8f0 ${marginFill}%, #e2e8f0 100%)`,
+          background: `linear-gradient(to right, #2563eb 0%, #2563eb ${marginFill}%, #e2e8f0 ${marginFill}%, #e2e8f0 100%)`,
         }}
       />
       <div className="mt-1 flex justify-between text-xs text-slate-400">
@@ -490,7 +490,7 @@ export default function VehicleDetail() {
         <select
           value={selectedState}
           onChange={(e) => setSelectedState(e.target.value)}
-          className="w-full appearance-none rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 pr-10 text-sm font-medium text-slate-800 transition focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/30"
+          className="w-full appearance-none rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 pr-10 text-sm font-medium text-slate-800 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
         >
           <option value="">— Use vehicle defaults —</option>
           {states.map((s) => (
@@ -546,7 +546,7 @@ export default function VehicleDetail() {
         href={car.lot_url}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-green py-2.5 text-sm font-semibold text-white shadow-sm shadow-brand-green/20 transition hover:bg-brand-green-dark active:scale-[0.99]"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 active:scale-[0.99]"
       >
         {isPrivate ? "View Listing" : "View on Copart"}
         <ExternalLink size={16} />

@@ -76,7 +76,7 @@ export default function VehicleListRow({
         <button
           type="button"
           onClick={onViewDetails}
-          className="text-left text-base font-bold tracking-tight text-brand-green transition hover:text-brand-green-dark hover:underline"
+          className="text-left text-base font-bold tracking-tight text-blue-700 transition hover:text-blue-800 hover:underline"
         >
           {formatVehicleTitle(car)}
         </button>
@@ -87,7 +87,7 @@ export default function VehicleListRow({
             : `Lot ${car.lot_number || "—"}`}
         </p>
         <div className="mt-2 flex items-center gap-2">
-          <span className="hidden rounded-full bg-brand-bg px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 lg:inline">
+          <span className="hidden rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 lg:inline">
             {sourceLabel(car)}
           </span>
           {!isDemo && (
@@ -96,7 +96,7 @@ export default function VehicleListRow({
                 type="button"
                 aria-label="Vehicle options"
                 onClick={() => setMenuOpenId(menuOpenId === car.id ? null : car.id)}
-                className="rounded-lg border border-slate-200 p-1.5 text-slate-500 transition hover:bg-brand-bg hover:text-slate-700"
+                className="rounded-lg border border-slate-200 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
               >
                 <MoreVertical size={15} />
               </button>
@@ -209,7 +209,7 @@ export default function VehicleListRow({
       <div className="flex min-w-0 flex-col gap-2">
         <button
           type="button"
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-green py-2 text-sm font-semibold text-white transition hover:bg-brand-green-dark active:scale-[0.99]"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 active:scale-[0.99]"
           onClick={onViewDetails}
         >
           View Decision

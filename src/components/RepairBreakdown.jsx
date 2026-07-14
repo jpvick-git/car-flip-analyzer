@@ -81,7 +81,7 @@ export default function RepairBreakdown({
             readOnly={readOnly}
             value={item.cost}
             onChange={(value) => updateItem(index, "cost", value)}
-            inputClassName="w-24 shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums text-slate-800 focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/20 disabled:bg-slate-50 sm:w-28"
+            inputClassName="w-24 shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50 sm:w-28"
           />
         </li>
       ))}

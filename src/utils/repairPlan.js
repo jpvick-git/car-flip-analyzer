@@ -335,7 +335,7 @@ export function difficultyStyles(label) {
     case "Expert":
       return { badge: "bg-red-100 text-red-800", bar: "bg-red-500" };
     default:
-      return { badge: "bg-brand-bg text-slate-600", bar: "bg-slate-400" };
+      return { badge: "bg-slate-100 text-slate-600", bar: "bg-slate-400" };
   }
 }
 

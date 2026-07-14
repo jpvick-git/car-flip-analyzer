@@ -217,7 +217,7 @@ export default function CarCard({
 
         <button
           type="button"
-          className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-green py-2.5 text-sm font-semibold text-white transition hover:bg-brand-green-dark active:scale-[0.99]"
+          className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 active:scale-[0.99]"
           onClick={onViewDetails}
         >
           View Decision

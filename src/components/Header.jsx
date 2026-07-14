@@ -9,7 +9,7 @@ export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 sm:px-6">
+      <div className="flex w-full items-center justify-between px-4 py-3.5 sm:px-5">
         <div className="flex items-center gap-3">
           <BrandLogo size="md" />
           {isDemo && (
@@ -29,7 +29,7 @@ export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
       </div>
 
       {menuOpen && (
-        <div className="absolute right-4 top-[calc(100%-0.25rem)] z-50 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/80 sm:right-6">
+        <div className="absolute right-3 top-[calc(100%-0.25rem)] z-50 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/80 sm:right-5">
           <div className="flex flex-col p-1.5">
             {!isDemo && (
               <button

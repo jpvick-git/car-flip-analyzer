@@ -823,8 +823,8 @@ export default function Dashboard({
         uploadUserFile={uploadUserFile}
       />
 
-      <div className="relative mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
-        <div className="mb-8 flex flex-col gap-5 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
+      <div className="relative w-full px-3 py-5 sm:px-4 sm:py-6 lg:px-5">
+        <div className="mb-5 flex flex-col gap-4 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium text-blue-600">Your pipeline</p>
             <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-brand-navy sm:text-4xl">
@@ -874,13 +874,13 @@ export default function Dashboard({
         </div>
 
         {isDemo && (
-          <div className="mb-6 rounded-2xl border border-amber-200/80 bg-amber-50 px-4 py-3.5 text-sm text-amber-800 shadow-sm shadow-amber-100/50">
+          <div className="mb-5 rounded-2xl border border-amber-200/80 bg-amber-50 px-4 py-3.5 text-sm text-amber-800 shadow-sm shadow-amber-100/50">
             Demo mode — browse only. Upload, add, and delete are disabled.
           </div>
         )}
 
         {visibleCars.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-3xl border border-slate-200 bg-white px-6 py-24 text-center shadow-xl shadow-slate-200/70">
+          <div className="flex min-h-[calc(100vh-11rem)] flex-col items-center justify-center rounded-3xl border border-slate-200 bg-white px-6 py-16 text-center shadow-xl shadow-slate-200/70">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-bg text-slate-400">
               <Car size={26} />
             </div>
@@ -905,7 +905,7 @@ export default function Dashboard({
             )}
           </div>
         ) : viewMode === "list" ? (
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+          <div className="min-h-[calc(100vh-11rem)] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
             <div className="hidden border-b border-slate-200 bg-brand-navy px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-white/90 lg:grid lg:grid-cols-[120px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-5">
               <span>Image</span>
               <span>Lot info</span>
@@ -929,7 +929,7 @@ export default function Dashboard({
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 items-stretch gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[1800px]:grid-cols-6">
             {visibleCars.map((car) => (
               <CarCard
                 key={car.id}

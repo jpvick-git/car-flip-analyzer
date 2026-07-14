@@ -223,7 +223,7 @@ export default function TransportCostCard({
       </div>
 
       {/* Impact summary */}
-      <div className="grid grid-cols-3 gap-px border-b border-slate-100 bg-slate-100">
+      <div className="grid grid-cols-3 gap-px border-b border-slate-100 bg-brand-bg">
         <SummaryCell label="Est. Transport" value={formatCurrency(estimatedCost)} />
         <SummaryCell
           label="Profit After Transport"
@@ -251,7 +251,7 @@ export default function TransportCostCard({
                 }
               }}
               placeholder="Auction yard or seller city"
-              inputClassName="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
+              inputClassName="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/20 disabled:bg-slate-50"
             />
           </Field>
           <Field label="Delivery">
@@ -270,7 +270,7 @@ export default function TransportCostCard({
                 }
               }}
               placeholder="Your shop or home"
-              inputClassName="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
+              inputClassName="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/20 disabled:bg-slate-50"
             />
           </Field>
         </div>
@@ -288,7 +288,7 @@ export default function TransportCostCard({
                 update("transport_distance_miles", e.target.value);
               }}
               placeholder={geocodingMiles ? "Calculating…" : "e.g. 23"}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm tabular-nums focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm tabular-nums focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/20 disabled:bg-slate-50"
             />
           </Field>
           <Field label="Method">
@@ -296,7 +296,7 @@ export default function TransportCostCard({
               disabled={readOnly}
               value={form.transport_type}
               onChange={(e) => update("transport_type", e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/20 disabled:bg-slate-50"
             >
               {TRANSPORT_TYPES.map((type) => (
                 <option key={type} value={type}>
@@ -317,7 +317,7 @@ export default function TransportCostCard({
                 value > 0 ? String(value) : ""
               )
             }
-            inputClassName="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold tabular-nums focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            inputClassName="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold tabular-nums focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/20"
           />
           <p className="mt-1 text-xs text-slate-400">
             Rule estimate: {formatCurrency(estimatedCost)} for {milesDisplay} via{" "}
@@ -332,7 +332,7 @@ export default function TransportCostCard({
             value={form.transport_notes}
             onChange={(e) => update("transport_notes", e.target.value)}
             placeholder="Carrier quote, gate fees, etc."
-            className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
+            className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/20 disabled:bg-slate-50"
           />
         </Field>
 

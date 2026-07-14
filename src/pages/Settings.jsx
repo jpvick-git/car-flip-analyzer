@@ -53,8 +53,8 @@ export default function SettingsPage({ isDemo = false }) {
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center bg-slate-100">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
+      <div className="flex min-h-[60vh] items-center justify-center bg-brand-bg">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-brand-green" />
       </div>
     );
   }
@@ -65,7 +65,7 @@ export default function SettingsPage({ isDemo = false }) {
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="text-sm font-medium text-blue-600 hover:text-blue-700"
+          className="text-sm font-medium text-brand-green hover:text-brand-green-dark"
         >
           ← Back to inventory
         </button>
@@ -91,7 +91,7 @@ export default function SettingsPage({ isDemo = false }) {
         {/* Default margin */}
         <section>
           <div className="mb-3 flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-green-light text-brand-green">
               <Percent size={16} />
             </span>
             <div>
@@ -104,7 +104,7 @@ export default function SettingsPage({ isDemo = false }) {
           <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
             <div className="mb-2 flex items-center justify-between text-sm">
               <span className="font-medium text-slate-700">Desired margin</span>
-              <span className="rounded-md bg-blue-100 px-2 py-0.5 text-sm font-bold text-blue-700">
+              <span className="rounded-md bg-brand-green-light px-2 py-0.5 text-sm font-bold text-brand-green">
                 {form.default_margin_percent}%
               </span>
             </div>
@@ -120,9 +120,9 @@ export default function SettingsPage({ isDemo = false }) {
                   default_margin_percent: Number(e.target.value),
                 }))
               }
-              className="h-2 w-full cursor-pointer appearance-none rounded-full accent-blue-600 disabled:opacity-50"
+              className="h-2 w-full cursor-pointer appearance-none rounded-full accent-brand-green disabled:opacity-50"
               style={{
-                background: `linear-gradient(to right, #2563eb 0%, #2563eb ${marginFill}%, #e2e8f0 ${marginFill}%, #e2e8f0 100%)`,
+                background: `linear-gradient(to right, #2E9D58 0%, #2E9D58 ${marginFill}%, #e2e8f0 ${marginFill}%, #e2e8f0 100%)`,
               }}
             />
             <div className="mt-1 flex justify-between text-xs text-slate-400">
@@ -177,7 +177,7 @@ export default function SettingsPage({ isDemo = false }) {
                 default_transport_type: e.target.value,
               }))
             }
-            className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50"
+            className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/20 disabled:bg-slate-50"
           >
             {TRANSPORT_TYPES.map((type) => (
               <option key={type} value={type}>
@@ -193,7 +193,7 @@ export default function SettingsPage({ isDemo = false }) {
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-green py-3 text-sm font-semibold text-white transition hover:bg-brand-green-dark disabled:opacity-50"
           >
             <Save size={16} />
             {saving ? "Saving…" : saved ? "Saved" : "Save Preferences"}

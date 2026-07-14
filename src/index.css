@@ -3,11 +3,11 @@
 @tailwind utilities;
 
 body {
-  @apply bg-gradient-to-b from-neutral-950 to-black text-black min-h-screen font-sans;
+  @apply bg-brand-bg text-brand-navy min-h-screen font-sans antialiased;
 }
 
 /* -------------------------------------------------- */
-/* Custom image + card styling for Car Flip Analyzer  */
+/* Custom image + card styling for CarFlipAnalyzer    */
 /* -------------------------------------------------- */
 
 img {

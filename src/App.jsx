@@ -10,6 +10,7 @@ import {
 } from "react-router-dom";
 
 import Login from "./pages/Login";
+import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import VehicleDetail from "./pages/VehicleDetail";
 import SettingsPage from "./pages/Settings";
@@ -34,7 +35,10 @@ function Layout() {
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadComplete, setUploadComplete] = useState(false);
 
-  const hideHeader = location.pathname === "/login" || location.pathname.startsWith("/vehicle/");
+  const hideHeader =
+    location.pathname === "/login" ||
+    location.pathname === "/register" ||
+    location.pathname.startsWith("/vehicle/");
 
   const isDemo = localStorage.getItem("is_demo") === "1";
 
@@ -98,8 +102,9 @@ function Layout() {
       )}
 
       <Routes>
-        {/* LOGIN */}
+        {/* LOGIN / REGISTER */}
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
         {/* DASHBOARD */}
 		<Route

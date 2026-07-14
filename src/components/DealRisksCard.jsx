@@ -65,7 +65,7 @@ export default function DealRisksCard({ vehicle, decision, flipMetrics, transpor
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-green hover:text-brand-green-dark"
           >
             {expanded ? (
               <>

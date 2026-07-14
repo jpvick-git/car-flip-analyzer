@@ -159,7 +159,7 @@ export default function RepairPlanCard({
                     {scoreDisplay}
                   </span>
                   {plan.diy_friendly && (
-                    <span className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                    <span className="rounded-lg bg-brand-green-light px-2.5 py-1 text-xs font-semibold text-brand-green">
                       DIY: {plan.diy_friendly}
                     </span>
                   )}
@@ -227,7 +227,7 @@ export default function RepairPlanCard({
                         <p className="text-sm font-medium text-slate-800">
                           {part.name}
                           {part.category && part.category !== "General" && (
-                            <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500">
+                            <span className="ml-2 rounded bg-brand-bg px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500">
                               {part.category}
                             </span>
                           )}
@@ -291,7 +291,7 @@ export default function RepairPlanCard({
                 <button
                   type="button"
                   onClick={() => setAiNotesOpen((v) => !v)}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-green hover:text-brand-green-dark"
                 >
                   {aiNotesOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   View AI repair notes

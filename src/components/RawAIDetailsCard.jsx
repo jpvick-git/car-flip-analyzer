@@ -31,7 +31,7 @@ export default function RawAIDetailsCard({ car }) {
         className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition hover:bg-slate-50"
       >
         <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 text-slate-600">
+          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-brand-bg text-slate-600">
             <FileText size={13} />
           </span>
           <div>

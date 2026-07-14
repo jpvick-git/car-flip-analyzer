@@ -8,7 +8,7 @@ function strengthClass(strength) {
   const level = String(strength || "").toLowerCase();
   if (level === "strong") return "bg-emerald-100 text-emerald-700";
   if (level === "moderate") return "bg-amber-100 text-amber-700";
-  return "bg-slate-100 text-slate-600";
+  return "bg-brand-bg text-slate-600";
 }
 
 function categoryLabel(category) {

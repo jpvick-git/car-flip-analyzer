@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { fetchUserSettings } from "../utils/userSettings";
+import BrandLogo from "../components/BrandLogo";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -77,13 +78,13 @@ export default function Login() {
   };
 
   const statusStyles = {
-    info: "bg-blue-50 text-blue-700 border-blue-200",
+    info: "bg-brand-green-light text-brand-navy border-brand-green/30",
     success: "bg-green-50 text-green-700 border-green-200",
     error: "bg-red-50 text-red-700 border-red-200",
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex">
+    <div className="min-h-screen bg-brand-navy flex">
       {/* Left image / brand panel */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
         <img
@@ -92,26 +93,14 @@ export default function Login() {
           className="absolute inset-0 h-full w-full object-cover"
         />
 
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-950/90 via-slate-900/65 to-blue-950/40" />
+        <div className="absolute inset-0 bg-gradient-to-br from-brand-navy/95 via-brand-navy/70 to-brand-green/30" />
 
         <div className="relative z-10 flex flex-col justify-between p-12 text-white">
-          <div className="flex items-center gap-3">
-            <div className="h-11 w-11 rounded-xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center">
-              <img
-                src="/logo.png"
-                alt="Car Flip Analyzer"
-                className="h-7 w-7 object-contain"
-              />
-            </div>
-
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight">
-                Car Flip Analyzer
-              </h1>
-              <p className="text-sm text-slate-300">
-                Smarter decisions for every flip
-              </p>
-            </div>
+          <div>
+            <BrandLogo size="lg" variant="onDark" />
+            <p className="mt-2 text-sm text-slate-300">
+              Smarter decisions for every flip
+            </p>
           </div>
 
           <div className="max-w-xl">
@@ -130,17 +119,17 @@ export default function Login() {
 
             <div className="mt-8 grid grid-cols-3 gap-4 max-w-lg">
               <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-                <p className="text-2xl font-bold">ROI</p>
+                <p className="text-2xl font-bold text-brand-green">ROI</p>
                 <p className="mt-1 text-sm text-slate-300">Profit estimates</p>
               </div>
 
               <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-                <p className="text-2xl font-bold">AI</p>
+                <p className="text-2xl font-bold text-brand-green">AI</p>
                 <p className="mt-1 text-sm text-slate-300">Deal scoring</p>
               </div>
 
               <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-                <p className="text-2xl font-bold">VIN</p>
+                <p className="text-2xl font-bold text-brand-green">VIN</p>
                 <p className="mt-1 text-sm text-slate-300">Vehicle details</p>
               </div>
             </div>
@@ -153,22 +142,19 @@ export default function Login() {
       </div>
 
       {/* Login panel */}
-      <div className="flex min-h-screen w-full lg:w-1/2 items-center justify-center px-5 py-10 bg-slate-50">
+      <div className="flex min-h-screen w-full lg:w-1/2 items-center justify-center px-5 py-10 bg-brand-bg">
         <div className="w-full max-w-md">
           <div className="lg:hidden flex flex-col items-center mb-8">
-            <img src="/logo.png" alt="Car Flip Analyzer" className="h-14 mb-3" />
-            <h1 className="text-2xl font-bold text-slate-900">
-              Car Flip Analyzer
-            </h1>
-            <p className="text-slate-500 text-sm mt-1">Sign in to continue</p>
+            <BrandLogo size="xl" />
+            <p className="text-slate-500 text-sm mt-2">Sign in to continue</p>
           </div>
 
           <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/80 border border-slate-200 p-8">
             <div className="mb-8">
-              <p className="text-sm font-medium text-blue-600">
+              <p className="text-sm font-medium text-brand-green">
                 Welcome back
               </p>
-              <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
+              <h2 className="mt-2 text-3xl font-bold tracking-tight text-brand-navy">
                 Sign in to your account
               </h2>
               <p className="mt-2 text-sm text-slate-500">
@@ -187,7 +173,7 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   autoComplete="email"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/15"
                 />
               </div>
 
@@ -204,7 +190,7 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   autoComplete="current-password"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/15"
                 />
               </div>
 
@@ -212,7 +198,7 @@ export default function Login() {
                 id="authButton"
                 type="submit"
                 disabled={isLoading}
-                className="w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white shadow-lg shadow-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+                className="w-full rounded-xl bg-brand-green px-4 py-3 font-semibold text-white shadow-lg shadow-brand-green/25 transition hover:bg-brand-green-dark disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isLoading ? "Signing in..." : "Sign in"}
               </button>
@@ -227,10 +213,20 @@ export default function Login() {
                 {status}
               </div>
             )}
+
+            <p className="mt-6 text-center text-sm text-slate-500">
+              Don&apos;t have an account?{" "}
+              <Link
+                to="/register"
+                className="font-medium text-brand-green hover:text-brand-green-dark"
+              >
+                Create one
+              </Link>
+            </p>
           </div>
 
           <p className="mt-6 text-center text-xs text-slate-400">
-            Secure access to your Car Flip Analyzer workspace.
+            Secure access to your CarFlipAnalyzer workspace.
           </p>
         </div>
       </div>

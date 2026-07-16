@@ -41,7 +41,7 @@ export default function AdminUsers() {
   const [role, setRole] = useState("");
   const [accountStatus, setAccountStatus] = useState("");
   const [subStatus, setSubStatus] = useState("");
-  const [lastLoginFrom, setLastLoginFrom] = useState(
+  const [lastLoginFrom] = useState(
     searchParams.get("last_login_days") ? daysAgoISO(searchParams.get("last_login_days")) : ""
   );
   const [sort, setSort] = useState({ sortBy: "created_at", sortDir: "desc" });

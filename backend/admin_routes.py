@@ -25,7 +25,8 @@ router = APIRouter()
 engine = get_engine()
 
 # Vehicles that have received an AI valuation count as "evaluations".
-EVAL_CONDITION = "resale_estimate IS NOT NULL AND resale_estimate > 0"
+# resale_estimate is stored as text, so compare as text (non-empty, non-zero).
+EVAL_CONDITION = "resale_estimate IS NOT NULL AND TRIM(resale_estimate) NOT IN ('', '0')"
 
 # flip_recommendation is computed on the frontend and not stored, so the
 # admin "decision" is derived from the persisted deal_status instead.

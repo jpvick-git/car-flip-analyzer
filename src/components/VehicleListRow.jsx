@@ -29,8 +29,10 @@ import {
   statusLabel,
   statusBadgeClasses,
   statusDotClasses,
+  isAcquired,
   DEAL_STATUS,
 } from "../utils/dealLifecycle";
+import DealTrackerCard from "./DealTrackerCard";
 
 export default function VehicleListRow({
   car,
@@ -40,6 +42,8 @@ export default function VehicleListRow({
   setCarToDelete,
   updateCarValue,
   onViewDetails,
+  onUpdate,
+  apiBase = "",
   marginPercent = 15,
 }) {
   const { settings } = useUserSettings();
@@ -65,6 +69,13 @@ export default function VehicleListRow({
   const profitPositive = decision.expectedProfit >= 0;
   const status = dealStatus(car);
   const showStatus = status !== DEAL_STATUS.ANALYZING;
+  const acquired = isAcquired(car);
+  const predictions = {
+    maxBid: flipMetrics.bid,
+    repair,
+    resale,
+    profit: decision.expectedProfit,
+  };
 
   return (
     <div className="group grid grid-cols-1 gap-4 border-b border-slate-100 bg-white p-4 transition last:border-b-0 hover:bg-brand-bg/60 lg:grid-cols-[120px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center lg:gap-5 lg:px-5 lg:py-4">
@@ -167,72 +178,96 @@ export default function VehicleListRow({
         {car.keys && <p>{car.keys}</p>}
       </div>
 
-      {/* Flip decision + estimates */}
-      <div className="min-w-0 space-y-2">
-        <div>
-          <div className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold ${styles.badge}`}>
-            {decision.recommendation}
-            <span className="opacity-80">· {decision.flipScore}</span>
-          </div>
-          <p className={`mt-1 text-lg font-extrabold tabular-nums ${profitPositive ? "text-emerald-700" : "text-red-600"}`}>
-            {formatCurrency(decision.expectedProfit)}
-            <span className="ml-1 text-xs font-semibold text-slate-400">profit</span>
-          </p>
-        <p className="text-xs text-slate-500">
-          {maxOfferLabel(car)} {formatCurrency(flipMetrics.bid)} ·{" "}
-          <span className={decision.riskLevel === "Low" ? "text-emerald-600" : decision.riskLevel === "Medium" ? "text-amber-600" : "text-red-600"}>
-            {decision.riskLevel} risk
-          </span>
-          {transport.hasValue && (
-            <>
-              {" "}
-              · Transport {transport.isEstimated ? "est. " : ""}
-              {formatCurrency(transportCost)}
-            </>
-          )}
-        </p>
+      {acquired ? (
+        /* Inventory: stage tracker spans the decision + action columns */
+        <div className="min-w-0 lg:col-span-2">
+          <DealTrackerCard
+            embedded
+            car={car}
+            apiBase={apiBase}
+            predictions={predictions}
+            readOnly={isDemo}
+            onUpdate={onUpdate}
+          />
+          <button
+            type="button"
+            onClick={onViewDetails}
+            className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 transition hover:text-blue-700"
+          >
+            View details
+            <ArrowRight size={14} />
+          </button>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-lg border border-amber-100 bg-amber-50 p-2">
-            <div className="mb-0.5 flex items-center gap-1 text-amber-600">
-              <Wrench size={11} />
-              <span className="text-[10px] font-semibold uppercase">{costLabel(car)}</span>
+      ) : (
+        <>
+          {/* Flip decision + estimates */}
+          <div className="min-w-0 space-y-2">
+            <div>
+              <div className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold ${styles.badge}`}>
+                {decision.recommendation}
+                <span className="opacity-80">· {decision.flipScore}</span>
+              </div>
+              <p className={`mt-1 text-lg font-extrabold tabular-nums ${profitPositive ? "text-emerald-700" : "text-red-600"}`}>
+                {formatCurrency(decision.expectedProfit)}
+                <span className="ml-1 text-xs font-semibold text-slate-400">profit</span>
+              </p>
+              <p className="text-xs text-slate-500">
+                {maxOfferLabel(car)} {formatCurrency(flipMetrics.bid)} ·{" "}
+                <span className={decision.riskLevel === "Low" ? "text-emerald-600" : decision.riskLevel === "Medium" ? "text-amber-600" : "text-red-600"}>
+                  {decision.riskLevel} risk
+                </span>
+                {transport.hasValue && (
+                  <>
+                    {" "}
+                    · Transport {transport.isEstimated ? "est. " : ""}
+                    {formatCurrency(transportCost)}
+                  </>
+                )}
+              </p>
             </div>
-            <CurrencyInput
-              readOnly={isDemo}
-              value={repair}
-              onChange={(value) => updateCarValue(car.id, "repair_estimate", value)}
-              inputClassName={`w-full min-w-0 bg-transparent text-xs font-bold tabular-nums text-amber-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
-            />
-          </div>
-          <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-2">
-            <div className="mb-0.5 flex items-center gap-1 text-emerald-600">
-              <DollarSign size={11} />
-              <span className="text-[10px] font-semibold uppercase">
-                {isPrivateParty(car) ? "Exit" : "Resale"}
-              </span>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-amber-100 bg-amber-50 p-2">
+                <div className="mb-0.5 flex items-center gap-1 text-amber-600">
+                  <Wrench size={11} />
+                  <span className="text-[10px] font-semibold uppercase">{costLabel(car)}</span>
+                </div>
+                <CurrencyInput
+                  readOnly={isDemo}
+                  value={repair}
+                  onChange={(value) => updateCarValue(car.id, "repair_estimate", value)}
+                  inputClassName={`w-full min-w-0 bg-transparent text-xs font-bold tabular-nums text-amber-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
+                />
+              </div>
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-2">
+                <div className="mb-0.5 flex items-center gap-1 text-emerald-600">
+                  <DollarSign size={11} />
+                  <span className="text-[10px] font-semibold uppercase">
+                    {isPrivateParty(car) ? "Exit" : "Resale"}
+                  </span>
+                </div>
+                <CurrencyInput
+                  readOnly={isDemo}
+                  value={resale}
+                  onChange={(value) => updateCarValue(car.id, "resale_estimate", value)}
+                  inputClassName={`w-full min-w-0 bg-transparent text-xs font-bold tabular-nums text-emerald-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
+                />
+              </div>
             </div>
-            <CurrencyInput
-              readOnly={isDemo}
-              value={resale}
-              onChange={(value) => updateCarValue(car.id, "resale_estimate", value)}
-              inputClassName={`w-full min-w-0 bg-transparent text-xs font-bold tabular-nums text-emerald-700 ${isDemo ? "cursor-default" : "focus:outline-none"}`}
-            />
           </div>
-        </div>
-      </div>
 
-      {/* Actions */}
-      <div className="flex min-w-0 flex-col gap-2">
-        <button
-          type="button"
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-blue-700 active:scale-[0.99]"
-          onClick={onViewDetails}
-        >
-          View Decision
-          <ArrowRight size={14} />
-        </button>
-      </div>
+          {/* Actions */}
+          <div className="flex min-w-0 flex-col gap-2">
+            <button
+              type="button"
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-blue-700 active:scale-[0.99]"
+              onClick={onViewDetails}
+            >
+              View Decision
+              <ArrowRight size={14} />
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

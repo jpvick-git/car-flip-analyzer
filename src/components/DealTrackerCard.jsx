@@ -20,7 +20,7 @@ import {
  * advancement plus outcome logging. Marking a deal acquired freezes the
  * current app prediction so accuracy can be scored later.
  */
-export default function DealTrackerCard({ car, apiBase = "", predictions = {}, readOnly = false, onUpdate }) {
+export default function DealTrackerCard({ car, apiBase = "", predictions = {}, readOnly = false, onUpdate, embedded = false }) {
   const { settings } = useUserSettings();
   const dealer = isDealer(settings);
   const status = dealStatus(car);
@@ -89,19 +89,21 @@ export default function DealTrackerCard({ car, apiBase = "", predictions = {}, r
   const actions = nextActions(status);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-          Deal Tracker
-        </h3>
-        {status === DEAL_STATUS.PASSED && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">
-            <Ban size={12} /> Passed
-          </span>
-        )}
-      </div>
+    <div className={embedded ? "" : "overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"}>
+      {!embedded && (
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            Deal Tracker
+          </h3>
+          {status === DEAL_STATUS.PASSED && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">
+              <Ban size={12} /> Passed
+            </span>
+          )}
+        </div>
+      )}
 
-      <div className="space-y-4 p-4">
+      <div className={embedded ? "space-y-4" : "space-y-4 p-4"}>
         {/* Stepper */}
         <ol className="flex items-center justify-between">
           {DEAL_STATUS_FLOW.map((step, i) => {

@@ -21,6 +21,7 @@ import {
 import RepairBreakdown from "../components/RepairBreakdown";
 import VehicleListRow from "../components/VehicleListRow";
 import CarCard from "../components/CarCard";
+import InventoryCard from "../components/InventoryCard";
 import CurrencyInput from "../components/CurrencyInput";
 import OutcomeLogModal from "../components/OutcomeLogModal";
 import { formatCurrency, parseCurrencyInput } from "../utils/formatCurrency";
@@ -1202,8 +1203,8 @@ export default function Dashboard({
               <span>Lot info</span>
               <span>Vehicle info</span>
               <span>Condition</span>
-              <span>Flip decision</span>
-              <span>Action</span>
+              <span>{view === "inventory" ? "Deal stage" : "Flip decision"}</span>
+              <span>{view === "inventory" ? "" : "Action"}</span>
             </div>
             {visibleCars.map((car) => (
               <VehicleListRow
@@ -1215,33 +1216,50 @@ export default function Dashboard({
                 setCarToDelete={setCarToDelete}
                 marginPercent={tempMargin}
                 updateCarValue={updateCarValue}
+                apiBase={API}
+                onUpdate={mergeCar}
                 onViewDetails={() => navigate(`/vehicle/${car.public_id}`)}
               />
             ))}
           </div>
         ) : (
           <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[1800px]:grid-cols-6">
-            {visibleCars.map((car) => (
-              <CarCard
-                key={car.id}
-                car={car}
-                isDemo={isDemo}
-                marginPercent={tempMargin}
-                menuOpenId={menuOpenId}
-                setMenuOpenId={setMenuOpenId}
-                setCarToDelete={setCarToDelete}
-                onViewDetails={() => navigate(`/vehicle/${car.public_id}`)}
-                onQuickStatus={handleQuickStatus}
-                onLogOutcome={(target, predictions) =>
-                  setOutcomeTarget({ car: target, predictions })
-                }
-                onUpdateValues={(carId, updates) => {
-                  Object.entries(updates).forEach(([field, value]) => {
-                    updateCarValue(carId, field, value);
-                  });
-                }}
-              />
-            ))}
+            {visibleCars.map((car) =>
+              view === "inventory" ? (
+                <InventoryCard
+                  key={car.id}
+                  car={car}
+                  apiBase={API}
+                  isDemo={isDemo}
+                  marginPercent={tempMargin}
+                  menuOpenId={menuOpenId}
+                  setMenuOpenId={setMenuOpenId}
+                  setCarToDelete={setCarToDelete}
+                  onViewDetails={() => navigate(`/vehicle/${car.public_id}`)}
+                  onUpdate={mergeCar}
+                />
+              ) : (
+                <CarCard
+                  key={car.id}
+                  car={car}
+                  isDemo={isDemo}
+                  marginPercent={tempMargin}
+                  menuOpenId={menuOpenId}
+                  setMenuOpenId={setMenuOpenId}
+                  setCarToDelete={setCarToDelete}
+                  onViewDetails={() => navigate(`/vehicle/${car.public_id}`)}
+                  onQuickStatus={handleQuickStatus}
+                  onLogOutcome={(target, predictions) =>
+                    setOutcomeTarget({ car: target, predictions })
+                  }
+                  onUpdateValues={(carId, updates) => {
+                    Object.entries(updates).forEach(([field, value]) => {
+                      updateCarValue(carId, field, value);
+                    });
+                  }}
+                />
+              )
+            )}
           </div>
         )}
       </div>

@@ -10,7 +10,7 @@ from .db import get_engine
 from .auth import get_current_user, get_vehicle_owner_id, require_not_demo
 from .ai_estimator import run_ai
 from .copart_utils import enrich_vehicle
-from .vehicle_model import normalize_vehicle, is_private_party
+from .vehicle_model import normalize_vehicle, is_private_party, buyer_fee_rate
 from .ai_repair_estimator import select_images_by_angle, repair_plan_db_params, analyze_vehicle
 from fastapi.responses import JSONResponse
 
@@ -59,6 +59,20 @@ def _ensure_schema_columns():
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS repair_plan_summary TEXT",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS repair_plan_warnings TEXT",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS hidden_damage_risks TEXT",
+            # Deal lifecycle + outcome tracking (flywheel)
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS deal_status VARCHAR(16) DEFAULT 'analyzing'",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS actual_purchase_price INTEGER",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS actual_repair_cost INTEGER",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS actual_sale_price INTEGER",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS actual_transport_cost INTEGER",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS outcome_notes TEXT",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS purchased_at TIMESTAMP",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS listed_at TIMESTAMP",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS sold_at TIMESTAMP",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS predicted_max_bid INTEGER",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS predicted_repair INTEGER",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS predicted_resale INTEGER",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS predicted_profit INTEGER",
         ):
             conn.execute(text(stmt))
 
@@ -92,6 +106,55 @@ class TransportUpdatePayload(BaseModel):
     transport_cost_estimate: int | None = None
     transport_cost_manual_override: int | None = None
     transport_notes: str | None = None
+
+
+# --------------------------------------------------------------
+# DEAL LIFECYCLE / OUTCOME TRACKING
+# --------------------------------------------------------------
+DEAL_STATUSES = frozenset({
+    "analyzing",
+    "watching",
+    "bought",
+    "in_repair",
+    "listed",
+    "sold",
+    "passed",
+})
+
+# Statuses that mean the vehicle has been acquired (used for stamping timestamps)
+ACQUIRED_STATUSES = frozenset({"bought", "in_repair", "listed", "sold"})
+
+
+class PredictionSnapshot(BaseModel):
+    predicted_max_bid: int | None = None
+    predicted_repair: int | None = None
+    predicted_resale: int | None = None
+    predicted_profit: int | None = None
+
+
+class StatusUpdatePayload(BaseModel):
+    deal_status: str
+    snapshot: PredictionSnapshot | None = None
+
+
+class OutcomeUpdatePayload(BaseModel):
+    actual_purchase_price: int | None = None
+    actual_repair_cost: int | None = None
+    actual_sale_price: int | None = None
+    actual_transport_cost: int | None = None
+    outcome_notes: str | None = None
+
+
+def _realized_profit(row: dict) -> int | None:
+    """Realized profit for a sold deal, or None if not enough data."""
+    sale = row.get("actual_sale_price")
+    purchase = row.get("actual_purchase_price")
+    if sale is None or purchase is None:
+        return None
+    repair = row.get("actual_repair_cost") or 0
+    transport = row.get("actual_transport_cost") or 0
+    buyer_fee = round(int(purchase) * buyer_fee_rate(row))
+    return int(sale) - int(purchase) - int(repair) - int(transport) - buyer_fee
 
 
 # --------------------------------------------------------------
@@ -536,6 +599,242 @@ def refresh_vehicle_negotiation(
         "suggested_offer_low": result.get("suggested_offer_low"),
         "suggested_offer_high": result.get("suggested_offer_high"),
         "offer_rationale": result.get("offer_rationale"),
+    }
+
+
+# --------------------------------------------------------------
+# UPDATE DEAL STATUS (lifecycle)
+# --------------------------------------------------------------
+@router.patch("/vehicle/{vehicle_id}/status")
+def update_vehicle_status(
+    vehicle_id: int,
+    payload: StatusUpdatePayload,
+    current_user: dict = Depends(get_current_user),
+):
+    require_not_demo(current_user)
+    owner_id = get_vehicle_owner_id(current_user)
+
+    status = (payload.deal_status or "").strip().lower()
+    if status not in DEAL_STATUSES:
+        raise HTTPException(status_code=400, detail="Invalid deal status")
+
+    with engine.begin() as conn:
+        row = conn.execute(
+            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
+            {"id": vehicle_id, "uid": owner_id},
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Vehicle not found")
+
+        existing = dict(row._mapping)
+
+        sets = ["deal_status = :status", "updated_at = NOW()"]
+        params = {"status": status, "id": vehicle_id, "uid": owner_id}
+
+        # Stamp lifecycle timestamps on first transition into each stage
+        if status in ACQUIRED_STATUSES and not existing.get("purchased_at"):
+            sets.append("purchased_at = NOW()")
+        if status == "listed" and not existing.get("listed_at"):
+            sets.append("listed_at = NOW()")
+        if status == "sold" and not existing.get("sold_at"):
+            sets.append("sold_at = NOW()")
+
+        # Freeze prediction snapshot when the deal is first marked bought
+        snap = payload.snapshot
+        if (
+            status in ACQUIRED_STATUSES
+            and existing.get("predicted_max_bid") is None
+            and snap is not None
+        ):
+            if snap.predicted_max_bid is not None:
+                sets.append("predicted_max_bid = :p_bid")
+                params["p_bid"] = int(snap.predicted_max_bid)
+            if snap.predicted_repair is not None:
+                sets.append("predicted_repair = :p_repair")
+                params["p_repair"] = int(snap.predicted_repair)
+            if snap.predicted_resale is not None:
+                sets.append("predicted_resale = :p_resale")
+                params["p_resale"] = int(snap.predicted_resale)
+            if snap.predicted_profit is not None:
+                sets.append("predicted_profit = :p_profit")
+                params["p_profit"] = int(snap.predicted_profit)
+
+        conn.execute(
+            text(f"UPDATE user_vehicles SET {', '.join(sets)} WHERE id = :id AND user_id = :uid"),
+            params,
+        )
+
+        saved = conn.execute(
+            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
+            {"id": vehicle_id, "uid": owner_id},
+        ).fetchone()
+
+    return normalize_vehicle(enrich_vehicle(dict(saved._mapping)))
+
+
+# --------------------------------------------------------------
+# UPDATE DEAL OUTCOME (actual numbers)
+# --------------------------------------------------------------
+@router.patch("/vehicle/{vehicle_id}/outcome")
+def update_vehicle_outcome(
+    vehicle_id: int,
+    payload: OutcomeUpdatePayload,
+    current_user: dict = Depends(get_current_user),
+):
+    require_not_demo(current_user)
+    owner_id = get_vehicle_owner_id(current_user)
+
+    for field in ("actual_purchase_price", "actual_repair_cost", "actual_sale_price", "actual_transport_cost"):
+        val = getattr(payload, field)
+        if val is not None and val < 0:
+            raise HTTPException(status_code=400, detail=f"{field} cannot be negative")
+
+    with engine.begin() as conn:
+        row = conn.execute(
+            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
+            {"id": vehicle_id, "uid": owner_id},
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Vehicle not found")
+
+        existing = dict(row._mapping)
+
+        sets = ["updated_at = NOW()"]
+        params = {"id": vehicle_id, "uid": owner_id}
+
+        fields = payload.model_dump(exclude_unset=True)
+        for key, val in fields.items():
+            sets.append(f"{key} = :{key}")
+            params[key] = val
+
+        # Logging a sale price closes out the deal
+        if payload.actual_sale_price is not None:
+            if not existing.get("sold_at"):
+                sets.append("sold_at = NOW()")
+            if existing.get("deal_status") != "sold":
+                sets.append("deal_status = 'sold'")
+        # Logging a purchase price implies the deal was bought
+        if payload.actual_purchase_price is not None and not existing.get("purchased_at"):
+            sets.append("purchased_at = NOW()")
+            if existing.get("deal_status") in (None, "analyzing", "watching"):
+                sets.append("deal_status = 'bought'")
+
+        conn.execute(
+            text(f"UPDATE user_vehicles SET {', '.join(sets)} WHERE id = :id AND user_id = :uid"),
+            params,
+        )
+
+        saved = conn.execute(
+            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
+            {"id": vehicle_id, "uid": owner_id},
+        ).fetchone()
+
+    result = normalize_vehicle(enrich_vehicle(dict(saved._mapping)))
+    result["realized_profit"] = _realized_profit(dict(saved._mapping))
+    return result
+
+
+# --------------------------------------------------------------
+# PORTFOLIO SUMMARY (scoreboard)
+# --------------------------------------------------------------
+@router.get("/portfolio/summary")
+def portfolio_summary(current_user: dict = Depends(get_current_user)):
+    owner_id = get_vehicle_owner_id(current_user)
+
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT * FROM user_vehicles WHERE user_id = :uid"),
+            {"uid": owner_id},
+        ).fetchall()
+
+    status_counts = {s: 0 for s in DEAL_STATUSES}
+    active_count = 0
+    total_invested = 0
+    realized_profit_total = 0
+    roi_values = []
+    days_to_sell_values = []
+    sold_count = 0
+    win_count = 0
+    profit_errors = []
+    buy_called = 0
+    buy_profitable = 0
+    recent_sold = []
+
+    for row in rows:
+        v = dict(row._mapping)
+        status = (v.get("deal_status") or "analyzing").lower()
+        if status not in status_counts:
+            status_counts[status] = 0
+        status_counts[status] += 1
+
+        if status in ("watching", "bought", "in_repair", "listed"):
+            active_count += 1
+
+        if status == "sold":
+            realized = _realized_profit(v)
+            purchase = v.get("actual_purchase_price")
+            if realized is not None:
+                sold_count += 1
+                realized_profit_total += realized
+                invested = int(purchase or 0) + int(v.get("actual_repair_cost") or 0) + int(v.get("actual_transport_cost") or 0)
+                total_invested += invested
+                if invested > 0:
+                    roi_values.append((realized / invested) * 100)
+                if realized > 0:
+                    win_count += 1
+
+                predicted_profit = v.get("predicted_profit")
+                if predicted_profit is not None:
+                    profit_errors.append(abs(realized - int(predicted_profit)))
+
+                rec = str(v.get("flip_recommendation") or "").upper()
+                if rec == "BUY":
+                    buy_called += 1
+                    if realized > 0:
+                        buy_profitable += 1
+
+                purchased_at = v.get("purchased_at")
+                sold_at = v.get("sold_at")
+                if purchased_at and sold_at:
+                    try:
+                        days = (sold_at - purchased_at).days
+                        if days >= 0:
+                            days_to_sell_values.append(days)
+                    except (TypeError, AttributeError):
+                        pass
+
+                recent_sold.append({
+                    "id": v.get("id"),
+                    "year": v.get("year"),
+                    "make": v.get("make"),
+                    "model": v.get("model"),
+                    "image_url": v.get("image_url"),
+                    "sold_at": sold_at.isoformat() if sold_at else None,
+                    "actual_purchase_price": purchase,
+                    "actual_repair_cost": v.get("actual_repair_cost"),
+                    "actual_sale_price": v.get("actual_sale_price"),
+                    "predicted_profit": predicted_profit,
+                    "realized_profit": realized,
+                })
+
+    recent_sold.sort(key=lambda r: r.get("sold_at") or "", reverse=True)
+
+    def _avg(values):
+        return round(sum(values) / len(values), 1) if values else None
+
+    return {
+        "status_counts": status_counts,
+        "active_count": active_count,
+        "sold_count": sold_count,
+        "realized_profit_total": realized_profit_total,
+        "total_invested": total_invested,
+        "avg_roi": _avg(roi_values),
+        "win_rate": round((win_count / sold_count) * 100, 1) if sold_count else None,
+        "avg_days_to_sell": _avg(days_to_sell_values),
+        "avg_profit_error": _avg(profit_errors),
+        "buy_called": buy_called,
+        "buy_hit_rate": round((buy_profitable / buy_called) * 100, 1) if buy_called else None,
+        "recent_sold": recent_sold[:10],
     }
 
 

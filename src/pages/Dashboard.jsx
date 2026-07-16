@@ -22,6 +22,7 @@ import RepairBreakdown from "../components/RepairBreakdown";
 import VehicleListRow from "../components/VehicleListRow";
 import CarCard from "../components/CarCard";
 import CurrencyInput from "../components/CurrencyInput";
+import OutcomeLogModal from "../components/OutcomeLogModal";
 import { formatCurrency, parseCurrencyInput } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
 import { calculateFlipMetrics } from "../utils/flipCalculator";
@@ -40,6 +41,15 @@ import {
   askingPrice,
   formatSaleDate,
 } from "../utils/vehicleSource";
+import {
+  DEAL_STATUS,
+  dealStatus,
+  isActiveDeal,
+  isSold,
+  daysSincePurchaseUnsold,
+  formatSignedCurrency,
+} from "../utils/dealLifecycle";
+import { Trophy, Target, Clock } from "lucide-react";
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 //  ADD VEHICLE MODAL (ManualVehicleModal)
@@ -577,6 +587,62 @@ function isCarProcessing(car) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
+//  SCOREBOARD STRIP
+///////////////////////////////////////////////////////////////////////////////////////////
+
+function ScoreboardStrip({ summary, onOpen }) {
+  const profit = summary.realized_profit_total || 0;
+  const stats = [
+    {
+      icon: Trophy,
+      label: "Realized profit",
+      value: formatSignedCurrency(profit),
+      tone: profit >= 0 ? "text-emerald-600" : "text-red-600",
+    },
+    {
+      icon: TrendingUp,
+      label: "Active deals",
+      value: String(summary.active_count ?? 0),
+      tone: "text-slate-800",
+    },
+    {
+      icon: Target,
+      label: "Win rate",
+      value: summary.win_rate != null ? `${summary.win_rate}%` : "—",
+      tone: "text-slate-800",
+    },
+    {
+      icon: Clock,
+      label: "Avg days to sell",
+      value: summary.avg_days_to_sell != null ? `${summary.avg_days_to_sell}d` : "—",
+      tone: "text-slate-800",
+    },
+  ];
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="mb-5 grid w-full grid-cols-2 gap-3 rounded-3xl border border-slate-200 bg-white p-4 text-left shadow-lg shadow-slate-200/60 transition hover:border-blue-200 hover:shadow-xl sm:grid-cols-4 sm:gap-4"
+    >
+      {stats.map(({ icon: Icon, label, value, tone }) => (
+        <div key={label} className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-bg text-slate-400">
+            <Icon size={16} />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              {label}
+            </p>
+            <p className={`truncate text-lg font-bold tabular-nums ${tone}`}>{value}</p>
+          </div>
+        </div>
+      ))}
+    </button>
+  );
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
 //  DASHBOARD
 ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -602,6 +668,9 @@ export default function Dashboard({
   const [menuOpenId, setMenuOpenId] = useState(null);
   const [carToDelete, setCarToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [summary, setSummary] = useState(null);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [outcomeTarget, setOutcomeTarget] = useState(null);
   const [viewMode, setViewMode] = useState(() =>
     localStorage.getItem("dashboard-view-mode") === "list" ? "list" : "grid"
   );
@@ -695,6 +764,17 @@ export default function Dashboard({
     return list;
   };
 
+  const fetchSummary = async () => {
+    try {
+      const res = await axios.get(`${API}/api/portfolio/summary`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      setSummary(res.data);
+    } catch (err) {
+      console.error("Portfolio summary load failed:", err);
+    }
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -709,6 +789,7 @@ export default function Dashboard({
     };
 
     load();
+    fetchSummary();
   }, []);
 
   // Poll while any vehicle is still processing (images + AI)
@@ -768,6 +849,44 @@ export default function Dashboard({
     );
   };
 
+  const mergeCar = (updated) => {
+    if (!updated?.id) return;
+    setCars((prev) =>
+      prev.map((car) =>
+        car.id === updated.id
+          ? calculateCarWithMargin({ ...car, ...updated }, tempMargin)
+          : car
+      )
+    );
+    fetchSummary();
+  };
+
+  const handleQuickStatus = async (car, status, predictions) => {
+    if (isDemo) return;
+    try {
+      const body = { deal_status: status };
+      if (
+        ["bought", "in_repair", "listed", "sold"].includes(status) &&
+        car?.predicted_max_bid == null &&
+        predictions
+      ) {
+        body.snapshot = {
+          predicted_max_bid: Math.round(Number(predictions.maxBid) || 0),
+          predicted_repair: Math.round(Number(predictions.repair) || 0),
+          predicted_resale: Math.round(Number(predictions.resale) || 0),
+          predicted_profit: Math.round(Number(predictions.profit) || 0),
+        };
+      }
+      const res = await axios.patch(`${API}/api/vehicle/${car.id}/status`, body, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      mergeCar(res.data);
+    } catch (err) {
+      console.error("Quick status update failed:", err);
+      alert(err.response?.data?.detail || "Could not update deal status.");
+    }
+  };
+
   if (loading)
     return (
       <div className="flex h-screen items-center justify-center bg-brand-bg">
@@ -786,10 +905,28 @@ export default function Dashboard({
       </div>
     );
 
-  const visibleCars = cars.filter(isCarReady);
+  const readyCars = cars.filter(isCarReady);
   const processingCars = cars.filter(isCarProcessing);
-  const readyCount = visibleCars.length;
+  const readyCount = readyCars.length;
   const processingCount = processingCars.length;
+
+  const STATUS_TABS = [
+    { key: "all", label: "All" },
+    { key: DEAL_STATUS.WATCHING, label: "Watching" },
+    { key: DEAL_STATUS.BOUGHT, label: "Bought" },
+    { key: DEAL_STATUS.IN_REPAIR, label: "In Repair" },
+    { key: DEAL_STATUS.LISTED, label: "Listed" },
+    { key: DEAL_STATUS.SOLD, label: "Sold" },
+  ];
+  const statusCountFor = (key) =>
+    key === "all" ? readyCars.length : readyCars.filter((c) => dealStatus(c) === key).length;
+
+  const visibleCars =
+    statusFilter === "all"
+      ? readyCars
+      : readyCars.filter((c) => dealStatus(c) === statusFilter);
+
+  const nudgeCars = readyCars.filter((c) => (daysSincePurchaseUnsold(c) ?? -1) > 30);
 
   return (
     <main className="relative min-h-screen bg-brand-bg">
@@ -822,6 +959,10 @@ export default function Dashboard({
       />
 
       <div className="relative w-full px-3 py-5 sm:px-4 sm:py-6 lg:px-5">
+        {summary && (summary.sold_count > 0 || summary.active_count > 0) && (
+          <ScoreboardStrip summary={summary} onOpen={() => navigate("/portfolio")} />
+        )}
+
         <div className="mb-5 flex flex-col gap-4 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium text-blue-600">Your pipeline</p>
@@ -829,7 +970,7 @@ export default function Dashboard({
               Vehicle Inventory
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-slate-500 sm:text-base">
-              {visibleCars.length} {visibleCars.length === 1 ? "vehicle" : "vehicles"}
+              {readyCount} {readyCount === 1 ? "vehicle" : "vehicles"}
               {isDemo ? " in demo preview" : " ready for flip decisions"}
               {processingCount > 0 ? ` · ${processingCount} processing` : ""}
             </p>
@@ -877,12 +1018,70 @@ export default function Dashboard({
           </div>
         )}
 
+        {!isDemo && nudgeCars.length > 0 && (
+          <div className="mb-5 flex items-center gap-3 rounded-2xl border border-blue-200/80 bg-blue-50 px-4 py-3.5 text-sm text-blue-900 shadow-sm shadow-blue-100/50">
+            <Clock size={18} className="shrink-0 text-blue-600" />
+            <span>
+              {nudgeCars.length === 1
+                ? "1 bought deal hasn't been closed out yet."
+                : `${nudgeCars.length} bought deals haven't been closed out yet.`}{" "}
+              Did they sell? Log the outcome to score the flip.
+            </span>
+          </div>
+        )}
+
+        {readyCount > 0 && (
+          <div className="mb-5 flex flex-wrap gap-2">
+            {STATUS_TABS.map((tab) => {
+              const count = statusCountFor(tab.key);
+              const active = statusFilter === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setStatusFilter(tab.key)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                    active
+                      ? "border-blue-600 bg-blue-600 text-white shadow-sm shadow-blue-600/20"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {tab.label}
+                  <span
+                    className={`rounded-full px-1.5 text-xs tabular-nums ${
+                      active ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {visibleCars.length === 0 ? (
           <div className="flex min-h-[calc(100vh-11rem)] flex-col items-center justify-center rounded-3xl border border-slate-200 bg-white px-6 py-16 text-center shadow-xl shadow-slate-200/70">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-bg text-slate-400">
               <Car size={26} />
             </div>
-            {processingCount > 0 && downloading ? (
+            {readyCount > 0 && statusFilter !== "all" ? (
+              <>
+                <p className="text-xl font-bold tracking-tight text-brand-navy">
+                  No deals in this stage
+                </p>
+                <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
+                  Nothing is marked “{STATUS_TABS.find((t) => t.key === statusFilter)?.label}” yet.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("all")}
+                  className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                >
+                  Show all vehicles
+                </button>
+              </>
+            ) : processingCount > 0 && downloading ? (
               <>
                 <p className="text-xl font-bold tracking-tight text-brand-navy">
                   Processing vehicles…
@@ -938,6 +1137,10 @@ export default function Dashboard({
                 setMenuOpenId={setMenuOpenId}
                 setCarToDelete={setCarToDelete}
                 onViewDetails={() => navigate(`/vehicle/${car.id}`)}
+                onQuickStatus={handleQuickStatus}
+                onLogOutcome={(target, predictions) =>
+                  setOutcomeTarget({ car: target, predictions })
+                }
                 onUpdateValues={(carId, updates) => {
                   Object.entries(updates).forEach(([field, value]) => {
                     updateCarValue(carId, field, value);
@@ -993,6 +1196,16 @@ export default function Dashboard({
           onUpdateCarValue={updateCarValue}
           apiBase={API}
           isDemo={isDemo}
+        />
+      )}
+
+      {outcomeTarget && (
+        <OutcomeLogModal
+          car={outcomeTarget.car}
+          apiBase={API}
+          predictions={outcomeTarget.predictions}
+          onClose={() => setOutcomeTarget(null)}
+          onSaved={mergeCar}
         />
       )}
     </main>

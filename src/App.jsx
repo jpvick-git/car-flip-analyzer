@@ -14,6 +14,7 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import VehicleDetail from "./pages/VehicleDetail";
 import SettingsPage from "./pages/Settings";
+import Portfolio from "./pages/Portfolio";
 import Header from "./components/Header";
 import { UserSettingsProvider } from "./context/UserSettingsContext";
 import { clearCachedSettings } from "./utils/userSettings";
@@ -131,6 +132,15 @@ function Layout() {
           element={
             <ProtectedRoute>
               <VehicleDetail />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/portfolio"
+          element={
+            <ProtectedRoute>
+              <Portfolio />
             </ProtectedRoute>
           }
         />

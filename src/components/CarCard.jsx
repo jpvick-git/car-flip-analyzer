@@ -1,4 +1,4 @@
-import { Wrench, DollarSign, ArrowRight, MoreVertical, Trash2 } from "lucide-react";
+import { Wrench, DollarSign, ArrowRight, MoreVertical, Trash2, ShoppingCart, Tag } from "lucide-react";
 import CurrencyInput from "./CurrencyInput";
 import { formatCurrency } from "../utils/formatCurrency";
 import { formatVehicleTitle } from "../utils/vehicleName";
@@ -20,11 +20,20 @@ import {
   formatSaleDate,
   buyerFeeRate,
 } from "../utils/vehicleSource";
+import {
+  dealStatus,
+  statusLabel,
+  statusBadgeClasses,
+  statusDotClasses,
+  DEAL_STATUS,
+} from "../utils/dealLifecycle";
 
 export default function CarCard({
   car,
   onViewDetails,
   onUpdateValues,
+  onQuickStatus,
+  onLogOutcome,
   marginPercent = 15,
   isDemo = false,
   menuOpenId,
@@ -54,6 +63,15 @@ export default function CarCard({
   const styles = recommendationStyles(decision.recommendation);
   const profitPositive = decision.expectedProfit >= 0;
   const saleDate = formatSaleDate(car);
+  const status = dealStatus(car);
+  const showStatus = status !== DEAL_STATUS.ANALYZING;
+  const predictions = {
+    maxBid: flipMetrics.bid,
+    repair,
+    resale,
+    profit: decision.expectedProfit,
+  };
+  const acquired = [DEAL_STATUS.BOUGHT, DEAL_STATUS.IN_REPAIR, DEAL_STATUS.LISTED].includes(status);
 
   return (
     <div className="group flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70 transition duration-200 hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-300/50">
@@ -83,7 +101,33 @@ export default function CarCard({
                 <MoreVertical size={16} />
               </button>
               {menuOpenId === car.id && (
-                <div className="absolute right-0 top-full z-10 mt-1.5 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-white py-1 shadow-xl shadow-slate-200/80">
+                <div className="absolute right-0 top-full z-10 mt-1.5 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white py-1 shadow-xl shadow-slate-200/80">
+                  {status !== DEAL_STATUS.SOLD && !acquired && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpenId(null);
+                        onQuickStatus?.(car, DEAL_STATUS.BOUGHT, predictions);
+                      }}
+                      className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <ShoppingCart size={14} className="text-indigo-500" />
+                      Mark bought
+                    </button>
+                  )}
+                  {status !== DEAL_STATUS.SOLD && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpenId(null);
+                        onLogOutcome?.(car, predictions);
+                      }}
+                      className="flex w-full items-center gap-2 px-3.5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <Tag size={14} className="text-emerald-500" />
+                      Log sale
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -100,9 +144,17 @@ export default function CarCard({
             </div>
           )}
         </div>
-        <span className="absolute bottom-3 left-3 max-w-[70%] truncate rounded-full bg-brand-navy/70 px-3 py-1 text-xs font-medium text-white backdrop-blur">
+        <span className="absolute bottom-3 left-3 max-w-[60%] truncate rounded-full bg-brand-navy/70 px-3 py-1 text-xs font-medium text-white backdrop-blur">
           {sourceLabel(car)}
         </span>
+        {showStatus && (
+          <span
+            className={`absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold shadow-sm ${statusBadgeClasses(status)}`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${statusDotClasses(status)}`} />
+            {statusLabel(status)}
+          </span>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col p-5 sm:p-6">

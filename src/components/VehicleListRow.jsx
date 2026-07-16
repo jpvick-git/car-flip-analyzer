@@ -24,6 +24,13 @@ import {
   formatSaleDate,
   buyerFeeRate,
 } from "../utils/vehicleSource";
+import {
+  dealStatus,
+  statusLabel,
+  statusBadgeClasses,
+  statusDotClasses,
+  DEAL_STATUS,
+} from "../utils/dealLifecycle";
 
 export default function VehicleListRow({
   car,
@@ -56,6 +63,8 @@ export default function VehicleListRow({
   const decision = calculateFlipDecision(car, flipMetrics, { marginPercent });
   const styles = recommendationStyles(decision.recommendation);
   const profitPositive = decision.expectedProfit >= 0;
+  const status = dealStatus(car);
+  const showStatus = status !== DEAL_STATUS.ANALYZING;
 
   return (
     <div className="group grid grid-cols-1 gap-4 border-b border-slate-100 bg-white p-4 transition last:border-b-0 hover:bg-brand-bg/60 lg:grid-cols-[120px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center lg:gap-5 lg:px-5 lg:py-4">
@@ -90,6 +99,14 @@ export default function VehicleListRow({
           <span className="hidden rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600 lg:inline">
             {sourceLabel(car)}
           </span>
+          {showStatus && (
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${statusBadgeClasses(status)}`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${statusDotClasses(status)}`} />
+              {statusLabel(status)}
+            </span>
+          )}
           {!isDemo && (
             <div className="relative" onClick={(e) => e.stopPropagation()}>
               <button

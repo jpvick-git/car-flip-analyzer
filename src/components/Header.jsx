@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Menu, X, Plus, Settings, LogOut } from "lucide-react";
+import { Menu, X, Plus, Settings, LogOut, BarChart3 } from "lucide-react";
 import BrandLogo from "./BrandLogo";
 
 export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
@@ -43,6 +43,17 @@ export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
                 Add Vehicle
               </button>
             )}
+
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                navigate("/portfolio");
+              }}
+              className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-brand-bg"
+            >
+              <BarChart3 size={16} className="text-emerald-600" />
+              Portfolio
+            </button>
 
             <button
               onClick={() => {

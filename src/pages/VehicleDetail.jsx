@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import RepairPlanCard from "../components/RepairPlanCard";
 import FlipDecisionCard from "../components/FlipDecisionCard";
+import DealTrackerCard from "../components/DealTrackerCard";
 import DealSummaryCard from "../components/DealSummaryCard";
 import DealRisksCard from "../components/DealRisksCard";
 import RawAIDetailsCard from "../components/RawAIDetailsCard";
@@ -447,6 +448,14 @@ export default function VehicleDetail() {
                 flipMetrics={{ bid, profit, resale, repair, marginActual, transportCost }}
                 decision={flipDecision}
                 hideNarrative
+              />
+
+              <DealTrackerCard
+                car={car}
+                apiBase={API}
+                readOnly={isDemo}
+                predictions={{ maxBid: bid, repair, resale, profit }}
+                onUpdate={(updated) => setCar((prev) => ({ ...prev, ...updated }))}
               />
 
               <TransportCostCard

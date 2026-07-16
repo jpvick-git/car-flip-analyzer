@@ -1,6 +1,32 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { User, Store, Info, X } from "lucide-react";
 import BrandLogo from "../components/BrandLogo";
+
+const ACCOUNT_TYPES = [
+  {
+    value: "flipper",
+    label: "Flipper",
+    icon: User,
+    tagline: "Individual buyer / reseller",
+    points: [
+      "Framed around Max Bid, Repair, and per-car Profit",
+      "Best for auction and private-party flips",
+      "Simple outcome logging: bought → repair → sold",
+    ],
+  },
+  {
+    value: "dealer",
+    label: "Used Car Lot",
+    icon: Store,
+    tagline: "Dealership / lot operator",
+    points: [
+      "Uses Max Buy, Recon, and Front/Back Gross",
+      "Adds a Lot Cost Profile (fees, pack, floor plan)",
+      "Portfolio tracks inventory aging and gross split",
+    ],
+  },
+];
 
 const inputClass =
   "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/15";
@@ -17,6 +43,8 @@ export default function Register() {
   const [city, setCity] = useState("");
   const [stateCode, setStateCode] = useState("");
   const [zipCode, setZipCode] = useState("");
+  const [businessType, setBusinessType] = useState("flipper");
+  const [showTypeInfo, setShowTypeInfo] = useState(false);
   const [status, setStatus] = useState("");
   const [statusType, setStatusType] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -55,6 +83,7 @@ export default function Register() {
       const body = new URLSearchParams({
         username: trimmedEmail,
         password,
+        business_type: businessType,
       });
 
       if (name.trim()) body.append("name", name.trim());
@@ -173,6 +202,87 @@ export default function Register() {
             </div>
 
             <form onSubmit={handleRegister} className="space-y-4">
+              <div>
+                <div className="mb-2 flex items-center gap-1.5">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Account type
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowTypeInfo((v) => !v)}
+                    className="text-slate-400 transition hover:text-brand-green"
+                    aria-label="What's the difference?"
+                    title="What's the difference?"
+                  >
+                    <Info size={15} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {ACCOUNT_TYPES.map(({ value, label, icon: Icon, tagline }) => {
+                    const active = businessType === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setBusinessType(value)}
+                        className={`flex flex-col items-start gap-1 rounded-xl border px-4 py-3 text-left transition ${
+                          active
+                            ? "border-brand-green bg-brand-green/5 ring-2 ring-brand-green/20"
+                            : "border-slate-300 hover:bg-slate-50"
+                        }`}
+                      >
+                        <span
+                          className={`flex items-center gap-1.5 text-sm font-semibold ${
+                            active ? "text-brand-navy" : "text-slate-700"
+                          }`}
+                        >
+                          <Icon size={16} className={active ? "text-brand-green" : "text-slate-400"} />
+                          {label}
+                        </span>
+                        <span className="text-xs text-slate-500">{tagline}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {showTypeInfo && (
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-sm font-semibold text-brand-navy">
+                        Which one is right for me?
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowTypeInfo(false)}
+                        className="text-slate-400 hover:text-slate-600"
+                        aria-label="Close"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {ACCOUNT_TYPES.map(({ value, label, icon: Icon, points }) => (
+                        <div key={value}>
+                          <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                            <Icon size={13} className="text-brand-green" />
+                            {label}
+                          </p>
+                          <ul className="mt-1 space-y-0.5 pl-5 text-xs text-slate-500">
+                            {points.map((pt) => (
+                              <li key={pt} className="list-disc">{pt}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-xs text-slate-400">
+                      You can change this anytime in Settings.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Email address

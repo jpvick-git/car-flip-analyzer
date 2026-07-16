@@ -167,7 +167,13 @@ def register(
     state_code: str = Form(None),
     zip_code: str = Form(None),
     phone: str = Form(None),
+    business_type: str = Form("flipper"),
 ):
+    # Account type chosen at sign-up (flipper vs used-car-lot/dealer).
+    business_type = (business_type or "flipper").strip().lower()
+    if business_type not in ("flipper", "dealer"):
+        business_type = "flipper"
+
     with engine.begin() as conn:
         # Prevent duplicate accounts
         existing = conn.execute(
@@ -182,10 +188,10 @@ def register(
             text("""
                 INSERT INTO users (
                     username, email, password_hash, created_at,
-                    name, street, city, state_code, zip_code, phone
+                    name, street, city, state_code, zip_code, phone, business_type
                 ) VALUES (
                     :u, :e, :p, NOW(),
-                    :name, :street, :city, :state_code, :zip_code, :phone
+                    :name, :street, :city, :state_code, :zip_code, :phone, :business_type
                 )
                 RETURNING id
             """),
@@ -198,13 +204,15 @@ def register(
                 "city": city,
                 "state_code": state_code,
                 "zip_code": zip_code,
-                "phone": phone
+                "phone": phone,
+                "business_type": business_type,
             }
         ).scalar()
 
     log_activity(
         new_id, "register", entity_type="user", entity_id=new_id,
-        description=f"New account registered: {username}", request=request,
+        description=f"New account registered: {username}",
+        metadata={"business_type": business_type}, request=request,
     )
     return {"message": "User created successfully"}
 

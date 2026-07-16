@@ -6,10 +6,20 @@ run once when the API boots (same self-migrating pattern as user_settings.py).
 """
 
 import json
+import os
+import threading
 from sqlalchemy import text
 from .db import get_engine
 
 engine = get_engine()
+
+# Offline IP geolocation (DB-IP Lite / GeoLite2 .mmdb). Zero ongoing cost:
+# no API calls, no license key needed for DB-IP Lite. Degrades gracefully to
+# no location when the DB file or geoip2 library is missing.
+GEOIP_DB_PATH = os.getenv("GEOIP_DB_PATH", "/opt/carflip/geoip/city.mmdb")
+_geo_reader = None
+_geo_disabled = False
+_geo_lock = threading.Lock()
 
 # Role vocabulary. Dealership tier intentionally omitted for now.
 ROLE_SUPER_ADMIN = "super_admin"
@@ -68,6 +78,13 @@ _CORE_DDL = (
         created_at TIMESTAMP DEFAULT NOW()
     )
     """,
+    # approximate IP geolocation (offline lookup; nullable, best-effort)
+    "ALTER TABLE user_login_history ADD COLUMN IF NOT EXISTS city TEXT",
+    "ALTER TABLE user_login_history ADD COLUMN IF NOT EXISTS region TEXT",
+    "ALTER TABLE user_login_history ADD COLUMN IF NOT EXISTS country TEXT",
+    "ALTER TABLE user_activity_logs ADD COLUMN IF NOT EXISTS city TEXT",
+    "ALTER TABLE user_activity_logs ADD COLUMN IF NOT EXISTS region TEXT",
+    "ALTER TABLE user_activity_logs ADD COLUMN IF NOT EXISTS country TEXT",
 )
 
 # Indexes — best-effort. Some depend on columns created by other modules
@@ -171,6 +188,54 @@ def client_ip(request) -> str | None:
 
 
 # --------------------------------------------------------------
+# Offline IP geolocation
+# --------------------------------------------------------------
+def _get_geo_reader():
+    """Lazily open the mmdb reader once; disable cleanly if unavailable."""
+    global _geo_reader, _geo_disabled
+    if _geo_reader is not None or _geo_disabled:
+        return _geo_reader
+    with _geo_lock:
+        if _geo_reader is None and not _geo_disabled:
+            try:
+                import geoip2.database  # noqa: WPS433 (optional dependency)
+
+                _geo_reader = geoip2.database.Reader(GEOIP_DB_PATH)
+                print(f"🌍 GeoIP enabled ({GEOIP_DB_PATH})")
+            except Exception as e:
+                _geo_disabled = True
+                print(f"⚠️ GeoIP disabled ({e}); locations will be blank")
+    return _geo_reader
+
+
+def geolocate(ip: str | None) -> dict:
+    """Return {city, region, country} for an IP, or empty dict if unknown.
+
+    Private/loopback IPs and lookups that miss simply return {}.
+    """
+    if not ip:
+        return {}
+    reader = _get_geo_reader()
+    if reader is None:
+        return {}
+    try:
+        r = reader.city(ip)
+        region = None
+        try:
+            region = r.subdivisions.most_specific.iso_code
+        except Exception:
+            region = None
+        return {
+            "city": r.city.name,
+            "region": region,
+            "country": r.country.iso_code,
+        }
+    except Exception:
+        # AddressNotFoundError (private/unknown IP) and any parse error.
+        return {}
+
+
+# --------------------------------------------------------------
 # Login history + activity logging
 # --------------------------------------------------------------
 def record_login(user_id, request, success: bool, failure_reason: str | None = None,
@@ -179,18 +244,22 @@ def record_login(user_id, request, success: bool, failure_reason: str | None = N
     try:
         ua = request.headers.get("user-agent") if request is not None else None
         parsed = parse_user_agent(ua)
+        ip = client_ip(request)
+        geo = geolocate(ip)
         with engine.begin() as conn:
             conn.execute(
                 text("""
                     INSERT INTO user_login_history
                         (user_id, ip_address, user_agent, browser, device_type,
-                         operating_system, success, failure_reason, session_id)
+                         operating_system, success, failure_reason, session_id,
+                         city, region, country)
                     VALUES
-                        (:uid, :ip, :ua, :browser, :device, :os, :success, :reason, :sid)
+                        (:uid, :ip, :ua, :browser, :device, :os, :success, :reason, :sid,
+                         :city, :region, :country)
                 """),
                 {
                     "uid": user_id,
-                    "ip": client_ip(request),
+                    "ip": ip,
                     "ua": ua,
                     "browser": parsed["browser"],
                     "device": parsed["device_type"],
@@ -198,6 +267,9 @@ def record_login(user_id, request, success: bool, failure_reason: str | None = N
                     "success": success,
                     "reason": failure_reason,
                     "sid": session_id,
+                    "city": geo.get("city"),
+                    "region": geo.get("region"),
+                    "country": geo.get("country"),
                 },
             )
     except Exception as e:  # pragma: no cover - logging must not break auth
@@ -213,15 +285,17 @@ def log_activity(user_id, action_type, *, entity_type=None, entity_id=None,
     try:
         ua = request.headers.get("user-agent") if request is not None else None
         meta_json = json.dumps(metadata) if metadata is not None else None
+        ip = client_ip(request)
+        geo = geolocate(ip)
         with engine.begin() as conn:
             conn.execute(
                 text("""
                     INSERT INTO user_activity_logs
                         (user_id, action_type, entity_type, entity_id, description,
-                         metadata, ip_address, user_agent)
+                         metadata, ip_address, user_agent, city, region, country)
                     VALUES
                         (:uid, :action, :etype, :eid, :desc,
-                         CAST(:meta AS JSONB), :ip, :ua)
+                         CAST(:meta AS JSONB), :ip, :ua, :city, :region, :country)
                 """),
                 {
                     "uid": user_id,
@@ -230,8 +304,11 @@ def log_activity(user_id, action_type, *, entity_type=None, entity_id=None,
                     "eid": str(entity_id) if entity_id is not None else None,
                     "desc": description,
                     "meta": meta_json,
-                    "ip": client_ip(request),
+                    "ip": ip,
                     "ua": ua,
+                    "city": geo.get("city"),
+                    "region": geo.get("region"),
+                    "country": geo.get("country"),
                 },
             )
             if user_id is not None:

@@ -116,7 +116,9 @@ export default function AdminActivity() {
               ) : (
                 <span className="text-xs text-slate-400">System</span>
               )}
-              <span className="text-xs text-slate-400">{a.ip_address || ""}</span>
+              <span className="text-xs text-slate-400">
+                {a.location ? `${a.location} · ${a.ip_address || ""}` : a.ip_address || ""}
+              </span>
               <span className="shrink-0 text-xs text-slate-400">{dateTime(a.created_at)}</span>
             </li>
           ))}

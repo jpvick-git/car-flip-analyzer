@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, Clock } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, Clock, Globe } from "lucide-react";
 import adminApi from "../../utils/adminApi";
 import { money, num, dateShort, relativeTime, dateTime, vehicleName } from "../../utils/adminFormat";
 import { LoadingState, ErrorState, EmptyState } from "../../components/admin/AdminStates";
@@ -147,6 +147,9 @@ export default function AdminUserDetail() {
               {user.location && <InfoRow icon={MapPin}>{user.location}</InfoRow>}
               <InfoRow icon={Calendar}>Joined {dateShort(user.created_at)}</InfoRow>
               <InfoRow icon={Clock}>Last login {relativeTime(user.last_login_at)}</InfoRow>
+              {user.last_login_location && (
+                <InfoRow icon={Globe}>From {user.last_login_location}</InfoRow>
+              )}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <StatusBadge value={user.role} />
@@ -230,7 +233,10 @@ export default function AdminUserDetail() {
                       <p className="font-medium text-slate-700">
                         {a.description || a.action_type}
                       </p>
-                      <p className="text-xs text-slate-400">{a.action_type}</p>
+                      <p className="text-xs text-slate-400">
+                        {a.action_type}
+                        {a.location ? ` · ${a.location}` : ""}
+                      </p>
                     </div>
                     <span className="shrink-0 text-xs text-slate-400">{dateTime(a.created_at)}</span>
                   </li>

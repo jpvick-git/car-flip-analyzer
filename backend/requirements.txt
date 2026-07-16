@@ -14,6 +14,9 @@ schedule==1.2.2
 python-dotenv==1.1.1
 requests==2.32.3
 
+# --- Offline IP geolocation (reads a local DB-IP/GeoLite2 .mmdb; no API cost) ---
+geoip2
+
 # --- Async / networking ---
 aiohttp==3.13.1
 aiohappyeyeballs==2.6.1

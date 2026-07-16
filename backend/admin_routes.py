@@ -349,6 +349,14 @@ def admin_user_detail(user_id: int, current_user: dict = Depends(require_super_a
             WHERE user_id = :id AND deal_status = 'sold'
         """), {"id": user_id}).fetchall()
 
+        last_login = conn.execute(text("""
+            SELECT city, region, country, ip_address
+            FROM user_login_history
+            WHERE user_id = :id AND success = TRUE
+            ORDER BY logged_in_at DESC
+            LIMIT 1
+        """), {"id": user_id}).fetchone()
+
     realized_total = 0
     realized_count = 0
     for sr in sold_rows:
@@ -375,6 +383,10 @@ def admin_user_detail(user_id: int, current_user: dict = Depends(require_super_a
         "last_login_at": user["last_login_at"].isoformat() if user["last_login_at"] else None,
         "last_activity_at": user["last_activity_at"].isoformat() if user["last_activity_at"] else None,
         "login_count": int(user["login_count"] or 0),
+        "last_login_location": _location_str(
+            last_login.city, last_login.region, last_login.country
+        ) if last_login else None,
+        "last_login_ip": last_login.ip_address if last_login else None,
         "activity_summary": {
             "total_vehicles": int(stats.total_vehicles or 0),
             "total_evaluations": int(stats.total_evaluations or 0),
@@ -485,7 +497,7 @@ def admin_user_activity(
         ).scalar()
         rows = conn.execute(text("""
             SELECT id, action_type, entity_type, entity_id, description,
-                   metadata, ip_address, created_at
+                   metadata, ip_address, created_at, city, region, country
             FROM user_activity_logs
             WHERE user_id = :id
             ORDER BY created_at DESC
@@ -697,7 +709,13 @@ def admin_restore_vehicle(
 # ==============================================================
 # ACTIVITY LOG
 # ==============================================================
+def _location_str(city, region, country):
+    parts = [p for p in (city, region, country) if p]
+    return ", ".join(parts) if parts else None
+
+
 def _activity_row(r) -> dict:
+    m = r._mapping
     return {
         "id": r.id,
         "action_type": r.action_type,
@@ -706,6 +724,7 @@ def _activity_row(r) -> dict:
         "description": r.description,
         "metadata": r.metadata,
         "ip_address": r.ip_address,
+        "location": _location_str(m.get("city"), m.get("region"), m.get("country")),
         "created_at": r.created_at.isoformat() if r.created_at else None,
     }
 
@@ -745,6 +764,7 @@ def admin_activity(
         rows = conn.execute(text(f"""
             SELECT a.id, a.user_id, a.action_type, a.entity_type, a.entity_id,
                    a.description, a.metadata, a.ip_address, a.created_at,
+                   a.city, a.region, a.country,
                    u.name AS user_name, u.email AS user_email
             FROM user_activity_logs a
             LEFT JOIN users u ON u.id = a.user_id

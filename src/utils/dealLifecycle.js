@@ -123,16 +123,37 @@ export function computeRealizedProfit(car) {
   if (sale == null || purchase == null) return null;
   const repair = Number(car?.actual_repair_cost) || 0;
   const transport = Number(car?.actual_transport_cost) || 0;
+  const backend = Number(car?.backend_gross) || 0;
+  const auctionFee = Number(car?.buy_auction_fee) || 0;
+  const dealShield = Number(car?.buy_deal_shield) || 0;
   const buyerFee = Math.round(purchase * buyerFeeRate(car));
-  return sale - purchase - repair - transport - buyerFee;
+  return (
+    sale +
+    backend -
+    purchase -
+    repair -
+    transport -
+    auctionFee -
+    dealShield -
+    buyerFee
+  );
 }
 
-/** Total cash invested in a sold/acquired deal (purchase + repair + transport). */
+/** Realized profit excluding backend gross (vehicle front-end only). */
+export function computeFrontGross(car) {
+  const realized = computeRealizedProfit(car);
+  if (realized == null) return null;
+  return realized - (Number(car?.backend_gross) || 0);
+}
+
+/** Total cash invested in a sold/acquired deal (purchase + recon + transport + fees). */
 export function computeInvested(car) {
   const purchase = Number(car?.actual_purchase_price) || 0;
   const repair = Number(car?.actual_repair_cost) || 0;
   const transport = Number(car?.actual_transport_cost) || 0;
-  return purchase + repair + transport;
+  const auctionFee = Number(car?.buy_auction_fee) || 0;
+  const dealShield = Number(car?.buy_deal_shield) || 0;
+  return purchase + repair + transport + auctionFee + dealShield;
 }
 
 /**

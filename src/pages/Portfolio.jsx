@@ -65,6 +65,8 @@ export default function Portfolio() {
   const profit = summary.realized_profit_total || 0;
   const soldCount = summary.sold_count || 0;
   const hasData = soldCount > 0 || (summary.active_count || 0) > 0;
+  const dealer = summary.business_type === "dealer";
+  const unitWord = dealer ? "unit" : "flip";
 
   return (
     <main className="relative min-h-screen bg-brand-bg">
@@ -81,13 +83,15 @@ export default function Portfolio() {
         </button>
 
         <div className="mb-6">
-          <p className="text-sm font-medium text-blue-600">Your flip business</p>
+          <p className="text-sm font-medium text-blue-600">
+            {dealer ? "Your lot" : "Your flip business"}
+          </p>
           <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-brand-navy sm:text-4xl">
             Portfolio
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-slate-500 sm:text-base">
             {soldCount > 0
-              ? `${soldCount} flip${soldCount === 1 ? "" : "s"} closed · ${summary.active_count || 0} active`
+              ? `${soldCount} ${unitWord}${soldCount === 1 ? "" : "s"} sold · ${summary.active_count || 0} on lot`
               : "Track your real outcomes to build your scoreboard."}
           </p>
         </div>
@@ -186,6 +190,93 @@ export default function Portfolio() {
               </section>
             </div>
 
+            {/* Dealer/lot performance */}
+            {dealer && (
+              <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                {/* Gross split */}
+                <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+                  <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5">
+                    <Wallet size={16} className="text-emerald-600" />
+                    <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Gross split
+                    </h2>
+                  </div>
+                  <div className="p-5">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Stat
+                        icon={TrendingUp}
+                        label="Front gross"
+                        value={formatSignedCurrency(summary.front_gross_total || 0)}
+                      />
+                      <Stat
+                        icon={Sparkles}
+                        label="Back gross"
+                        value={formatSignedCurrency(summary.back_gross_total || 0)}
+                      />
+                      <Stat
+                        icon={TrendingUp}
+                        label="Avg front / unit"
+                        value={
+                          summary.avg_front_gross != null
+                            ? formatSignedCurrency(summary.avg_front_gross)
+                            : "—"
+                        }
+                      />
+                      <Stat
+                        icon={Target}
+                        label="Avg recon miss"
+                        value={
+                          summary.avg_recon_variance != null
+                            ? formatSignedCurrency(summary.avg_recon_variance)
+                            : "—"
+                        }
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                {/* Aging tracker */}
+                <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+                  <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5">
+                    <Clock size={16} className="text-amber-600" />
+                    <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Aging on lot
+                    </h2>
+                  </div>
+                  <div className="p-5">
+                    <div className="grid grid-cols-3 gap-3">
+                      <AgeBucket
+                        label={`Fresh (<${summary.target_turn_days}d)`}
+                        count={summary.aging_buckets?.fresh || 0}
+                        tone="emerald"
+                      />
+                      <AgeBucket
+                        label={`Aging (${summary.target_turn_days}-${summary.max_turn_days}d)`}
+                        count={summary.aging_buckets?.aging || 0}
+                        tone="amber"
+                      />
+                      <AgeBucket
+                        label={`Stale (>${summary.max_turn_days}d)`}
+                        count={summary.aging_buckets?.stale || 0}
+                        tone="red"
+                      />
+                    </div>
+                    {summary.units_over_max_turn > 0 ? (
+                      <p className="mt-4 rounded-xl bg-red-50 px-3 py-2.5 text-xs font-medium text-red-700">
+                        {summary.units_over_max_turn} unit
+                        {summary.units_over_max_turn === 1 ? "" : "s"} past your{" "}
+                        {summary.max_turn_days}-day act-by window — time to move them.
+                      </p>
+                    ) : (
+                      <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2.5 text-xs text-slate-500">
+                        Nothing stale — your lot is turning within target.
+                      </p>
+                    )}
+                  </div>
+                </section>
+              </div>
+            )}
+
             {/* Recent sold — predicted vs actual */}
             <section className="mt-5 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
               <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5">
@@ -222,6 +313,22 @@ function Stat({ icon: Icon, label, value }) {
         <span className="text-[10px] font-semibold uppercase tracking-wider">{label}</span>
       </div>
       <p className="text-lg font-bold tabular-nums text-slate-800">{value}</p>
+    </div>
+  );
+}
+
+function AgeBucket({ label, count, tone }) {
+  const tones = {
+    emerald: "border-emerald-100 bg-emerald-50/70 text-emerald-700",
+    amber: "border-amber-100 bg-amber-50/70 text-amber-700",
+    red: "border-red-100 bg-red-50/70 text-red-700",
+  };
+  return (
+    <div className={`rounded-2xl border p-3 text-center ${tones[tone] || tones.emerald}`}>
+      <p className="text-2xl font-extrabold tabular-nums">{count}</p>
+      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide leading-tight">
+        {label}
+      </p>
     </div>
   );
 }

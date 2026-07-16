@@ -3,6 +3,7 @@
 import os
 import shutil
 import json
+from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -73,6 +74,10 @@ def _ensure_schema_columns():
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS predicted_repair INTEGER",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS predicted_resale INTEGER",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS predicted_profit INTEGER",
+            # Dealer/lot mode: backend gross + buy cost stack
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS backend_gross INTEGER",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS buy_auction_fee INTEGER",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS buy_deal_shield INTEGER",
         ):
             conn.execute(text(stmt))
 
@@ -137,24 +142,67 @@ class StatusUpdatePayload(BaseModel):
     snapshot: PredictionSnapshot | None = None
 
 
+# Hard sanity bound for any single money field (rejects fat-finger / bad data).
+MONEY_MAX = 5_000_000
+
+# Money fields that flow through the outcome endpoint.
+OUTCOME_MONEY_FIELDS = (
+    "actual_purchase_price",
+    "actual_repair_cost",
+    "actual_sale_price",
+    "actual_transport_cost",
+    "backend_gross",
+    "buy_auction_fee",
+    "buy_deal_shield",
+)
+
+
 class OutcomeUpdatePayload(BaseModel):
     actual_purchase_price: int | None = None
     actual_repair_cost: int | None = None
     actual_sale_price: int | None = None
     actual_transport_cost: int | None = None
+    # Dealer/lot mode fields
+    backend_gross: int | None = None
+    buy_auction_fee: int | None = None
+    buy_deal_shield: int | None = None
     outcome_notes: str | None = None
 
 
 def _realized_profit(row: dict) -> int | None:
-    """Realized profit for a sold deal, or None if not enough data."""
+    """Realized profit for a sold deal, or None if not enough data.
+
+    Includes dealer-mode backend gross and buy cost stack when present.
+    Flipper deals leave those columns NULL, so this stays backward compatible.
+    """
     sale = row.get("actual_sale_price")
     purchase = row.get("actual_purchase_price")
     if sale is None or purchase is None:
         return None
     repair = row.get("actual_repair_cost") or 0
     transport = row.get("actual_transport_cost") or 0
+    backend = row.get("backend_gross") or 0
+    auction_fee = row.get("buy_auction_fee") or 0
+    deal_shield = row.get("buy_deal_shield") or 0
     buyer_fee = round(int(purchase) * buyer_fee_rate(row))
-    return int(sale) - int(purchase) - int(repair) - int(transport) - buyer_fee
+    return (
+        int(sale)
+        + int(backend)
+        - int(purchase)
+        - int(repair)
+        - int(transport)
+        - int(auction_fee)
+        - int(deal_shield)
+        - buyer_fee
+    )
+
+
+def _front_gross(row: dict) -> int | None:
+    """Realized profit excluding backend gross (vehicle front-end only)."""
+    realized = _realized_profit(row)
+    if realized is None:
+        return None
+    return realized - int(row.get("backend_gross") or 0)
 
 
 # --------------------------------------------------------------
@@ -684,10 +732,17 @@ def update_vehicle_outcome(
     require_not_demo(current_user)
     owner_id = get_vehicle_owner_id(current_user)
 
-    for field in ("actual_purchase_price", "actual_repair_cost", "actual_sale_price", "actual_transport_cost"):
+    for field in OUTCOME_MONEY_FIELDS:
         val = getattr(payload, field)
-        if val is not None and val < 0:
+        if val is None:
+            continue
+        if val < 0:
             raise HTTPException(status_code=400, detail=f"{field} cannot be negative")
+        if val > MONEY_MAX:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{field} looks too large — double-check the value",
+            )
 
     with engine.begin() as conn:
         row = conn.execute(
@@ -746,6 +801,20 @@ def portfolio_summary(current_user: dict = Depends(get_current_user)):
             text("SELECT * FROM user_vehicles WHERE user_id = :uid"),
             {"uid": owner_id},
         ).fetchall()
+        prefs = conn.execute(
+            text("""
+                SELECT business_type, target_turn_days, max_turn_days
+                FROM users WHERE id = :uid
+            """),
+            {"uid": owner_id},
+        ).fetchone()
+
+    prefs = dict(prefs._mapping) if prefs else {}
+    business_type = prefs.get("business_type") or "flipper"
+    target_turn_days = int(prefs.get("target_turn_days") or 60)
+    max_turn_days = int(prefs.get("max_turn_days") or 90)
+
+    now = datetime.utcnow()
 
     status_counts = {s: 0 for s in DEAL_STATUSES}
     active_count = 0
@@ -760,6 +829,15 @@ def portfolio_summary(current_user: dict = Depends(get_current_user)):
     buy_profitable = 0
     recent_sold = []
 
+    # Dealer/lot metrics
+    front_gross_total = 0
+    back_gross_total = 0
+    front_gross_values = []
+    back_gross_values = []
+    recon_variance_values = []
+    aging_buckets = {"fresh": 0, "aging": 0, "stale": 0}
+    units_over_max_turn = 0
+
     for row in rows:
         v = dict(row._mapping)
         status = (v.get("deal_status") or "analyzing").lower()
@@ -769,6 +847,22 @@ def portfolio_summary(current_user: dict = Depends(get_current_user)):
 
         if status in ("watching", "bought", "in_repair", "listed"):
             active_count += 1
+
+        # Aging for unsold, on-lot units (dealer aging tracker)
+        if status in ("bought", "in_repair", "listed"):
+            purchased_at = v.get("purchased_at")
+            if purchased_at:
+                try:
+                    days_on_lot = (now - purchased_at).days
+                    if days_on_lot < target_turn_days:
+                        aging_buckets["fresh"] += 1
+                    elif days_on_lot <= max_turn_days:
+                        aging_buckets["aging"] += 1
+                    else:
+                        aging_buckets["stale"] += 1
+                        units_over_max_turn += 1
+                except (TypeError, AttributeError):
+                    pass
 
         if status == "sold":
             realized = _realized_profit(v)
@@ -782,6 +876,18 @@ def portfolio_summary(current_user: dict = Depends(get_current_user)):
                     roi_values.append((realized / invested) * 100)
                 if realized > 0:
                     win_count += 1
+
+                back = int(v.get("backend_gross") or 0)
+                front = realized - back
+                front_gross_total += front
+                back_gross_total += back
+                front_gross_values.append(front)
+                back_gross_values.append(back)
+
+                predicted_repair = v.get("predicted_repair")
+                actual_repair = v.get("actual_repair_cost")
+                if predicted_repair is not None and actual_repair is not None:
+                    recon_variance_values.append(int(actual_repair) - int(predicted_repair))
 
                 predicted_profit = v.get("predicted_profit")
                 if predicted_profit is not None:
@@ -813,7 +919,10 @@ def portfolio_summary(current_user: dict = Depends(get_current_user)):
                     "actual_purchase_price": purchase,
                     "actual_repair_cost": v.get("actual_repair_cost"),
                     "actual_sale_price": v.get("actual_sale_price"),
+                    "backend_gross": back,
+                    "front_gross": front,
                     "predicted_profit": predicted_profit,
+                    "predicted_repair": predicted_repair,
                     "realized_profit": realized,
                 })
 
@@ -823,6 +932,9 @@ def portfolio_summary(current_user: dict = Depends(get_current_user)):
         return round(sum(values) / len(values), 1) if values else None
 
     return {
+        "business_type": business_type,
+        "target_turn_days": target_turn_days,
+        "max_turn_days": max_turn_days,
         "status_counts": status_counts,
         "active_count": active_count,
         "sold_count": sold_count,
@@ -834,6 +946,14 @@ def portfolio_summary(current_user: dict = Depends(get_current_user)):
         "avg_profit_error": _avg(profit_errors),
         "buy_called": buy_called,
         "buy_hit_rate": round((buy_profitable / buy_called) * 100, 1) if buy_called else None,
+        # Dealer/lot metrics
+        "front_gross_total": front_gross_total,
+        "back_gross_total": back_gross_total,
+        "avg_front_gross": _avg(front_gross_values),
+        "avg_back_gross": _avg(back_gross_values),
+        "avg_recon_variance": _avg(recon_variance_values),
+        "aging_buckets": aging_buckets,
+        "units_over_max_turn": units_over_max_turn,
         "recent_sold": recent_sold[:10],
     }
 

@@ -9,11 +9,36 @@ import { getCachedTransportEstimate, isTransportSavedOnVehicle } from "./transpo
 
 export const SETTINGS_CACHE_KEY = "user_settings";
 
+export const BUSINESS_TYPES = ["flipper", "dealer"];
+
+// Lot cost-profile defaults (dealer mode) — mirror LOT_PROFILE_DEFAULTS in backend.
+export const LOT_PROFILE_DEFAULTS = {
+  target_front_gross: 2500,
+  auction_fee_default: 550,
+  transport_cost_default: 700,
+  deal_shield_fee: 365,
+  default_recon: 1200,
+  floor_plan_cost_per_day: 12,
+  target_turn_days: 60,
+  max_turn_days: 90,
+};
+
 export const DEFAULT_USER_SETTINGS = {
   default_margin_percent: 15,
   default_transport_type: "local_tow",
   shop_location: "",
+  business_type: "flipper",
+  ...LOT_PROFILE_DEFAULTS,
 };
+
+export function isDealer(settings) {
+  return (settings?.business_type || "flipper") === "dealer";
+}
+
+function normalizeInt(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : fallback;
+}
 
 export function normalizeUserSettings(raw) {
   if (!raw) return { ...DEFAULT_USER_SETTINGS };
@@ -21,14 +46,23 @@ export function normalizeUserSettings(raw) {
   const transport = TRANSPORT_TYPES.includes(raw.default_transport_type)
     ? raw.default_transport_type
     : DEFAULT_USER_SETTINGS.default_transport_type;
-  return {
+  const business = BUSINESS_TYPES.includes(raw.business_type)
+    ? raw.business_type
+    : DEFAULT_USER_SETTINGS.business_type;
+
+  const normalized = {
     default_margin_percent:
       Number.isFinite(margin) && margin >= 0 && margin <= 90
         ? Math.round(margin)
         : DEFAULT_USER_SETTINGS.default_margin_percent,
     default_transport_type: transport,
     shop_location: String(raw.shop_location || "").trim(),
+    business_type: business,
   };
+  for (const [key, fallback] of Object.entries(LOT_PROFILE_DEFAULTS)) {
+    normalized[key] = normalizeInt(raw[key], fallback);
+  }
+  return normalized;
 }
 
 export function getCachedSettings() {

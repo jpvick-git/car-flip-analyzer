@@ -1,12 +1,24 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Settings, Save, MapPin, Percent, Truck } from "lucide-react";
+import { Settings, Save, MapPin, Percent, Truck, Store, User, Wallet } from "lucide-react";
 import { useUserSettings } from "../context/UserSettingsContext";
 import AddressAutocomplete from "../components/AddressAutocomplete";
+import { LOT_PROFILE_DEFAULTS } from "../utils/userSettings";
 import {
   TRANSPORT_TYPES,
   TRANSPORT_TYPE_LABELS,
 } from "../utils/transportCalculator";
+
+const LOT_PROFILE_FIELDS = [
+  ["target_front_gross", "Target front gross", "$", "Profit you aim to make per unit before backend."],
+  ["default_recon", "Default recon", "$", "Fallback recon cost when no photo estimate exists."],
+  ["auction_fee_default", "Auction fees", "$", "Typical buyer/auction fees per unit."],
+  ["transport_cost_default", "Transport", "$", "Typical transport cost per unit."],
+  ["deal_shield_fee", "DealShield / buy protection", "$", "Flat purchase-protection fee, if used."],
+  ["floor_plan_cost_per_day", "Floor plan cost / day", "$", "Daily holding cost while a unit sits."],
+  ["target_turn_days", "Target turn (days)", "d", "Healthy days-on-lot before it ages."],
+  ["max_turn_days", "Act-by turn (days)", "d", "Age at which you cut price or wholesale."],
+];
 
 export default function SettingsPage({ isDemo = false }) {
   const navigate = useNavigate();
@@ -16,20 +28,33 @@ export default function SettingsPage({ isDemo = false }) {
     default_margin_percent: 15,
     default_transport_type: "local_tow",
     shop_location: "",
+    business_type: "flipper",
+    ...LOT_PROFILE_DEFAULTS,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    setForm({
+    setForm((prev) => ({
+      ...prev,
       default_margin_percent: settings.default_margin_percent,
       default_transport_type: settings.default_transport_type,
       shop_location: settings.shop_location,
-    });
+      business_type: settings.business_type || "flipper",
+      ...Object.fromEntries(
+        Object.keys(LOT_PROFILE_DEFAULTS).map((k) => [
+          k,
+          settings[k] ?? LOT_PROFILE_DEFAULTS[k],
+        ])
+      ),
+    }));
   }, [settings]);
 
+  const isDealer = form.business_type === "dealer";
   const marginFill = (form.default_margin_percent / 40) * 100;
+
+  const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -37,11 +62,16 @@ export default function SettingsPage({ isDemo = false }) {
     setSaving(true);
     setError(null);
     try {
-      await updateSettings({
+      const payload = {
         default_margin_percent: Number(form.default_margin_percent),
         default_transport_type: form.default_transport_type,
         shop_location: form.shop_location.trim(),
-      });
+        business_type: form.business_type,
+      };
+      for (const key of Object.keys(LOT_PROFILE_DEFAULTS)) {
+        payload[key] = Math.max(0, Math.round(Number(form[key]) || 0));
+      }
+      await updateSettings(payload);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
@@ -88,6 +118,88 @@ export default function SettingsPage({ isDemo = false }) {
         onSubmit={handleSave}
         className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
       >
+        {/* Business type */}
+        <section>
+          <div className="mb-3 flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+              <Store size={16} />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Business Type</h2>
+              <p className="text-xs text-slate-500">
+                Dealer mode switches to retail/recon language and unlocks the lot buy calculator.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              ["flipper", "Flipper", User],
+              ["dealer", "Used Car Lot", Store],
+            ].map(([value, label, Icon]) => (
+              <button
+                key={value}
+                type="button"
+                disabled={isDemo}
+                onClick={() => setField("business_type", value)}
+                className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition disabled:opacity-50 ${
+                  form.business_type === value
+                    ? "border-blue-600 bg-blue-50 text-blue-700"
+                    : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                <Icon size={16} />
+                {label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {isDealer && (
+          <section>
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
+                <Wallet size={16} />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">Lot Cost Profile</h2>
+                <p className="text-xs text-slate-500">
+                  Your typical cost stack — used to compute max buy and true gross per unit.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {LOT_PROFILE_FIELDS.map(([key, label, unit, hint]) => (
+                <div key={key}>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">{label}</label>
+                  <div className="relative">
+                    {unit === "$" && (
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+                        $
+                      </span>
+                    )}
+                    <input
+                      type="number"
+                      min={0}
+                      disabled={isDemo}
+                      value={form[key]}
+                      onChange={(e) => setField(key, e.target.value)}
+                      className={`w-full rounded-xl border border-slate-300 py-2.5 text-sm tabular-nums focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50 ${
+                        unit === "$" ? "pl-7 pr-3" : "px-3"
+                      }`}
+                    />
+                    {unit === "d" && (
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                        days
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">{hint}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Default margin */}
         <section>
           <div className="mb-3 flex items-center gap-2">

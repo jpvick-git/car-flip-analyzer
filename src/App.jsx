@@ -15,6 +15,7 @@ import Dashboard from "./pages/Dashboard";
 import VehicleDetail from "./pages/VehicleDetail";
 import SettingsPage from "./pages/Settings";
 import Portfolio from "./pages/Portfolio";
+import Appraise from "./pages/Appraise";
 import Header from "./components/Header";
 import { UserSettingsProvider } from "./context/UserSettingsContext";
 import { clearCachedSettings } from "./utils/userSettings";
@@ -141,6 +142,15 @@ function Layout() {
           element={
             <ProtectedRoute>
               <Portfolio />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/appraise"
+          element={
+            <ProtectedRoute>
+              <Appraise />
             </ProtectedRoute>
           }
         />

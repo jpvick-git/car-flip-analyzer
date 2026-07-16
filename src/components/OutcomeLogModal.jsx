@@ -1,14 +1,21 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import axios from "axios";
-import { X, TrendingUp, TrendingDown, Trophy, Sparkles } from "lucide-react";
+import { X, TrendingUp, TrendingDown, Trophy, Sparkles, AlertTriangle } from "lucide-react";
 import CurrencyInput from "./CurrencyInput";
 import { formatCurrency } from "../utils/formatCurrency";
 import { isPrivateParty, maxOfferLabel } from "../utils/vehicleSource";
+import { useUserSettings } from "../context/UserSettingsContext";
+import { isDealer } from "../utils/businessMode";
 import {
   computeRealizedProfit,
   computeAccuracy,
   formatSignedCurrency,
 } from "../utils/dealLifecycle";
+
+// Soft plausibility gate — a value this large, or this far above its estimate,
+// is probably a fat-finger (extra zero). Hard bounds live on the backend.
+const SOFT_MONEY_CAP = 500000;
+const OVER_ESTIMATE_MULT = 8;
 
 /**
  * One-tap-friendly outcome logger. Every actual field is prefilled with the
@@ -16,20 +23,37 @@ import {
  * On saving a sale it shows a "predicted vs actual" result — the payoff hook.
  */
 export default function OutcomeLogModal({ car, apiBase = "", predictions = {}, onClose, onSaved }) {
+  const { settings } = useUserSettings();
+  const dealer = isDealer(settings);
   const isPrivate = isPrivateParty(car);
-  const purchaseLabel = isPrivate ? "Actual Purchase Price" : "Winning Bid";
+  const purchaseLabel = dealer
+    ? "Buy / Purchase Price"
+    : isPrivate
+    ? "Actual Purchase Price"
+    : "Winning Bid";
+  const reconLabel = dealer ? "Actual Recon Cost" : "Actual Repair Cost";
+  const saleLabel = dealer ? "Retail Sale Price" : "Actual Sale Price";
 
   const [purchase, setPurchase] = useState(
     numOr(car?.actual_purchase_price, predictions.maxBid)
   );
   const [repair, setRepair] = useState(
-    numOr(car?.actual_repair_cost, predictions.repair)
+    numOr(car?.actual_repair_cost, predictions.repair ?? (dealer ? settings.default_recon : 0))
   );
   const [sale, setSale] = useState(
     numOr(car?.actual_sale_price, predictions.resale)
   );
   const [transport, setTransport] = useState(
-    numOr(car?.actual_transport_cost, 0)
+    numOr(car?.actual_transport_cost, dealer ? settings.transport_cost_default : 0)
+  );
+  const [auctionFee, setAuctionFee] = useState(
+    numOr(car?.buy_auction_fee, dealer ? settings.auction_fee_default : 0)
+  );
+  const [dealShield, setDealShield] = useState(
+    numOr(car?.buy_deal_shield, dealer ? settings.deal_shield_fee : 0)
+  );
+  const [backendGross, setBackendGross] = useState(
+    numOr(car?.backend_gross, 0)
   );
   const [notes, setNotes] = useState(car?.outcome_notes || "");
   const [saleTouched, setSaleTouched] = useState(car?.actual_sale_price != null);
@@ -37,16 +61,56 @@ export default function OutcomeLogModal({ car, apiBase = "", predictions = {}, o
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const [ackWarnings, setAckWarnings] = useState(false);
 
-  const preview = computeRealizedProfit({
+  const draftCar = {
     ...car,
     actual_purchase_price: purchase,
     actual_repair_cost: repair,
     actual_sale_price: saleTouched ? sale : null,
     actual_transport_cost: transport,
-  });
+    ...(dealer
+      ? {
+          buy_auction_fee: auctionFee,
+          buy_deal_shield: dealShield,
+          backend_gross: backendGross,
+        }
+      : {}),
+  };
+
+  const preview = computeRealizedProfit(draftCar);
+
+  const warnings = useMemo(() => {
+    const w = [];
+    const check = (name, val, predicted) => {
+      const n = Number(val) || 0;
+      if (n > SOFT_MONEY_CAP) {
+        w.push(`${name} (${formatCurrency(n)}) is unusually large.`);
+      } else if (predicted > 0 && n >= predicted * OVER_ESTIMATE_MULT) {
+        w.push(`${name} (${formatCurrency(n)}) is far above the estimate.`);
+      }
+    };
+    check(purchaseLabel, purchase, Number(predictions.maxBid) || 0);
+    check(reconLabel, repair, Number(predictions.repair) || 0);
+    if (saleTouched) check(saleLabel, sale, Number(predictions.resale) || 0);
+    check("Transport", transport, 0);
+    if (dealer) {
+      check("Auction fees", auctionFee, 0);
+      check("DealShield", dealShield, 0);
+      check("Back-end gross", backendGross, 0);
+    }
+    return w;
+  }, [
+    purchase, repair, sale, transport, auctionFee, dealShield, backendGross,
+    saleTouched, dealer, predictions, purchaseLabel, reconLabel, saleLabel,
+  ]);
 
   const save = async () => {
+    // Two-step confirm when values look implausible
+    if (warnings.length && !ackWarnings) {
+      setAckWarnings(true);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -57,6 +121,11 @@ export default function OutcomeLogModal({ car, apiBase = "", predictions = {}, o
         outcome_notes: notes || null,
       };
       if (saleTouched) payload.actual_sale_price = toInt(sale);
+      if (dealer) {
+        payload.buy_auction_fee = toInt(auctionFee);
+        payload.buy_deal_shield = toInt(dealShield);
+        payload.backend_gross = toInt(backendGross);
+      }
 
       const res = await axios.patch(
         `${apiBase}/api/vehicle/${car.id}/outcome`,
@@ -115,9 +184,9 @@ export default function OutcomeLogModal({ car, apiBase = "", predictions = {}, o
                 onChange={setPurchase}
               />
               <OutcomeField
-                label="Actual Repair Cost"
+                label={reconLabel}
                 predicted={predictions.repair}
-                predictedLabel="Est. repair"
+                predictedLabel={dealer ? "Est. recon" : "Est. repair"}
                 value={repair}
                 onChange={setRepair}
               />
@@ -126,10 +195,24 @@ export default function OutcomeLogModal({ car, apiBase = "", predictions = {}, o
                 value={transport}
                 onChange={setTransport}
               />
+              {dealer && (
+                <>
+                  <OutcomeField
+                    label="Auction / Buyer Fees"
+                    value={auctionFee}
+                    onChange={setAuctionFee}
+                  />
+                  <OutcomeField
+                    label="DealShield / Protection"
+                    value={dealShield}
+                    onChange={setDealShield}
+                  />
+                </>
+              )}
               <OutcomeField
-                label={isPrivate ? "Actual Sale Price" : "Actual Sale Price"}
+                label={saleLabel}
                 predicted={predictions.resale}
-                predictedLabel="Est. resale"
+                predictedLabel={dealer ? "Est. retail" : "Est. resale"}
                 value={sale}
                 onChange={(v) => {
                   setSale(v);
@@ -138,6 +221,14 @@ export default function OutcomeLogModal({ car, apiBase = "", predictions = {}, o
                 highlight
                 hint={!saleTouched ? "Set this to close out and score the deal" : null}
               />
+              {dealer && (
+                <OutcomeField
+                  label="Back-end Gross (F&I, warranty, add-ons)"
+                  value={backendGross}
+                  onChange={setBackendGross}
+                  hint="Profit beyond the vehicle — optional."
+                />
+              )}
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
@@ -179,6 +270,25 @@ export default function OutcomeLogModal({ car, apiBase = "", predictions = {}, o
               </div>
             )}
 
+            {warnings.length > 0 && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-800">
+                  <AlertTriangle size={15} />
+                  Double-check these numbers
+                </p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-amber-700">
+                  {warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+                {ackWarnings && (
+                  <p className="mt-1.5 text-xs font-medium text-amber-800">
+                    Look right? Press save again to confirm.
+                  </p>
+                )}
+              </div>
+            )}
+
             {error && (
               <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
             )}
@@ -193,9 +303,17 @@ export default function OutcomeLogModal({ car, apiBase = "", predictions = {}, o
               <button
                 onClick={save}
                 disabled={saving}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                className={`rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-50 ${
+                  warnings.length && ackWarnings
+                    ? "bg-amber-600 hover:bg-amber-700"
+                    : "bg-blue-600 hover:bg-blue-700"
+                }`}
               >
-                {saving ? "Saving…" : "Save outcome"}
+                {saving
+                  ? "Saving…"
+                  : warnings.length && ackWarnings
+                  ? "Confirm & save"
+                  : "Save outcome"}
               </button>
             </div>
           </>

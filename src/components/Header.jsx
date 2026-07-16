@@ -1,11 +1,15 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Menu, X, Plus, Settings, LogOut, BarChart3, LayoutDashboard } from "lucide-react";
+import { Menu, X, Plus, Settings, LogOut, BarChart3, LayoutDashboard, Calculator } from "lucide-react";
 import BrandLogo from "./BrandLogo";
+import { useUserSettings } from "../context/UserSettingsContext";
+import { isDealer } from "../utils/businessMode";
 
 export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const { settings } = useUserSettings();
+  const dealer = isDealer(settings);
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
@@ -55,6 +59,19 @@ export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
               </button>
             )}
 
+            {dealer && (
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate("/appraise");
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-brand-bg"
+              >
+                <Calculator size={16} className="text-blue-600" />
+                Buy Calculator
+              </button>
+            )}
+
             <button
               onClick={() => {
                 setMenuOpen(false);
@@ -74,7 +91,7 @@ export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
               className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-brand-bg"
             >
               <Settings size={16} className="text-slate-500" />
-              Flip Preferences
+              {dealer ? "Lot Preferences" : "Flip Preferences"}
             </button>
 
             <div className="my-1 border-t border-slate-100" />

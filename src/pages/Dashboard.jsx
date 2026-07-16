@@ -924,7 +924,11 @@ export default function Dashboard({
       ? readyCars
       : readyCars.filter((c) => dealStatus(c) === statusFilter);
 
-  const nudgeCars = readyCars.filter((c) => (daysSincePurchaseUnsold(c) ?? -1) > 30);
+  const dealerMode = (settings?.business_type || "flipper") === "dealer";
+  const agingThreshold = dealerMode ? settings?.max_turn_days || 90 : 30;
+  const nudgeCars = readyCars.filter(
+    (c) => (daysSincePurchaseUnsold(c) ?? -1) > agingThreshold
+  );
 
   return (
     <main className="relative min-h-screen bg-brand-bg">
@@ -1020,10 +1024,16 @@ export default function Dashboard({
           <div className="mb-5 flex items-center gap-3 rounded-2xl border border-blue-200/80 bg-blue-50 px-4 py-3.5 text-sm text-blue-900 shadow-sm shadow-blue-100/50">
             <Clock size={18} className="shrink-0 text-blue-600" />
             <span>
-              {nudgeCars.length === 1
+              {dealerMode
+                ? nudgeCars.length === 1
+                  ? `1 unit is past your ${agingThreshold}-day turn window.`
+                  : `${nudgeCars.length} units are past your ${agingThreshold}-day turn window.`
+                : nudgeCars.length === 1
                 ? "1 bought deal hasn't been closed out yet."
                 : `${nudgeCars.length} bought deals haven't been closed out yet.`}{" "}
-              Did they sell? Log the outcome to score the flip.
+              {dealerMode
+                ? "Did they sell, or is it time to cut price?"
+                : "Did they sell? Log the outcome to score the flip."}
             </span>
           </div>
         )}

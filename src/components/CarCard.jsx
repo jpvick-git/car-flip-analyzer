@@ -139,7 +139,7 @@ export default function CarCard({
           </div>
         </div>
 
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 min-h-[1rem] text-xs text-slate-500">
           Transport{" "}
           {transport.hasValue ? (
             <span className="font-semibold tabular-nums text-slate-700">
@@ -151,31 +151,36 @@ export default function CarCard({
           )}
         </p>
 
-        {showRepairPlan && (
-          <p className="mt-1 text-xs text-slate-500">
-            Repair{" "}
-            <span className="font-semibold text-slate-700">
-              {repairPlan.repair_difficulty_label || "—"}
-            </span>
-            {repairPlan.parts_availability && (
-              <>
-                {" · "}
-                Parts{" "}
-                <span className="font-semibold text-slate-700">
-                  {repairPlan.parts_availability}
-                </span>
-              </>
-            )}
-            {formatRepairTimeline(repairPlan) !== "—" && (
-              <>
-                {" · "}
-                <span className="font-semibold text-slate-700">
-                  {formatRepairTimeline(repairPlan)}
-                </span>
-              </>
-            )}
-          </p>
-        )}
+        {/* Always reserve this row so Repair/Resale boxes align across cards */}
+        <p className="mt-1 min-h-[1rem] truncate text-xs text-slate-500">
+          {showRepairPlan ? (
+            <>
+              Repair{" "}
+              <span className="font-semibold text-slate-700">
+                {repairPlan.repair_difficulty_label || "—"}
+              </span>
+              {repairPlan.parts_availability && (
+                <>
+                  {" · "}
+                  Parts{" "}
+                  <span className="font-semibold text-slate-700">
+                    {repairPlan.parts_availability}
+                  </span>
+                </>
+              )}
+              {formatRepairTimeline(repairPlan) !== "—" && (
+                <>
+                  {" · "}
+                  <span className="font-semibold text-slate-700">
+                    {formatRepairTimeline(repairPlan)}
+                  </span>
+                </>
+              )}
+            </>
+          ) : (
+            <span className="invisible">Repair —</span>
+          )}
+        </p>
 
         {/* Secondary: repair / resale */}
         <div className="mt-3 grid grid-cols-2 gap-2">
@@ -207,23 +212,32 @@ export default function CarCard({
           </div>
         </div>
 
-        {saleDate && (
-          <p className="mt-2 text-xs text-slate-400">
-            Sale: {saleDate}
-            {isPrivateParty(car) && askingPrice(car) && (
-              <> · Ask {formatCurrency(askingPrice(car))}</>
+        <div className="mt-auto pt-4">
+          {/* Always reserve this row so View Decision buttons align across cards */}
+          <p className="mb-2 min-h-[1rem] truncate text-xs text-slate-400">
+            {saleDate ? (
+              <>
+                Sale: {saleDate}
+                {isPrivateParty(car) && askingPrice(car) && (
+                  <> · Ask {formatCurrency(askingPrice(car))}</>
+                )}
+              </>
+            ) : isPrivateParty(car) && askingPrice(car) ? (
+              <>Ask {formatCurrency(askingPrice(car))}</>
+            ) : (
+              <span className="invisible">Sale: —</span>
             )}
           </p>
-        )}
 
-        <button
-          type="button"
-          className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 active:scale-[0.99]"
-          onClick={onViewDetails}
-        >
-          View Decision
-          <ArrowRight size={15} />
-        </button>
+          <button
+            type="button"
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 active:scale-[0.99]"
+            onClick={onViewDetails}
+          >
+            View Decision
+            <ArrowRight size={15} />
+          </button>
+        </div>
       </div>
     </div>
   );

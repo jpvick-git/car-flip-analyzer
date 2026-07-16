@@ -44,8 +44,6 @@ import {
 import {
   DEAL_STATUS,
   dealStatus,
-  isActiveDeal,
-  isSold,
   daysSincePurchaseUnsold,
   formatSignedCurrency,
 } from "../utils/dealLifecycle";

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Menu, X, Plus, Settings, LogOut, BarChart3 } from "lucide-react";
+import { Menu, X, Plus, Settings, LogOut, BarChart3, LayoutDashboard } from "lucide-react";
 import BrandLogo from "./BrandLogo";
 
 export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
@@ -31,6 +31,17 @@ export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
       {menuOpen && (
         <div className="absolute right-3 top-[calc(100%-0.25rem)] z-50 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/80 sm:right-5">
           <div className="flex flex-col p-1.5">
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                navigate("/");
+              }}
+              className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-brand-bg"
+            >
+              <LayoutDashboard size={16} className="text-slate-500" />
+              Dashboard
+            </button>
+
             {!isDemo && (
               <button
                 onClick={() => {

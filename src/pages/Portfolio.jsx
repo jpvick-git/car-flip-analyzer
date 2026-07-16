@@ -10,6 +10,7 @@ import {
   Wallet,
   Percent,
   ArrowRight,
+  ArrowLeft,
   BarChart3,
 } from "lucide-react";
 import { formatCurrency } from "../utils/formatCurrency";
@@ -70,6 +71,15 @@ export default function Portfolio() {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-white via-brand-bg/80 to-transparent" />
 
       <div className="relative w-full px-3 py-5 sm:px-4 sm:py-6 lg:px-5">
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          className="group mb-4 inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-blue-700"
+        >
+          <ArrowLeft size={16} className="transition group-hover:-translate-x-0.5" />
+          Back to Dashboard
+        </button>
+
         <div className="mb-6">
           <p className="text-sm font-medium text-blue-600">Your flip business</p>
           <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-brand-navy sm:text-4xl">

@@ -289,7 +289,7 @@ export default function Portfolio() {
               {summary.recent_sold?.length ? (
                 <div className="divide-y divide-slate-100">
                   {summary.recent_sold.map((deal) => (
-                    <SoldRow key={deal.id} deal={deal} onOpen={() => navigate(`/vehicle/${deal.id}`)} />
+                    <SoldRow key={deal.id} deal={deal} onOpen={() => navigate(`/vehicle/${deal.public_id}`)} />
                   ))}
                 </div>
               ) : (

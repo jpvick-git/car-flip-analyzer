@@ -60,7 +60,7 @@ export default function RepairPlanCard({
     setError(null);
     try {
       const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
-      const res = await axios.post(`${apiBase}/api/vehicle/${car.id}/repair_plan`, {}, { headers });
+      const res = await axios.post(`${apiBase}/api/vehicle/${car.public_id}/repair_plan`, {}, { headers });
       onUpdate?.(res.data);
     } catch (err) {
       console.error("Repair plan refresh failed:", err);

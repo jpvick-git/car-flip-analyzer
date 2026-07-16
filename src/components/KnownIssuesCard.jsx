@@ -67,7 +67,7 @@ export default function KnownIssuesCard({
     setError(null);
     try {
       const res = await axios.post(
-        `${apiBase}/api/vehicle/${car.id}/known_issues`,
+        `${apiBase}/api/vehicle/${car.public_id}/known_issues`,
         {},
         { headers }
       );

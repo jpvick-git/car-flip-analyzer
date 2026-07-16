@@ -66,6 +66,7 @@ def _ensure_schema_columns():
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS actual_repair_cost INTEGER",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS actual_sale_price INTEGER",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS actual_transport_cost INTEGER",
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS list_price INTEGER",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS outcome_notes TEXT",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS purchased_at TIMESTAMP",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS listed_at TIMESTAMP",
@@ -78,6 +79,15 @@ def _ensure_schema_columns():
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS backend_gross INTEGER",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS buy_auction_fee INTEGER",
             "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS buy_deal_shield INTEGER",
+            # Unguessable public identifier used in URLs/API instead of the serial id.
+            # Volatile default backfills existing rows with distinct 32-char hex tokens.
+            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS public_id VARCHAR(32) "
+            "DEFAULT md5(random()::text || clock_timestamp()::text || random()::text)",
+            "UPDATE user_vehicles SET public_id = "
+            "md5(random()::text || clock_timestamp()::text || id::text) "
+            "WHERE public_id IS NULL",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_vehicles_public_id "
+            "ON user_vehicles (public_id)",
         ):
             conn.execute(text(stmt))
 
@@ -137,9 +147,20 @@ class PredictionSnapshot(BaseModel):
     predicted_profit: int | None = None
 
 
+# Stage-gated actuals captured at the moment of a status transition
+# (e.g. purchase price when marking bought, recon when leaving in-repair).
+class OutcomeCapture(BaseModel):
+    actual_purchase_price: int | None = None
+    actual_repair_cost: int | None = None
+    actual_transport_cost: int | None = None
+    list_price: int | None = None
+    actual_sale_price: int | None = None
+
+
 class StatusUpdatePayload(BaseModel):
     deal_status: str
     snapshot: PredictionSnapshot | None = None
+    capture: OutcomeCapture | None = None
 
 
 # Hard sanity bound for any single money field (rejects fat-finger / bad data).
@@ -151,6 +172,7 @@ OUTCOME_MONEY_FIELDS = (
     "actual_repair_cost",
     "actual_sale_price",
     "actual_transport_cost",
+    "list_price",
     "backend_gross",
     "buy_auction_fee",
     "buy_deal_shield",
@@ -162,6 +184,7 @@ class OutcomeUpdatePayload(BaseModel):
     actual_repair_cost: int | None = None
     actual_sale_price: int | None = None
     actual_transport_cost: int | None = None
+    list_price: int | None = None
     # Dealer/lot mode fields
     backend_gross: int | None = None
     buy_auction_fee: int | None = None
@@ -254,22 +277,22 @@ async def upload_user_file(file: UploadFile = File(...), current_user: dict = De
 # --------------------------------------------------------------
 # GET SINGLE VEHICLE
 # --------------------------------------------------------------
-@router.get("/vehicle/{vehicle_id}")
-def get_vehicle(vehicle_id: int, current_user: dict = Depends(get_current_user)):
+@router.get("/vehicle/{public_id}")
+def get_vehicle(public_id: str, current_user: dict = Depends(get_current_user)):
     owner_id = get_vehicle_owner_id(current_user)
     with engine.connect() as conn:
         row = conn.execute(
-            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
-            {"id": vehicle_id, "uid": owner_id}
+            text("SELECT * FROM user_vehicles WHERE public_id = :pid AND user_id = :uid"),
+            {"pid": public_id, "uid": owner_id}
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Vehicle not found")
     return normalize_vehicle(enrich_vehicle(dict(row._mapping)))
 
 
-@router.patch("/vehicle/{vehicle_id}/repair")
+@router.patch("/vehicle/{public_id}/repair")
 def update_vehicle_repair(
-    vehicle_id: int,
+    public_id: str,
     payload: RepairUpdatePayload,
     current_user: dict = Depends(get_current_user),
 ):
@@ -290,12 +313,12 @@ def update_vehicle_repair(
                 SET repair_estimate = :total,
                     repair_breakdown = :breakdown,
                     updated_at = NOW()
-                WHERE id = :id AND user_id = :uid
+                WHERE public_id = :pid AND user_id = :uid
             """),
             {
                 "total": total,
                 "breakdown": json.dumps(items),
-                "id": vehicle_id,
+                "pid": public_id,
                 "uid": owner_id,
             },
         )
@@ -340,9 +363,9 @@ def _repair_plan_response(row_or_dict):
     }
 
 
-@router.post("/vehicle/{vehicle_id}/repair_plan")
+@router.post("/vehicle/{public_id}/repair_plan")
 def refresh_vehicle_repair_plan(
-    vehicle_id: int,
+    public_id: str,
     current_user: dict = Depends(get_current_user),
 ):
     """Re-run vision-based repair analysis and refresh the repair plan."""
@@ -351,15 +374,15 @@ def refresh_vehicle_repair_plan(
 
     with engine.connect() as conn:
         row = conn.execute(
-            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
-            {"id": vehicle_id, "uid": owner_id},
+            text("SELECT * FROM user_vehicles WHERE public_id = :pid AND user_id = :uid"),
+            {"pid": public_id, "uid": owner_id},
         ).fetchone()
 
     if not row:
         raise HTTPException(status_code=404, detail="Vehicle not found")
 
     vehicle_data = dict(row._mapping)
-    lot_number = vehicle_data.get("lot_number") or str(vehicle_id)
+    lot_number = vehicle_data.get("lot_number") or str(vehicle_data.get("id"))
     image_paths, image_entries = _load_vehicle_images(lot_number)
 
     if not image_paths:
@@ -405,14 +428,14 @@ def refresh_vehicle_repair_plan(
                     repair_plan_warnings = :repair_plan_warnings,
                     hidden_damage_risks = :hidden_damage_risks,
                     updated_at = NOW()
-                WHERE id = :id AND user_id = :uid
+                WHERE public_id = :pid AND user_id = :uid
             """),
             {
                 "repair_estimate": result.get("repair_estimate"),
                 "repair_details": result.get("repair_details"),
                 "repair_breakdown": breakdown_json,
                 **plan_params,
-                "id": vehicle_id,
+                "pid": public_id,
                 "uid": owner_id,
             },
         )
@@ -420,8 +443,8 @@ def refresh_vehicle_repair_plan(
             raise HTTPException(status_code=404, detail="Vehicle not found")
 
         saved = conn.execute(
-            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
-            {"id": vehicle_id, "uid": owner_id},
+            text("SELECT * FROM user_vehicles WHERE public_id = :pid AND user_id = :uid"),
+            {"pid": public_id, "uid": owner_id},
         ).fetchone()
 
     response = _repair_plan_response(dict(saved._mapping))
@@ -431,9 +454,9 @@ def refresh_vehicle_repair_plan(
     return response
 
 
-@router.patch("/vehicle/{vehicle_id}/transport")
+@router.patch("/vehicle/{public_id}/transport")
 def update_vehicle_transport(
-    vehicle_id: int,
+    public_id: str,
     payload: TransportUpdatePayload,
     current_user: dict = Depends(get_current_user),
 ):
@@ -468,7 +491,7 @@ def update_vehicle_transport(
                     transport_cost_manual_override = :manual_override,
                     transport_notes = :notes,
                     updated_at = NOW()
-                WHERE id = :id AND user_id = :uid
+                WHERE public_id = :pid AND user_id = :uid
             """),
             {
                 "pickup": payload.transport_pickup_location,
@@ -478,7 +501,7 @@ def update_vehicle_transport(
                 "estimate": estimate,
                 "manual_override": manual_override,
                 "notes": payload.transport_notes,
-                "id": vehicle_id,
+                "pid": public_id,
                 "uid": owner_id,
             },
         )
@@ -486,8 +509,8 @@ def update_vehicle_transport(
             raise HTTPException(status_code=404, detail="Vehicle not found")
 
         row = conn.execute(
-            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
-            {"id": vehicle_id, "uid": owner_id},
+            text("SELECT * FROM user_vehicles WHERE public_id = :pid AND user_id = :uid"),
+            {"pid": public_id, "uid": owner_id},
         ).fetchone()
 
     if not row:
@@ -496,9 +519,9 @@ def update_vehicle_transport(
     return normalize_vehicle(enrich_vehicle(dict(row._mapping)))
 
 
-@router.post("/vehicle/{vehicle_id}/known_issues")
+@router.post("/vehicle/{public_id}/known_issues")
 def refresh_vehicle_known_issues(
-    vehicle_id: int,
+    public_id: str,
     current_user: dict = Depends(get_current_user),
 ):
     """Re-run platform reliability lookup (text-only, no photos)."""
@@ -508,11 +531,11 @@ def refresh_vehicle_known_issues(
     with engine.connect() as conn:
         row = conn.execute(
             text("""
-                SELECT year, make, model, odometer, lot_number
+                SELECT id, year, make, model, odometer, lot_number
                 FROM user_vehicles
-                WHERE id = :id AND user_id = :uid
+                WHERE public_id = :pid AND user_id = :uid
             """),
-            {"id": vehicle_id, "uid": owner_id},
+            {"pid": public_id, "uid": owner_id},
         ).fetchone()
 
     if not row:
@@ -524,7 +547,7 @@ def refresh_vehicle_known_issues(
         "make": row.make,
         "model": row.model,
         "odometer": row.odometer or "Unknown",
-        "lot_number": row.lot_number or str(vehicle_id),
+        "lot_number": row.lot_number or str(row.id),
         "damage_description": "",
         "title_code": "Unknown",
     }
@@ -541,13 +564,13 @@ def refresh_vehicle_known_issues(
                     known_issues = :known_issues,
                     wear_items = :wear_items,
                     updated_at = NOW()
-                WHERE id = :id AND user_id = :uid
+                WHERE public_id = :pid AND user_id = :uid
             """),
             {
                 "summary": result.get("reliability_summary"),
                 "known_issues": known_issues_json,
                 "wear_items": wear_items_json,
-                "id": vehicle_id,
+                "pid": public_id,
                 "uid": owner_id,
             },
         )
@@ -571,9 +594,9 @@ def _load_vehicle_images(lot_number: str) -> tuple[list[str], list[dict]]:
     return paths, image_entries
 
 
-@router.post("/vehicle/{vehicle_id}/negotiation")
+@router.post("/vehicle/{public_id}/negotiation")
 def refresh_vehicle_negotiation(
-    vehicle_id: int,
+    public_id: str,
     current_user: dict = Depends(get_current_user),
 ):
     """Generate AI negotiation talking points for a private-party listing."""
@@ -583,14 +606,14 @@ def refresh_vehicle_negotiation(
     with engine.connect() as conn:
         row = conn.execute(
             text("""
-                SELECT year, make, model, odometer, lot_number, source_type,
+                SELECT id, year, make, model, odometer, lot_number, source_type,
                        asking_price, est_retail_value, listing_description, damage_description,
                        title_code, repair_estimate, repair_breakdown, resale_estimate,
                        red_flags
                 FROM user_vehicles
-                WHERE id = :id AND user_id = :uid
+                WHERE public_id = :pid AND user_id = :uid
             """),
-            {"id": vehicle_id, "uid": owner_id},
+            {"pid": public_id, "uid": owner_id},
         ).fetchone()
 
     if not row:
@@ -603,7 +626,7 @@ def refresh_vehicle_negotiation(
             detail="Negotiation coaching is only available for private-party listings.",
         )
 
-    lot_number = vehicle_data.get("lot_number") or str(vehicle_id)
+    lot_number = vehicle_data.get("lot_number") or str(vehicle_data.get("id"))
     image_paths, image_entries = _load_vehicle_images(lot_number)
 
     vehicle = {
@@ -626,7 +649,7 @@ def refresh_vehicle_negotiation(
                     suggested_offer_high = :offer_high,
                     offer_rationale = :offer_rationale,
                     updated_at = NOW()
-                WHERE id = :id AND user_id = :uid
+                WHERE public_id = :pid AND user_id = :uid
             """),
             {
                 "summary": result.get("negotiation_summary"),
@@ -634,7 +657,7 @@ def refresh_vehicle_negotiation(
                 "offer_low": result.get("suggested_offer_low"),
                 "offer_high": result.get("suggested_offer_high"),
                 "offer_rationale": result.get("offer_rationale"),
-                "id": vehicle_id,
+                "pid": public_id,
                 "uid": owner_id,
             },
         )
@@ -653,9 +676,9 @@ def refresh_vehicle_negotiation(
 # --------------------------------------------------------------
 # UPDATE DEAL STATUS (lifecycle)
 # --------------------------------------------------------------
-@router.patch("/vehicle/{vehicle_id}/status")
+@router.patch("/vehicle/{public_id}/status")
 def update_vehicle_status(
-    vehicle_id: int,
+    public_id: str,
     payload: StatusUpdatePayload,
     current_user: dict = Depends(get_current_user),
 ):
@@ -668,8 +691,8 @@ def update_vehicle_status(
 
     with engine.begin() as conn:
         row = conn.execute(
-            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
-            {"id": vehicle_id, "uid": owner_id},
+            text("SELECT * FROM user_vehicles WHERE public_id = :pid AND user_id = :uid"),
+            {"pid": public_id, "uid": owner_id},
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Vehicle not found")
@@ -677,7 +700,7 @@ def update_vehicle_status(
         existing = dict(row._mapping)
 
         sets = ["deal_status = :status", "updated_at = NOW()"]
-        params = {"status": status, "id": vehicle_id, "uid": owner_id}
+        params = {"status": status, "pid": public_id, "uid": owner_id}
 
         # Stamp lifecycle timestamps on first transition into each stage
         if status in ACQUIRED_STATUSES and not existing.get("purchased_at"):
@@ -707,14 +730,32 @@ def update_vehicle_status(
                 sets.append("predicted_profit = :p_profit")
                 params["p_profit"] = int(snap.predicted_profit)
 
+        # Stage-gated actuals captured during this transition
+        cap = payload.capture
+        if cap is not None:
+            for field in ("actual_purchase_price", "actual_repair_cost",
+                          "actual_transport_cost", "list_price", "actual_sale_price"):
+                val = getattr(cap, field)
+                if val is None:
+                    continue
+                if val < 0:
+                    raise HTTPException(status_code=400, detail=f"{field} cannot be negative")
+                if val > MONEY_MAX:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{field} looks too large — double-check the value",
+                    )
+                sets.append(f"{field} = :{field}")
+                params[field] = val
+
         conn.execute(
-            text(f"UPDATE user_vehicles SET {', '.join(sets)} WHERE id = :id AND user_id = :uid"),
+            text(f"UPDATE user_vehicles SET {', '.join(sets)} WHERE public_id = :pid AND user_id = :uid"),
             params,
         )
 
         saved = conn.execute(
-            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
-            {"id": vehicle_id, "uid": owner_id},
+            text("SELECT * FROM user_vehicles WHERE public_id = :pid AND user_id = :uid"),
+            {"pid": public_id, "uid": owner_id},
         ).fetchone()
 
     return normalize_vehicle(enrich_vehicle(dict(saved._mapping)))
@@ -723,9 +764,9 @@ def update_vehicle_status(
 # --------------------------------------------------------------
 # UPDATE DEAL OUTCOME (actual numbers)
 # --------------------------------------------------------------
-@router.patch("/vehicle/{vehicle_id}/outcome")
+@router.patch("/vehicle/{public_id}/outcome")
 def update_vehicle_outcome(
-    vehicle_id: int,
+    public_id: str,
     payload: OutcomeUpdatePayload,
     current_user: dict = Depends(get_current_user),
 ):
@@ -746,8 +787,8 @@ def update_vehicle_outcome(
 
     with engine.begin() as conn:
         row = conn.execute(
-            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
-            {"id": vehicle_id, "uid": owner_id},
+            text("SELECT * FROM user_vehicles WHERE public_id = :pid AND user_id = :uid"),
+            {"pid": public_id, "uid": owner_id},
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Vehicle not found")
@@ -755,7 +796,7 @@ def update_vehicle_outcome(
         existing = dict(row._mapping)
 
         sets = ["updated_at = NOW()"]
-        params = {"id": vehicle_id, "uid": owner_id}
+        params = {"pid": public_id, "uid": owner_id}
 
         fields = payload.model_dump(exclude_unset=True)
         for key, val in fields.items():
@@ -775,13 +816,13 @@ def update_vehicle_outcome(
                 sets.append("deal_status = 'bought'")
 
         conn.execute(
-            text(f"UPDATE user_vehicles SET {', '.join(sets)} WHERE id = :id AND user_id = :uid"),
+            text(f"UPDATE user_vehicles SET {', '.join(sets)} WHERE public_id = :pid AND user_id = :uid"),
             params,
         )
 
         saved = conn.execute(
-            text("SELECT * FROM user_vehicles WHERE id = :id AND user_id = :uid"),
-            {"id": vehicle_id, "uid": owner_id},
+            text("SELECT * FROM user_vehicles WHERE public_id = :pid AND user_id = :uid"),
+            {"pid": public_id, "uid": owner_id},
         ).fetchone()
 
     result = normalize_vehicle(enrich_vehicle(dict(saved._mapping)))
@@ -911,6 +952,7 @@ def portfolio_summary(current_user: dict = Depends(get_current_user)):
 
                 recent_sold.append({
                     "id": v.get("id"),
+                    "public_id": v.get("public_id"),
                     "year": v.get("year"),
                     "make": v.get("make"),
                     "model": v.get("model"),
@@ -961,13 +1003,13 @@ def portfolio_summary(current_user: dict = Depends(get_current_user)):
 # --------------------------------------------------------------
 # GET ALL IMAGES FOR A VEHICLE
 # --------------------------------------------------------------
-@router.get("/vehicle/{vehicle_id}/images")
-def get_vehicle_images(vehicle_id: int, current_user: dict = Depends(get_current_user)):
+@router.get("/vehicle/{public_id}/images")
+def get_vehicle_images(public_id: str, current_user: dict = Depends(get_current_user)):
     owner_id = get_vehicle_owner_id(current_user)
     with engine.connect() as conn:
         row = conn.execute(
-            text("SELECT lot_number FROM user_vehicles WHERE id = :id AND user_id = :uid"),
-            {"id": vehicle_id, "uid": owner_id}
+            text("SELECT lot_number FROM user_vehicles WHERE public_id = :pid AND user_id = :uid"),
+            {"pid": public_id, "uid": owner_id}
         ).fetchone()
 
     if not row:
@@ -1003,15 +1045,15 @@ def get_states():
 # --------------------------------------------------------------
 # DELETE VEHICLE
 # --------------------------------------------------------------
-@router.delete("/delete_vehicle/{vehicle_id}")
-def delete_vehicle(vehicle_id: int, current_user: dict = Depends(get_current_user)):
+@router.delete("/delete_vehicle/{public_id}")
+def delete_vehicle(public_id: str, current_user: dict = Depends(get_current_user)):
     require_not_demo(current_user)
     try:
         user_id = current_user["id"]
         with engine.begin() as conn:
             result = conn.execute(
-                text("DELETE FROM user_vehicles WHERE id = :id AND user_id = :uid"),
-                {"id": vehicle_id, "uid": user_id},
+                text("DELETE FROM user_vehicles WHERE public_id = :pid AND user_id = :uid"),
+                {"pid": public_id, "uid": user_id},
             )
             if result.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Vehicle not found")

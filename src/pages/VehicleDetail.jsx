@@ -135,7 +135,7 @@ export default function VehicleDetail() {
     taxRate,
     marginActual,
   } = useFlipMetrics({
-    carId: car?.id ?? id,
+    carId: car?.public_id ?? id,
     resale: car?.resale_estimate || car?.ai_resale_estimate || 0,
     repair: repairTotal,
     marginPercent: margin,

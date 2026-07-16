@@ -46,6 +46,9 @@ export default function OutcomeLogModal({ car, apiBase = "", predictions = {}, o
   const [transport, setTransport] = useState(
     numOr(car?.actual_transport_cost, dealer ? settings.transport_cost_default : 0)
   );
+  const [listPrice, setListPrice] = useState(
+    numOr(car?.list_price, predictions.resale)
+  );
   const [auctionFee, setAuctionFee] = useState(
     numOr(car?.buy_auction_fee, dealer ? settings.auction_fee_default : 0)
   );
@@ -118,6 +121,7 @@ export default function OutcomeLogModal({ car, apiBase = "", predictions = {}, o
         actual_purchase_price: toInt(purchase),
         actual_repair_cost: toInt(repair),
         actual_transport_cost: toInt(transport),
+        list_price: toInt(listPrice),
         outcome_notes: notes || null,
       };
       if (saleTouched) payload.actual_sale_price = toInt(sale);
@@ -128,7 +132,7 @@ export default function OutcomeLogModal({ car, apiBase = "", predictions = {}, o
       }
 
       const res = await axios.patch(
-        `${apiBase}/api/vehicle/${car.id}/outcome`,
+        `${apiBase}/api/vehicle/${car.public_id}/outcome`,
         payload,
         { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
       );
@@ -209,6 +213,13 @@ export default function OutcomeLogModal({ car, apiBase = "", predictions = {}, o
                   />
                 </>
               )}
+              <OutcomeField
+                label={dealer ? "List Price (retail)" : "List Price"}
+                predicted={predictions.resale}
+                predictedLabel={dealer ? "Est. retail" : "Est. resale"}
+                value={listPrice}
+                onChange={setListPrice}
+              />
               <OutcomeField
                 label={saleLabel}
                 predicted={predictions.resale}

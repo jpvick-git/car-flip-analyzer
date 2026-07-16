@@ -30,7 +30,7 @@ export default function RepairBreakdown({
     saveTimer.current = setTimeout(async () => {
       try {
         await axios.patch(
-          `${apiBase}/api/vehicle/${car.id}/repair`,
+          `${apiBase}/api/vehicle/${car.public_id}/repair`,
           { repair_items: nextItems },
           { headers }
         );

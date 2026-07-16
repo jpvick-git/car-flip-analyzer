@@ -823,7 +823,7 @@ export default function Dashboard({
   const deleteVehicle = async (car) => {
     setDeleting(true);
     try {
-      await axios.delete(`${API}/api/delete_vehicle/${car.id}`, {
+      await axios.delete(`${API}/api/delete_vehicle/${car.public_id}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
       setCars((prev) => prev.filter((c) => c.id !== car.id));
@@ -875,7 +875,7 @@ export default function Dashboard({
           predicted_profit: Math.round(Number(predictions.profit) || 0),
         };
       }
-      const res = await axios.patch(`${API}/api/vehicle/${car.id}/status`, body, {
+      const res = await axios.patch(`${API}/api/vehicle/${car.public_id}/status`, body, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
       mergeCar(res.data);
@@ -1129,7 +1129,7 @@ export default function Dashboard({
                 setCarToDelete={setCarToDelete}
                 marginPercent={tempMargin}
                 updateCarValue={updateCarValue}
-                onViewDetails={() => navigate(`/vehicle/${car.id}`)}
+                onViewDetails={() => navigate(`/vehicle/${car.public_id}`)}
               />
             ))}
           </div>
@@ -1144,7 +1144,7 @@ export default function Dashboard({
                 menuOpenId={menuOpenId}
                 setMenuOpenId={setMenuOpenId}
                 setCarToDelete={setCarToDelete}
-                onViewDetails={() => navigate(`/vehicle/${car.id}`)}
+                onViewDetails={() => navigate(`/vehicle/${car.public_id}`)}
                 onQuickStatus={handleQuickStatus}
                 onLogOutcome={(target, predictions) =>
                   setOutcomeTarget({ car: target, predictions })

@@ -189,7 +189,7 @@ export default function TransportCostCard({
 
       const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
       const res = await axios.patch(
-        `${apiBase}/api/vehicle/${vehicle.id}/transport`,
+        `${apiBase}/api/vehicle/${vehicle.public_id}/transport`,
         payload,
         { headers }
       );

@@ -121,7 +121,7 @@ export default function NegotiationCard({
     setError(null);
     try {
       const res = await axios.post(
-        `${apiBase}/api/vehicle/${car.id}/negotiation`,
+        `${apiBase}/api/vehicle/${car.public_id}/negotiation`,
         {},
         { headers }
       );

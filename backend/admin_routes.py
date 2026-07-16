@@ -27,6 +27,26 @@ engine = get_engine()
 # Vehicles that have received an AI valuation count as "evaluations".
 EVAL_CONDITION = "resale_estimate IS NOT NULL AND resale_estimate > 0"
 
+# flip_recommendation is computed on the frontend and not stored, so the
+# admin "decision" is derived from the persisted deal_status instead.
+ACQUIRED = ("bought", "in_repair", "listed", "sold")
+
+
+def _decision_case(col="deal_status"):
+    return (
+        f"CASE WHEN {col} IN ('bought','in_repair','listed','sold') THEN 'BUY' "
+        f"WHEN {col} = 'passed' THEN 'PASS' ELSE 'PENDING' END"
+    )
+
+
+def _decision_label(deal_status):
+    ds = (deal_status or "").lower()
+    if ds in ACQUIRED:
+        return "BUY"
+    if ds == "passed":
+        return "PASS"
+    return "PENDING"
+
 # SQL expression for a rough realized profit (admin filtering/sorting only; the
 # precise, buyer-fee-aware figure is computed in Python for detail views).
 PROFIT_EXPR = (
@@ -96,9 +116,8 @@ def admin_overview(current_user: dict = Depends(require_super_admin)):
             ORDER BY count DESC LIMIT 10
         """)).fetchall()
 
-        decisions = conn.execute(text("""
-            SELECT UPPER(COALESCE(NULLIF(TRIM(flip_recommendation), ''), 'PENDING')) AS label,
-                   COUNT(*) AS count
+        decisions = conn.execute(text(f"""
+            SELECT {_decision_case()} AS label, COUNT(*) AS count
             FROM user_vehicles
             WHERE archived_at IS NULL
             GROUP BY label
@@ -318,7 +337,8 @@ def admin_user_detail(user_id: int, current_user: dict = Depends(require_super_a
                 COUNT(*) FILTER (WHERE archived_at IS NULL AND {EVAL_CONDITION})
                     AS total_evaluations,
                 COUNT(*) FILTER (WHERE deal_status = 'sold') AS sold_count,
-                COUNT(*) FILTER (WHERE UPPER(flip_recommendation) = 'BUY') AS buy_count,
+                COUNT(*) FILTER (WHERE deal_status IN ('bought','in_repair','listed','sold'))
+                    AS buy_count,
                 COUNT(*) FILTER (WHERE deal_status = 'passed') AS pass_count
             FROM user_vehicles WHERE user_id = :id
         """), {"id": user_id}).fetchone()
@@ -502,7 +522,7 @@ def _vehicle_row(v: dict) -> dict:
         "vin": v.get("vin"),
         "image_url": v.get("image_url"),
         "deal_status": v.get("deal_status"),
-        "flip_recommendation": v.get("flip_recommendation"),
+        "flip_recommendation": _decision_label(v.get("deal_status")),
         "est_retail_value": v.get("est_retail_value"),
         "repair_estimate": v.get("repair_estimate"),
         "resale_estimate": v.get("resale_estimate"),
@@ -551,7 +571,7 @@ def admin_vehicles(
         where.append("v.deal_status = :ds")
         params["ds"] = deal_status
     if decision:
-        where.append("UPPER(v.flip_recommendation) = :dec")
+        where.append(f"{_decision_case('v.deal_status')} = :dec")
         params["dec"] = decision.upper()
     if profit_min is not None:
         where.append(f"{PROFIT_EXPR} >= :pmin")

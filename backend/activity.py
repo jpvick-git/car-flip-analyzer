@@ -25,65 +25,84 @@ BLOCKED_LOGIN_STATUSES = frozenset({"suspended", "disabled"})
 SUBSCRIPTION_STATUSES = frozenset({"free", "trial", "active", "past_due", "canceled"})
 
 
+# Column/table DDL — must succeed (all use IF NOT EXISTS, so they are idempotent).
+_CORE_DDL = (
+    # users: roles, status, login tracking
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS account_status TEXT DEFAULT 'active'",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'free'",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMP",
+    # soft archive for vehicles
+    "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP",
+    # login history
+    """
+    CREATE TABLE IF NOT EXISTS user_login_history (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER,
+        logged_in_at TIMESTAMP DEFAULT NOW(),
+        ip_address TEXT,
+        user_agent TEXT,
+        browser TEXT,
+        device_type TEXT,
+        operating_system TEXT,
+        success BOOLEAN DEFAULT TRUE,
+        failure_reason TEXT,
+        session_id TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+    )
+    """,
+    # activity log
+    """
+    CREATE TABLE IF NOT EXISTS user_activity_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER,
+        action_type TEXT NOT NULL,
+        entity_type TEXT,
+        entity_id TEXT,
+        description TEXT,
+        metadata JSONB,
+        ip_address TEXT,
+        user_agent TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+    )
+    """,
+)
+
+# Indexes — best-effort. Some depend on columns created by other modules
+# (e.g. user_vehicles.deal_status), so we tolerate failures and skip rather
+# than take the whole service down on startup.
+_INDEX_DDL = (
+    "CREATE INDEX IF NOT EXISTS idx_users_role ON users (role)",
+    "CREATE INDEX IF NOT EXISTS idx_users_account_status ON users (account_status)",
+    "CREATE INDEX IF NOT EXISTS idx_users_last_login_at ON users (last_login_at)",
+    "CREATE INDEX IF NOT EXISTS idx_users_last_activity_at ON users (last_activity_at)",
+    "CREATE INDEX IF NOT EXISTS idx_uv_user_id ON user_vehicles (user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_uv_deal_status ON user_vehicles (deal_status)",
+    "CREATE INDEX IF NOT EXISTS idx_uv_created_at ON user_vehicles (created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_uv_archived_at ON user_vehicles (archived_at)",
+    "CREATE INDEX IF NOT EXISTS idx_login_hist_user ON user_login_history (user_id, logged_in_at)",
+    "CREATE INDEX IF NOT EXISTS idx_activity_user ON user_activity_logs (user_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_activity_action ON user_activity_logs (action_type, created_at)",
+)
+
+
 def ensure_admin_schema():
-    with engine.begin() as conn:
-        for stmt in (
-            # ----- users: roles, status, login tracking -----
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS account_status TEXT DEFAULT 'active'",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'free'",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INTEGER DEFAULT 0",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMP",
-            # ----- soft archive for vehicles -----
-            "ALTER TABLE user_vehicles ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP",
-            # ----- login history -----
-            """
-            CREATE TABLE IF NOT EXISTS user_login_history (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER,
-                logged_in_at TIMESTAMP DEFAULT NOW(),
-                ip_address TEXT,
-                user_agent TEXT,
-                browser TEXT,
-                device_type TEXT,
-                operating_system TEXT,
-                success BOOLEAN DEFAULT TRUE,
-                failure_reason TEXT,
-                session_id TEXT,
-                created_at TIMESTAMP DEFAULT NOW()
-            )
-            """,
-            # ----- activity log -----
-            """
-            CREATE TABLE IF NOT EXISTS user_activity_logs (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER,
-                action_type TEXT NOT NULL,
-                entity_type TEXT,
-                entity_id TEXT,
-                description TEXT,
-                metadata JSONB,
-                ip_address TEXT,
-                user_agent TEXT,
-                created_at TIMESTAMP DEFAULT NOW()
-            )
-            """,
-            # ----- indexes -----
-            "CREATE INDEX IF NOT EXISTS idx_users_role ON users (role)",
-            "CREATE INDEX IF NOT EXISTS idx_users_account_status ON users (account_status)",
-            "CREATE INDEX IF NOT EXISTS idx_users_last_login_at ON users (last_login_at)",
-            "CREATE INDEX IF NOT EXISTS idx_users_last_activity_at ON users (last_activity_at)",
-            "CREATE INDEX IF NOT EXISTS idx_uv_user_id ON user_vehicles (user_id)",
-            "CREATE INDEX IF NOT EXISTS idx_uv_deal_status ON user_vehicles (deal_status)",
-            "CREATE INDEX IF NOT EXISTS idx_uv_created_at ON user_vehicles (created_at)",
-            "CREATE INDEX IF NOT EXISTS idx_uv_flip_rec ON user_vehicles (flip_recommendation)",
-            "CREATE INDEX IF NOT EXISTS idx_uv_archived_at ON user_vehicles (archived_at)",
-            "CREATE INDEX IF NOT EXISTS idx_login_hist_user ON user_login_history (user_id, logged_in_at)",
-            "CREATE INDEX IF NOT EXISTS idx_activity_user ON user_activity_logs (user_id, created_at)",
-            "CREATE INDEX IF NOT EXISTS idx_activity_action ON user_activity_logs (action_type, created_at)",
-        ):
-            conn.execute(text(stmt))
+    # Each statement runs in its own transaction so one failure never rolls
+    # back the others (and never crash-loops the API on startup).
+    for stmt in _CORE_DDL:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception as e:  # pragma: no cover
+            print(f"⚠️ admin schema DDL failed: {e}")
+    for stmt in _INDEX_DDL:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception as e:  # pragma: no cover
+            print(f"⚠️ admin index skipped: {e}")
 
 
 ensure_admin_schema()

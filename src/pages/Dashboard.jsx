@@ -668,6 +668,7 @@ export default function Dashboard({
   const [deleting, setDeleting] = useState(false);
   const [summary, setSummary] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [view, setView] = useState("watching");
   const [outcomeTarget, setOutcomeTarget] = useState(null);
   const [viewMode, setViewMode] = useState(() =>
     localStorage.getItem("dashboard-view-mode") === "list" ? "list" : "grid"
@@ -908,21 +909,35 @@ export default function Dashboard({
   const readyCount = readyCars.length;
   const processingCount = processingCars.length;
 
-  const STATUS_TABS = [
+  // A vehicle lives in "Watching" until it's bought; once acquired it moves to
+  // "Inventory" (bought → in repair → listed → sold).
+  const ACQUIRED_KEYS = [
+    DEAL_STATUS.BOUGHT,
+    DEAL_STATUS.IN_REPAIR,
+    DEAL_STATUS.LISTED,
+    DEAL_STATUS.SOLD,
+  ];
+  const isAcquiredCar = (c) => ACQUIRED_KEYS.includes(dealStatus(c));
+  const watchingCars = readyCars.filter((c) => !isAcquiredCar(c));
+  const inventoryCars = readyCars.filter(isAcquiredCar);
+
+  const INVENTORY_TABS = [
     { key: "all", label: "All" },
-    { key: DEAL_STATUS.WATCHING, label: "Watching" },
     { key: DEAL_STATUS.BOUGHT, label: "Bought" },
     { key: DEAL_STATUS.IN_REPAIR, label: "In Repair" },
     { key: DEAL_STATUS.LISTED, label: "Listed" },
     { key: DEAL_STATUS.SOLD, label: "Sold" },
   ];
   const statusCountFor = (key) =>
-    key === "all" ? readyCars.length : readyCars.filter((c) => dealStatus(c) === key).length;
+    key === "all"
+      ? inventoryCars.length
+      : inventoryCars.filter((c) => dealStatus(c) === key).length;
 
+  const baseCars = view === "watching" ? watchingCars : inventoryCars;
   const visibleCars =
-    statusFilter === "all"
-      ? readyCars
-      : readyCars.filter((c) => dealStatus(c) === statusFilter);
+    view === "inventory" && statusFilter !== "all"
+      ? inventoryCars.filter((c) => dealStatus(c) === statusFilter)
+      : baseCars;
 
   const dealerMode = (settings?.business_type || "flipper") === "dealer";
   const agingThreshold = dealerMode ? settings?.max_turn_days || 90 : 30;
@@ -967,14 +982,21 @@ export default function Dashboard({
 
         <div className="mb-5 flex flex-col gap-4 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-medium text-blue-600">Your pipeline</p>
             <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-brand-navy sm:text-4xl">
-              Vehicle Inventory
+              {view === "watching" ? "Watching" : "Inventory"}
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-slate-500 sm:text-base">
-              {readyCount} {readyCount === 1 ? "vehicle" : "vehicles"}
-              {isDemo ? " in demo preview" : " ready for flip decisions"}
-              {processingCount > 0 ? ` · ${processingCount} processing` : ""}
+              {view === "watching" ? (
+                <>
+                  {watchingCars.length} {watchingCars.length === 1 ? "vehicle" : "vehicles"}
+                  {isDemo ? " in demo preview" : " to evaluate"}
+                  {processingCount > 0 ? ` · ${processingCount} processing` : ""}
+                </>
+              ) : (
+                <>
+                  {inventoryCars.length} {inventoryCars.length === 1 ? "vehicle" : "vehicles"} in inventory
+                </>
+              )}
             </p>
           </div>
 
@@ -1039,8 +1061,40 @@ export default function Dashboard({
         )}
 
         {readyCount > 0 && (
+          <div className="mb-4 inline-flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+            {[
+              { key: "watching", label: "Watching", count: watchingCars.length },
+              { key: "inventory", label: "Inventory", count: inventoryCars.length },
+            ].map((tab) => {
+              const active = view === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setView(tab.key)}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                    active
+                      ? "bg-blue-600 text-white shadow-sm shadow-blue-600/20"
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {tab.label}
+                  <span
+                    className={`rounded-full px-1.5 text-xs tabular-nums ${
+                      active ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {readyCount > 0 && view === "inventory" && inventoryCars.length > 0 && (
           <div className="mb-5 flex flex-wrap gap-2">
-            {STATUS_TABS.map((tab) => {
+            {INVENTORY_TABS.map((tab) => {
               const count = statusCountFor(tab.key);
               const active = statusFilter === tab.key;
               return (
@@ -1073,20 +1127,52 @@ export default function Dashboard({
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-bg text-slate-400">
               <Car size={26} />
             </div>
-            {readyCount > 0 && statusFilter !== "all" ? (
+            {readyCount > 0 && view === "inventory" && statusFilter !== "all" ? (
               <>
                 <p className="text-xl font-bold tracking-tight text-brand-navy">
                   No deals in this stage
                 </p>
                 <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
-                  Nothing is marked “{STATUS_TABS.find((t) => t.key === statusFilter)?.label}” yet.
+                  Nothing is marked “{INVENTORY_TABS.find((t) => t.key === statusFilter)?.label}” yet.
                 </p>
                 <button
                   type="button"
                   onClick={() => setStatusFilter("all")}
                   className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
                 >
-                  Show all vehicles
+                  Show all inventory
+                </button>
+              </>
+            ) : readyCount > 0 && view === "inventory" ? (
+              <>
+                <p className="text-xl font-bold tracking-tight text-brand-navy">
+                  Nothing in inventory yet
+                </p>
+                <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
+                  Once you mark a watched vehicle as bought, it moves here.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setView("watching")}
+                  className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                >
+                  Go to watching
+                </button>
+              </>
+            ) : readyCount > 0 && view === "watching" ? (
+              <>
+                <p className="text-xl font-bold tracking-tight text-brand-navy">
+                  Nothing on your watch list
+                </p>
+                <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
+                  Everything's been bought and moved to inventory.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setView("inventory")}
+                  className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                >
+                  Go to inventory
                 </button>
               </>
             ) : processingCount > 0 && downloading ? (

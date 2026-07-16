@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Menu, X, Plus, Settings, LogOut, BarChart3, LayoutDashboard, Calculator, Shield } from "lucide-react";
+import { Menu, X, Plus, Settings, LogOut, BarChart3, LayoutDashboard, Calculator, Shield, User, Store } from "lucide-react";
 import BrandLogo from "./BrandLogo";
 import { useUserSettings } from "../context/UserSettingsContext";
 import { isDealer } from "../utils/businessMode";
@@ -8,10 +8,23 @@ import { isSuperAdmin } from "../utils/userSettings";
 
 export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const navigate = useNavigate();
-  const { settings } = useUserSettings();
+  const { settings, updateSettings } = useUserSettings();
   const dealer = isDealer(settings);
   const superAdmin = isSuperAdmin(settings);
+
+  const switchMode = async (value) => {
+    if (switching || value === (settings?.business_type || "flipper")) return;
+    setSwitching(true);
+    try {
+      await updateSettings({ business_type: value });
+    } catch (err) {
+      console.error("Mode switch failed:", err);
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
@@ -25,13 +38,47 @@ export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
           )}
         </div>
 
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          className="rounded-xl p-2 text-brand-navy transition hover:bg-brand-bg"
-          aria-label="Open menu"
-        >
-          {menuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        <div className="flex items-center gap-2">
+          {!isDemo && (
+            <div
+              className="flex items-center rounded-full border border-slate-200 bg-slate-100 p-0.5"
+              role="group"
+              aria-label="Account mode"
+            >
+              {[
+                ["flipper", "Flip", User],
+                ["dealer", "Lot", Store],
+              ].map(([value, label, Icon]) => {
+                const active = (settings?.business_type || "flipper") === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => switchMode(value)}
+                    disabled={switching}
+                    title={value === "dealer" ? "Used Car Lot mode" : "Flipper mode"}
+                    className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition disabled:opacity-60 ${
+                      active
+                        ? "bg-white text-brand-navy shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    <Icon size={13} className={active ? "text-brand-green" : "text-slate-400"} />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="rounded-xl p-2 text-brand-navy transition hover:bg-brand-bg"
+            aria-label="Open menu"
+          >
+            {menuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </div>
 
       {menuOpen && (

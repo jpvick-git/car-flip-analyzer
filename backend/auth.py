@@ -1,5 +1,5 @@
 # auth.py
-from fastapi import APIRouter, Depends, HTTPException, Form
+from fastapi import APIRouter, Depends, HTTPException, Form, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -7,6 +7,12 @@ from datetime import datetime, timedelta
 from sqlalchemy import text
 import os
 from .db import get_engine
+from .activity import (
+    record_login,
+    log_activity,
+    ROLE_SUPER_ADMIN,
+    BLOCKED_LOGIN_STATUSES,
+)
 
 router = APIRouter()
 engine = get_engine()
@@ -58,21 +64,17 @@ def create_access_token(data: dict):
 def get_user_by_email(email):
     with engine.connect() as conn:
         row = conn.execute(text("""
-            SELECT id, email, password_hash
+            SELECT id, email, password_hash,
+                   COALESCE(is_demo, false) AS is_demo,
+                   COALESCE(role, 'user') AS role,
+                   COALESCE(account_status, 'active') AS account_status
             FROM users
             WHERE email = :email
         """), {"email": email}).fetchone()
         if not row:
             return None
         user = dict(row._mapping)
-        try:
-            demo = conn.execute(
-                text("SELECT COALESCE(is_demo, false) FROM users WHERE email = :email"),
-                {"email": email},
-            ).scalar()
-            user["is_demo"] = bool(demo)
-        except Exception:
-            user["is_demo"] = email.lower() == DEMO_EMAIL.lower()
+        user["is_demo"] = bool(user.get("is_demo"))
         return user
 
 def get_vehicle_owner_id(current_user: dict) -> int:
@@ -133,13 +135,30 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return {"id": user["id"], "email": user["email"], "is_demo": bool(user.get("is_demo"))}
+    if user.get("account_status") in BLOCKED_LOGIN_STATUSES:
+        raise HTTPException(status_code=403, detail="Account is suspended or disabled")
+
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "is_demo": bool(user.get("is_demo")),
+        "role": user.get("role", "user"),
+        "account_status": user.get("account_status", "active"),
+    }
+
+
+def require_super_admin(current_user: dict = Depends(get_current_user)):
+    """Dependency that enforces the super_admin role (403 otherwise)."""
+    if current_user.get("role") != ROLE_SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="Super admin access required")
+    return current_user
 
 # --------------------------------------------------
 # ROUTES
 # --------------------------------------------------
 @router.post("/register")
 def register(
+    request: Request,
     username: str = Form(...),
     password: str = Form(...),
     name: str = Form(None),
@@ -159,7 +178,7 @@ def register(
         if existing:
             raise HTTPException(status_code=400, detail="User already exists")
 
-        conn.execute(
+        new_id = conn.execute(
             text("""
                 INSERT INTO users (
                     username, email, password_hash, created_at,
@@ -168,6 +187,7 @@ def register(
                     :u, :e, :p, NOW(),
                     :name, :street, :city, :state_code, :zip_code, :phone
                 )
+                RETURNING id
             """),
             {
                 "u": username,
@@ -180,19 +200,62 @@ def register(
                 "zip_code": zip_code,
                 "phone": phone
             }
-        )
+        ).scalar()
 
+    log_activity(
+        new_id, "register", entity_type="user", entity_id=new_id,
+        description=f"New account registered: {username}", request=request,
+    )
     return {"message": "User created successfully"}
 
 @router.post("/login")
-def login(form: OAuth2PasswordRequestForm = Depends()):
+def login(request: Request, form: OAuth2PasswordRequestForm = Depends()):
     user = get_user_by_email(form.username)
     if not user or not verify_password(form.password, user["password_hash"]):
+        record_login(
+            user["id"] if user else None, request, success=False,
+            failure_reason="invalid_credentials",
+        )
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    if user.get("account_status") in BLOCKED_LOGIN_STATUSES:
+        record_login(
+            user["id"], request, success=False,
+            failure_reason=f"account_{user.get('account_status')}",
+        )
+        raise HTTPException(status_code=403, detail="Account is suspended or disabled")
+
     token = create_access_token({"sub": user["email"], "id": user["id"]})
+
+    with engine.begin() as conn:
+        conn.execute(
+            text("""
+                UPDATE users
+                SET last_login_at = NOW(),
+                    last_activity_at = NOW(),
+                    login_count = COALESCE(login_count, 0) + 1
+                WHERE id = :uid
+            """),
+            {"uid": user["id"]},
+        )
+    record_login(user["id"], request, success=True, session_id=token[-16:])
+    log_activity(
+        user["id"], "login", entity_type="user", entity_id=user["id"],
+        description="User logged in", request=request,
+    )
+
     return {
         "access_token": token,
         "token_type": "bearer",
         "is_demo": bool(user.get("is_demo")),
+        "role": user.get("role", "user"),
     }
+
+
+@router.post("/logout")
+def logout(request: Request, current_user: dict = Depends(get_current_user)):
+    log_activity(
+        current_user["id"], "logout", entity_type="user",
+        entity_id=current_user["id"], description="User logged out", request=request,
+    )
+    return {"message": "Logged out"}

@@ -117,7 +117,9 @@ def get_settings(current_user: dict = Depends(get_current_user)):
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return _row_to_settings(row)
+    result = _row_to_settings(row)
+    result["role"] = current_user.get("role", "user")
+    return result
 
 
 @router.patch("/settings")

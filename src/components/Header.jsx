@@ -1,15 +1,17 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Menu, X, Plus, Settings, LogOut, BarChart3, LayoutDashboard, Calculator } from "lucide-react";
+import { Menu, X, Plus, Settings, LogOut, BarChart3, LayoutDashboard, Calculator, Shield } from "lucide-react";
 import BrandLogo from "./BrandLogo";
 import { useUserSettings } from "../context/UserSettingsContext";
 import { isDealer } from "../utils/businessMode";
+import { isSuperAdmin } from "../utils/userSettings";
 
 export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const { settings } = useUserSettings();
   const dealer = isDealer(settings);
+  const superAdmin = isSuperAdmin(settings);
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
@@ -93,6 +95,22 @@ export default function Header({ onAddVehicle, onUploadCSV, logout, isDemo }) {
               <Settings size={16} className="text-slate-500" />
               {dealer ? "Lot Preferences" : "Flip Preferences"}
             </button>
+
+            {superAdmin && (
+              <>
+                <div className="my-1 border-t border-slate-100" />
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    navigate("/admin");
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:bg-brand-bg"
+                >
+                  <Shield size={16} className="text-purple-600" />
+                  Admin
+                </button>
+              </>
+            )}
 
             <div className="my-1 border-t border-slate-100" />
 

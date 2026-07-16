@@ -16,14 +16,36 @@ import VehicleDetail from "./pages/VehicleDetail";
 import SettingsPage from "./pages/Settings";
 import Portfolio from "./pages/Portfolio";
 import Appraise from "./pages/Appraise";
+import AdminLayout from "./pages/admin/AdminLayout";
+import AdminOverview from "./pages/admin/AdminOverview";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminUserDetail from "./pages/admin/AdminUserDetail";
+import AdminVehicles from "./pages/admin/AdminVehicles";
+import AdminActivity from "./pages/admin/AdminActivity";
+import AdminSettings from "./pages/admin/AdminSettings";
 import Header from "./components/Header";
-import { UserSettingsProvider } from "./context/UserSettingsContext";
-import { clearCachedSettings } from "./utils/userSettings";
+import { UserSettingsProvider, useUserSettings } from "./context/UserSettingsContext";
+import { clearCachedSettings, isSuperAdmin } from "./utils/userSettings";
+import { Loader2 } from "lucide-react";
 
 // ProtectedRoute
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
   if (!token) return <Navigate to="/login" replace />;
+  return children;
+}
+
+// AdminRoute — gates the admin console to super_admin users (server also enforces).
+function AdminRoute({ children }) {
+  const { settings, loading } = useUserSettings();
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center text-slate-400">
+        <Loader2 className="animate-spin" size={28} />
+      </div>
+    );
+  }
+  if (!isSuperAdmin(settings)) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -163,6 +185,25 @@ function Layout() {
             </ProtectedRoute>
           }
         />
+
+        {/* ADMIN CONSOLE (super_admin only) */}
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminRoute>
+                <AdminLayout />
+              </AdminRoute>
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<AdminOverview />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="users/:id" element={<AdminUserDetail />} />
+          <Route path="vehicles" element={<AdminVehicles />} />
+          <Route path="activity" element={<AdminActivity />} />
+          <Route path="settings" element={<AdminSettings />} />
+        </Route>
 
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />

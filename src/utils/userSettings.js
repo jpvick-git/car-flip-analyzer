@@ -28,11 +28,16 @@ export const DEFAULT_USER_SETTINGS = {
   default_transport_type: "local_tow",
   shop_location: "",
   business_type: "flipper",
+  role: "user",
   ...LOT_PROFILE_DEFAULTS,
 };
 
 export function isDealer(settings) {
   return (settings?.business_type || "flipper") === "dealer";
+}
+
+export function isSuperAdmin(settings) {
+  return (settings?.role || "user") === "super_admin";
 }
 
 function normalizeInt(value, fallback) {
@@ -58,6 +63,7 @@ export function normalizeUserSettings(raw) {
     default_transport_type: transport,
     shop_location: String(raw.shop_location || "").trim(),
     business_type: business,
+    role: raw.role === "super_admin" ? "super_admin" : "user",
   };
   for (const [key, fallback] of Object.entries(LOT_PROFILE_DEFAULTS)) {
     normalized[key] = normalizeInt(raw[key], fallback);

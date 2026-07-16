@@ -4,11 +4,12 @@ import os
 import shutil
 import json
 from datetime import datetime
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 from .db import get_engine
 from .auth import get_current_user, get_vehicle_owner_id, require_not_demo
+from .activity import log_activity
 from .ai_estimator import run_ai
 from .copart_utils import enrich_vehicle
 from .vehicle_model import normalize_vehicle, is_private_party, buyer_fee_rate
@@ -241,6 +242,7 @@ def get_vehicles(current_user: dict = Depends(get_current_user)):
                 SELECT *
                 FROM user_vehicles
                 WHERE user_id = :uid
+                  AND archived_at IS NULL
                 ORDER BY id DESC
             """)
 
@@ -294,6 +296,7 @@ def get_vehicle(public_id: str, current_user: dict = Depends(get_current_user)):
 def update_vehicle_repair(
     public_id: str,
     payload: RepairUpdatePayload,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     require_not_demo(current_user)
@@ -325,6 +328,11 @@ def update_vehicle_repair(
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Vehicle not found")
 
+    log_activity(
+        current_user["id"], "vehicle_repair_update", entity_type="vehicle",
+        entity_id=public_id, description=f"Repair estimate updated to {total}",
+        metadata={"repair_estimate": total}, request=request,
+    )
     return {
         "repair_estimate": total,
         "repair_breakdown": items,
@@ -458,6 +466,7 @@ def refresh_vehicle_repair_plan(
 def update_vehicle_transport(
     public_id: str,
     payload: TransportUpdatePayload,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     require_not_demo(current_user)
@@ -516,6 +525,10 @@ def update_vehicle_transport(
     if not row:
         raise HTTPException(status_code=404, detail="Vehicle not found")
 
+    log_activity(
+        current_user["id"], "vehicle_transport_update", entity_type="vehicle",
+        entity_id=public_id, description="Transport details updated", request=request,
+    )
     return normalize_vehicle(enrich_vehicle(dict(row._mapping)))
 
 
@@ -680,6 +693,7 @@ def refresh_vehicle_negotiation(
 def update_vehicle_status(
     public_id: str,
     payload: StatusUpdatePayload,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     require_not_demo(current_user)
@@ -758,7 +772,18 @@ def update_vehicle_status(
             {"pid": public_id, "uid": owner_id},
         ).fetchone()
 
-    return normalize_vehicle(enrich_vehicle(dict(saved._mapping)))
+    saved_v = dict(saved._mapping)
+    log_activity(
+        current_user["id"], "vehicle_status_change", entity_type="vehicle",
+        entity_id=public_id,
+        description=f"Deal status changed to {status}",
+        metadata={
+            "deal_status": status,
+            "vehicle": f"{saved_v.get('year')} {saved_v.get('make')} {saved_v.get('model')}",
+        },
+        request=request,
+    )
+    return normalize_vehicle(enrich_vehicle(saved_v))
 
 
 # --------------------------------------------------------------
@@ -768,6 +793,7 @@ def update_vehicle_status(
 def update_vehicle_outcome(
     public_id: str,
     payload: OutcomeUpdatePayload,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     require_not_demo(current_user)
@@ -825,8 +851,16 @@ def update_vehicle_outcome(
             {"pid": public_id, "uid": owner_id},
         ).fetchone()
 
-    result = normalize_vehicle(enrich_vehicle(dict(saved._mapping)))
-    result["realized_profit"] = _realized_profit(dict(saved._mapping))
+    saved_v = dict(saved._mapping)
+    log_activity(
+        current_user["id"], "vehicle_outcome_update", entity_type="vehicle",
+        entity_id=public_id,
+        description="Deal outcome updated",
+        metadata={k: v for k, v in fields.items()},
+        request=request,
+    )
+    result = normalize_vehicle(enrich_vehicle(saved_v))
+    result["realized_profit"] = _realized_profit(saved_v)
     return result
 
 
@@ -1046,7 +1080,7 @@ def get_states():
 # DELETE VEHICLE
 # --------------------------------------------------------------
 @router.delete("/delete_vehicle/{public_id}")
-def delete_vehicle(public_id: str, current_user: dict = Depends(get_current_user)):
+def delete_vehicle(public_id: str, request: Request, current_user: dict = Depends(get_current_user)):
     require_not_demo(current_user)
     try:
         user_id = current_user["id"]
@@ -1057,6 +1091,10 @@ def delete_vehicle(public_id: str, current_user: dict = Depends(get_current_user
             )
             if result.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Vehicle not found")
+        log_activity(
+            user_id, "vehicle_delete", entity_type="vehicle", entity_id=public_id,
+            description="Vehicle deleted", request=request,
+        )
         return {"status": "deleted"}
     except HTTPException:
         raise

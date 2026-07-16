@@ -6,7 +6,7 @@ import time
 import traceback
 import threading
 import requests
-from fastapi import APIRouter, File, UploadFile, Form, Depends, HTTPException
+from fastapi import APIRouter, File, UploadFile, Form, Depends, HTTPException, Request
 from sqlalchemy import text
 
 from ..db import get_engine
@@ -15,6 +15,7 @@ engine = get_engine()
 
 from ..auth import get_current_user, require_not_demo, require_daily_vehicle_quota
 from ..vehicle_model import SOURCE_PRIVATE_PARTY, parse_money
+from ..activity import log_activity
 
 router = APIRouter()
 
@@ -48,6 +49,7 @@ async def add_manual_vehicle(
     extra_image_2: UploadFile = File(None),
     extra_image_3: UploadFile = File(None),
 
+    request: Request = None,
     current_user=Depends(get_current_user),
 ):
     print("➡️ /add_manual_vehicle called", flush=True)
@@ -91,7 +93,7 @@ async def add_manual_vehicle(
         listing_text = (description or damage_description or "").strip()
 
         with engine.begin() as conn:
-            conn.execute(
+            new_public_id = conn.execute(
                 text("""
                     INSERT INTO user_vehicles (
                         user_id,
@@ -153,6 +155,7 @@ async def add_manual_vehicle(
                         NULL,
                         NOW()
                     )
+                    RETURNING public_id
                 """),
                 {
                     "uid": user_id,
@@ -173,9 +176,16 @@ async def add_manual_vehicle(
                     "location": location,
                     "image": primary_image,
                 }
-            )
+            ).scalar()
 
         print("✔️ Manual vehicle inserted.", flush=True)
+
+        log_activity(
+            user_id, "vehicle_create", entity_type="vehicle", entity_id=new_public_id,
+            description=f"Manual vehicle added: {year or ''} {make or ''} {model or ''}".strip(),
+            metadata={"lot_number": lot_number, "source": "manual"},
+            request=request,
+        )
 
         def fire_ai_trigger():
             try:
@@ -198,6 +208,7 @@ async def add_manual_vehicle(
         return {
             "status": "success",
             "lot_number": lot_number,
+            "public_id": new_public_id,
             "source_type": SOURCE_PRIVATE_PARTY,
             "image_urls": saved_image_urls,
         }

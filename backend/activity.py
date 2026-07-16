@@ -201,10 +201,10 @@ def _get_geo_reader():
                 import geoip2.database  # noqa: WPS433 (optional dependency)
 
                 _geo_reader = geoip2.database.Reader(GEOIP_DB_PATH)
-                print(f"🌍 GeoIP enabled ({GEOIP_DB_PATH})")
+                print(f"[geoip] enabled ({GEOIP_DB_PATH})")
             except Exception as e:
                 _geo_disabled = True
-                print(f"⚠️ GeoIP disabled ({e}); locations will be blank")
+                print(f"[geoip] disabled ({e}); locations will be blank")
     return _geo_reader
 
 
@@ -222,7 +222,8 @@ def geolocate(ip: str | None) -> dict:
         r = reader.city(ip)
         region = None
         try:
-            region = r.subdivisions.most_specific.iso_code
+            sub = r.subdivisions.most_specific
+            region = sub.iso_code or sub.name
         except Exception:
             region = None
         return {

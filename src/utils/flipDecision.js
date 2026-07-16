@@ -426,7 +426,7 @@ function buildWarnings(vehicle, context) {
 
   const miles = Number(vehicle?.odometer);
   if (Number.isFinite(miles) && miles > 120000 && warnings.length < 6) {
-    warnings.push("Higher mileage increases recon and exit risk.");
+    warnings.push("Higher mileage increases repair and exit risk.");
   }
 
   if (profit > 0 && profit < 500 && warnings.length < 6) {
@@ -666,7 +666,7 @@ export function buildRecommendationExplanation(vehicle, flipMetrics, decision) {
 
   if (rec === RECOMMENDATION.PASS) {
     const primary = decision?.warnings?.[0] || "the risk outweighs the upside";
-    return `We recommend passing on this one. ${primary}. Expected profit is ${profit >= 0 ? "thin" : "negative"} after fees, recon, and taxes.`;
+    return `We recommend passing on this one. ${primary}. Expected profit is ${profit >= 0 ? "thin" : "negative"} after fees, repair, and taxes.`;
   }
 
   if (rec === RECOMMENDATION.MAYBE) {
@@ -676,7 +676,7 @@ export function buildRecommendationExplanation(vehicle, flipMetrics, decision) {
   const spread =
     repairRatio <= 0.2
       ? "a strong resale spread with relatively low repair cost"
-      : "a workable spread if recon stays on budget";
+      : "a workable spread if repair stays on budget";
 
   let text = `This vehicle appears to offer ${spread}. Estimated repair is $${repair.toLocaleString()} against a $${resale.toLocaleString()} exit, supporting roughly $${profit.toLocaleString()} profit at your target margin.`;
 

@@ -151,10 +151,6 @@ export default function Register() {
               </div>
             </div>
           </div>
-
-          <p className="text-xs text-slate-400">
-            Built for independent car flippers, side hustlers, and small dealers.
-          </p>
         </div>
       </div>
 

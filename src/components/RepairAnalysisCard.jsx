@@ -3,7 +3,7 @@ import { formatCurrency } from "../utils/formatCurrency";
 import { extractRepairHighlights } from "../utils/flipDecision";
 import { parseRepairItems, sumRepairItems } from "../utils/repairBreakdown";
 import RepairBreakdown from "./RepairBreakdown";
-import { costLabel, isPrivateParty } from "../utils/vehicleSource";
+import { costLabel } from "../utils/vehicleSource";
 
 function confidenceBadgeClass(level) {
   const l = String(level || "").toLowerCase();
@@ -31,7 +31,7 @@ export default function RepairAnalysisCard({
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-600">
             <Wrench size={13} />
           </span>
-          {isPrivateParty(car) ? "Recon Analysis" : "AI Repair Analysis"}
+          AI Repair Analysis
         </h3>
         <p className="text-sm text-slate-400">No repair analysis available yet.</p>
       </section>
@@ -44,7 +44,7 @@ export default function RepairAnalysisCard({
         <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-600">
           <Wrench size={13} />
         </span>
-        {isPrivateParty(car) ? "Recon Analysis" : "AI Repair Analysis"}
+        AI Repair Analysis
       </h3>
 
       {/* Summary header */}

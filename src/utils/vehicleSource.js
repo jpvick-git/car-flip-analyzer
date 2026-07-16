@@ -21,7 +21,7 @@ export function sourceLabel(car) {
 }
 
 export function costLabel(car) {
-  return isPrivateParty(car) ? "Recon" : "Repair";
+  return "Repair";
 }
 
 export function maxOfferLabel(car) {

@@ -559,7 +559,7 @@ export default function VehicleDetail() {
         </div>
 
         <p className="mt-10 border-t border-slate-200 pt-6 text-center text-xs leading-relaxed text-slate-400">
-          AI-generated estimates may contain errors. All {isPrivate ? "recon" : "repair"} costs, resale values, and{" "}
+          AI-generated estimates may contain errors. All repair costs, resale values, and{" "}
           {isPrivate ? "offer" : "bid"} calculations should be independently verified before making any purchase decision.
         </p>
       </main>

@@ -234,7 +234,7 @@ def refresh_vehicle_repair_plan(
     vehicle_id: int,
     current_user: dict = Depends(get_current_user),
 ):
-    """Re-run vision-based repair/recon analysis and refresh the repair plan."""
+    """Re-run vision-based repair analysis and refresh the repair plan."""
     require_not_demo(current_user)
     owner_id = get_vehicle_owner_id(current_user)
 

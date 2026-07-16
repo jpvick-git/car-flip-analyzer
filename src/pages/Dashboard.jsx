@@ -33,7 +33,6 @@ import {
 } from "../utils/transportEstimate";
 import { useFlipMetrics } from "../utils/useFlipMetrics";
 import {
-  isPrivateParty,
   buyerFeeRate,
   sourceLabel,
   costLabel,
@@ -376,7 +375,6 @@ function VehicleDetailModal({
 }) {
   const { settings } = useUserSettings();
   const repair = Number(car.repair_estimate || car.ai_repair_estimate || 0);
-  const isPrivate = isPrivateParty(car);
   const metrics = useFlipMetrics({
     carId: car.id,
     resale: car.resale_estimate || car.ai_resale_estimate || 0,
@@ -468,7 +466,7 @@ function VehicleDetailModal({
             </span>
           </div>
           <p className="mb-3 text-xs text-slate-400">
-            set at {tempMargin}% margin · profit updates when {isPrivate ? "recon" : "repair"} costs change
+            set at {tempMargin}% margin · profit updates when repair costs change
           </p>
 
           <div className="space-y-1.5 border-t border-slate-200 pt-3 text-sm text-slate-500">

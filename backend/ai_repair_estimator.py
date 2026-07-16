@@ -157,8 +157,8 @@ Repair plan rules (REQUIRED whenever repair_items is non-empty):
 """
 
 REPAIR_PLAN_RECON_APPEND = """
-Repair plan rules (REQUIRED whenever recon_items is non-empty):
-- Include ALL repair-plan fields in the SAME JSON object as recon_items.
+Repair plan rules (REQUIRED whenever repair_items is non-empty):
+- Include ALL repair-plan fields in the SAME JSON object as repair_items.
 - parts_needed must list specific parts/supplies (brake pads, tires, battery, bulbs, filters) with price ranges — not vague labels.
 - estimated_labor_hours must reflect shop time when work is not DIY-friendly.
 - shop_services_needed for alignment, AC recharge, paint touch-up, diagnostics when applicable.
@@ -252,32 +252,32 @@ PRIVATE_RECON_SYSTEM_PROMPT = (
 
 PRIVATE_RECON_RULES = """
 Rules:
-1. This is a private-party flip — estimate RECONDITIONING (detail, tires, brakes, fluids, bulbs,
+1. This is a private-party flip — estimate REPAIR/RECONDITIONING costs (detail, tires, brakes, fluids, bulbs,
    minor cosmetic touch-ups, deferred maintenance the listing mentions or photos suggest).
-2. Do NOT invent collision damage. If photos show a clean car, recon should be light (detail, inspection,
+2. Do NOT invent collision damage. If photos show a clean car, repair should be light (detail, inspection,
    maybe tires/brakes based on mileage) — not thousands in body work.
 3. Compare photos to the seller's listing description. Flag mismatches (e.g. ad says runs great but
    check-engine light visible, ad says clean but visible rust/dents not mentioned).
 4. Parse the listing text for red flags: runs but, needs work, mechanic special, salvage/rebuilt
    title mentions, vague mileage, lost title, lien language, as-is, incomplete registration, etc.
-5. Each recon_items cost is ALL-IN at a competent independent shop (not dealer, not DIY).
+5. Each repair_items cost is ALL-IN at a competent independent shop (not dealer, not DIY).
 6. If listing mentions a specific issue (needs brakes, AC doesn't blow cold), include a line item for it.
-7. Be conservative on recon — slightly HIGH rather than low when issues are visible or stated.
+7. Be conservative on repair — slightly HIGH rather than low when issues are visible or stated.
 
 Return JSON with this exact structure:
 {
   "photo_match_notes": "1-2 sentences: do photos match the listing?",
   "red_flags": ["short red flag strings from listing or photos"],
-  "recon_items": [
+  "repair_items": [
     {"description": "Full detail + engine bay clean", "cost": 200}
   ],
-  "recon_estimate": 200,
-  "recon_details": "2-4 sentence summary of recon needed and photo/listing observations"
+  "repair_estimate": 200,
+  "repair_details": "2-4 sentence summary of repair needed and photo/listing observations"
 }
 
-Rules for recon_items:
-8. recon_estimate MUST equal the sum of all recon_items costs.
-9. If the car appears retail-ready with no stated issues, recon_items can be minimal (detail + inspection).
+Rules for repair_items:
+8. repair_estimate MUST equal the sum of all repair_items costs.
+9. If the car appears retail-ready with no stated issues, repair_items can be minimal (detail + inspection).
 """ + REPAIR_PLAN_RECON_APPEND
 
 PRIVATE_RESALE_SYSTEM_PROMPT = (
@@ -291,10 +291,10 @@ Rules:
 1. Use realistic private-party RETAIL asking prices for a well-presented example of this year/make/model/trim
    at this mileage in the current US market — not KBB "fair purchase price" and not auction wholesale.
 2. Factor in title status: clean title = full retail; rebuilt/salvage = significant discount (20-40%+).
-3. Factor recon costs when a recon line-item list is provided — buyer's exit is AFTER recon is done.
+3. Factor repair costs when a repair line-item list is provided — buyer's exit is AFTER repair is done.
 4. Be conservative — understate rather than overstate value.
-5. You have NOT seen photos. Your only condition info is recon line items and listing context below.
-6. Do NOT invent specific mechanical failures not mentioned in the recon list or listing.
+5. You have NOT seen photos. Your only condition info is repair line items and listing context below.
+6. Do NOT invent specific mechanical failures not mentioned in the repair list or listing.
 
 Return JSON with this exact structure:
 {
@@ -306,16 +306,16 @@ Return JSON with this exact structure:
 NEGOTIATION_SYSTEM_PROMPT = (
     "You are an experienced used-car buyer and flipper coaching someone to negotiate a lower "
     "private-party purchase price. You inspect listing photos and text to find factual leverage — "
-    "visible condition issues, listing omissions or exaggerations, recon costs, market comps, and "
+    "visible condition issues, listing omissions or exaggerations, repair costs, market comps, and "
     "title/mileage concerns. You give practical talking points the buyer can use respectfully with "
     "the seller. You never suggest lying, insulting the seller, or fabricating problems."
 )
 
 NEGOTIATION_RULES = """
 Rules:
-1. Base every talking point on evidence from the listing text, photos, or provided recon/resale estimates.
+1. Base every talking point on evidence from the listing text, photos, or provided repair/resale estimates.
 2. Compare photos to the seller's description — mismatches are strong negotiation leverage.
-3. Reference visible wear, deferred maintenance, recon line items, or red flags when present.
+3. Reference visible wear, deferred maintenance, repair line items, or red flags when present.
 4. Use asking price vs. realistic retail exit (if provided) to frame how much room exists to negotiate.
 5. Include questions the buyer should ask the seller before making an offer (service records, accidents, why selling).
 6. Suggest a realistic offer range ONLY when you have enough context (asking price + condition/market signals).
@@ -338,7 +338,7 @@ Return JSON with this exact structure:
       "point": "The listing says 'no issues' but Photo 3 shows curb rash on both front wheels",
       "category": "condition",
       "strength": "strong",
-      "how_to_use": "Mention you budget for wheels/tires and ask if they'd adjust price for recon"
+      "how_to_use": "Mention you budget for wheels/tires and ask if they'd adjust price for repair"
     }
   ]
 }
@@ -1321,7 +1321,7 @@ def analyze_vehicle_known_issues(vehicle: dict) -> dict:
 
 def _finalize_private_recon_fields(parsed: dict) -> dict:
     items = []
-    for item in parsed.get("recon_items") or []:
+    for item in parsed.get("repair_items") or parsed.get("recon_items") or []:
         if not isinstance(item, dict):
             continue
         description = str(item.get("description") or "").strip()
@@ -1336,11 +1336,11 @@ def _finalize_private_recon_fields(parsed: dict) -> dict:
     total = sum(item["cost"] for item in items)
     if not total:
         try:
-            total = int(float(parsed.get("recon_estimate") or 0))
+            total = int(float(parsed.get("repair_estimate") or parsed.get("recon_estimate") or 0))
         except (TypeError, ValueError):
             total = 0
 
-    details = (parsed.get("recon_details") or "").strip()
+    details = (parsed.get("repair_details") or parsed.get("recon_details") or "").strip()
     photo_notes = (parsed.get("photo_match_notes") or "").strip()
     if photo_notes and photo_notes not in details:
         details = f"{photo_notes} {details}".strip()
@@ -1355,7 +1355,7 @@ def _finalize_private_recon_fields(parsed: dict) -> dict:
 
     return {
         "repair_estimate": total,
-        "repair_details": details or "No recon details available.",
+        "repair_details": details or "No repair details available.",
         "repair_breakdown": json.dumps(items),
         "red_flags": red_flags,
         **plan,
@@ -1385,7 +1385,7 @@ def analyze_private_recon(vehicle: dict) -> dict:
 
     if len(messages[1]["content"]) == 1:
         return {
-            **_empty_repair_result("No usable photos attached for recon analysis."),
+            **_empty_repair_result("No usable photos attached for repair analysis."),
             "red_flags": [],
         }
 
@@ -1401,7 +1401,7 @@ def analyze_private_recon(vehicle: dict) -> dict:
     parsed = _parse_json_response(
         raw,
         lot_number,
-        {"recon_estimate": None, "recon_details": raw[:800], "red_flags": []},
+        {"repair_estimate": None, "repair_details": raw[:800], "red_flags": []},
     )
     recon_fields = _finalize_private_recon_fields(parsed)
     return {
@@ -1433,10 +1433,10 @@ def analyze_private_resale(vehicle: dict, recon_result: dict | None = None) -> d
                     for item in items
                 )
             else:
-                item_lines = "  (no itemized recon breakdown available)"
+                item_lines = "  (no itemized repair breakdown available)"
             recon_summary = (
-                "\nKnown recon line items (this is the ONLY condition work you have — do not add to it):\n"
-                f"- Recon estimate total: {estimate if estimate is not None else 'Unknown'}\n"
+                "\nKnown repair line items (this is the ONLY condition work you have — do not add to it):\n"
+                f"- Repair estimate total: {estimate if estimate is not None else 'Unknown'}\n"
                 f"{item_lines}"
             )
 
@@ -1491,9 +1491,9 @@ def analyze_vehicle_negotiation(vehicle: dict) -> dict:
     recon_estimate = vehicle.get("repair_estimate")
     resale_estimate = vehicle.get("resale_estimate")
     if recon_estimate is not None:
-        context_parts.append(f"Estimated recon to retail-ready: ${recon_estimate}")
+        context_parts.append(f"Estimated repair to retail-ready: ${recon_estimate}")
     if resale_estimate is not None:
-        context_parts.append(f"Estimated retail exit value after recon: ${resale_estimate}")
+        context_parts.append(f"Estimated retail exit value after repair: ${resale_estimate}")
 
     breakdown_raw = vehicle.get("repair_breakdown")
     if breakdown_raw:
@@ -1506,7 +1506,7 @@ def analyze_vehicle_negotiation(vehicle: dict) -> dict:
                 f"  - {item.get('description', 'Unknown')}: ${item.get('cost', 0)}"
                 for item in items
             )
-            context_parts.append(f"Recon line items:\n{item_lines}")
+            context_parts.append(f"Repair line items:\n{item_lines}")
 
     red_flags = vehicle.get("red_flags") or []
     if red_flags:
@@ -1601,12 +1601,12 @@ def validate_private_deal(vehicle: dict, result: dict) -> dict:
     if asking and resale_estimate and asking >= resale_estimate * 0.9:
         reasons.append(
             f"Asking price (${asking}) is very close to or above estimated retail exit (${resale_estimate}) — "
-            "little or no margin before recon and fees."
+            "little or no margin before repair and fees."
         )
 
     if recon_estimate and resale_estimate and recon_estimate >= resale_estimate * 0.4:
         reasons.append(
-            f"Recon estimate (${recon_estimate}) is high relative to retail exit (${resale_estimate})."
+            f"Repair estimate (${recon_estimate}) is high relative to retail exit (${resale_estimate})."
         )
 
     title = (vehicle.get("title_code") or "").lower()
@@ -1734,7 +1734,7 @@ def analyze_salvage_flip(vehicle, mode: str = "full") -> dict:
 
 def analyze_private_flip(vehicle, mode: str = "full") -> dict:
     """
-    Private-party flip analysis — recon + retail resale + listing red flags.
+    Private-party flip analysis — repair + retail resale + listing red flags.
     """
     result = {}
     usages = []
@@ -1748,7 +1748,7 @@ def analyze_private_flip(vehicle, mode: str = "full") -> dict:
             usages.extend(recon_result.pop("_usage", []))
             result.update(recon_result)
         else:
-            result.update(_empty_repair_result("No photos provided for recon analysis."))
+            result.update(_empty_repair_result("No photos provided for repair analysis."))
             result["red_flags"] = []
 
     if mode in ("full", "resale"):
@@ -1782,8 +1782,8 @@ def analyze_vehicle(vehicle, mode: str = "full") -> dict:
     Analyze a vehicle with AI. Routes by source_type.
 
     mode:
-      - "full": repair/recon (if photos) + resale + known_issues
-      - "repair": vision repair/recon only
+      - "full": repair (if photos) + resale + known_issues
+      - "repair": vision repair only
       - "resale": text resale only
       - "known_issues": text platform-reliability lookup only
       - "negotiation": private-party price negotiation coaching only
